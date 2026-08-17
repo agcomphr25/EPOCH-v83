@@ -1,0 +1,245 @@
+{
+  "generatedFrom": "22f478990ee2a59f2780b79ac71507b9818e0242",
+  "migrationFiles": 324,
+  "duplicateNumericPrefixes": [
+    {
+      "prefix": "0075",
+      "files": [
+        "0075_cutting_documents_table.sql",
+        "0075_time_off_requests.sql"
+      ]
+    },
+    {
+      "prefix": "0077",
+      "files": [
+        "0077_compliance_requires_attention.sql",
+        "0077_phase_a_salaried_labor_capture.sql"
+      ]
+    },
+    {
+      "prefix": "0094",
+      "files": [
+        "0094_enable_salaried_timesheets.sql",
+        "0094_labor_entry_drafts.sql"
+      ]
+    },
+    {
+      "prefix": "0099",
+      "files": [
+        "0099_audit_evidence_hardening.sql",
+        "0099_employee_payroll_control.sql",
+        "0099_policies_library.sql",
+        "0099_punch_ledger_pending_approval.sql"
+      ]
+    },
+    {
+      "prefix": "0100",
+      "files": [
+        "0100_audit_ledger_privilege_hardening.sql",
+        "0100_burden_rates_engine.sql"
+      ]
+    },
+    {
+      "prefix": "0101",
+      "files": [
+        "0101_audit_tamper_attempts_durable.sql",
+        "0101_burden_rate_accumulation.sql"
+      ]
+    },
+    {
+      "prefix": "0109",
+      "files": [
+        "0109_inventory_transaction_ledger.sql",
+        "0109_vendor_pos_purchasing_controls_columns.sql"
+      ]
+    },
+    {
+      "prefix": "0111",
+      "files": [
+        "0111_approval_escalation_engine.sql",
+        "0111_critical_schema_health_repairs.sql",
+        "0111_digital_signatures.sql",
+        "0111_inventory_anomaly_detection.sql",
+        "0111_routing_step_enforcement.sql"
+      ]
+    },
+    {
+      "prefix": "0112",
+      "files": [
+        "0112_cycle_count_subsystem.sql",
+        "0112_inventory_traceability_capability.sql",
+        "0112_material_issue_approvals.sql"
+      ]
+    },
+    {
+      "prefix": "0114",
+      "files": [
+        "0114_inventory_high_risk_approvals.sql",
+        "0114_shelf_life_out_time_enforcement.sql"
+      ]
+    },
+    {
+      "prefix": "0115",
+      "files": [
+        "0115_receiving_project_material_acceptance.sql",
+        "0115_vendor_pos_production_line.sql"
+      ]
+    },
+    {
+      "prefix": "0116",
+      "files": [
+        "0116_parts_request_po_approvals.sql",
+        "0116_po_project_links.sql"
+      ]
+    },
+    {
+      "prefix": "0117",
+      "files": [
+        "0117_vendor_po_items_purchasing_unit_columns.sql",
+        "0117_vendor_po_line_project_traceability.sql"
+      ]
+    },
+    {
+      "prefix": "0121",
+      "files": [
+        "0121_p2_invoice_review_send_structure.sql",
+        "0121_quote_snapshots_and_po_reconciliation.sql"
+      ]
+    },
+    {
+      "prefix": "0127",
+      "files": [
+        "0127_contract_po_review_flowdown.sql",
+        "0127_quote_contract_snapshot_release_gates.sql"
+      ]
+    },
+    {
+      "prefix": "0128",
+      "files": [
+        "0128_engineering_control_revision_eco.sql",
+        "0128_procurement_section6_supplier_controls.sql"
+      ]
+    },
+    {
+      "prefix": "0129",
+      "files": [
+        "0129_manufacturing_section8_execution_controls.sql",
+        "0129_phase1_foundation_closure.sql",
+        "0129_quality_section9_ncr_capa_calibration.sql",
+        "0129_receiving_inspection_plans.sql",
+        "0129_vendor_default_order_method.sql",
+        "0129a_capa_records_base_table.sql"
+      ]
+    },
+    {
+      "prefix": "0130",
+      "files": [
+        "0130_audit_dcaa_security_section11.sql",
+        "0130_cmmc_itar_security_vault.sql",
+        "0130_vendor_po_support_tables_safe.sql"
+      ]
+    },
+    {
+      "prefix": "0131",
+      "files": [
+        "0131_nonconformance_schema_alignment.sql",
+        "0131_user_sessions_login_compatibility.sql"
+      ]
+    },
+    {
+      "prefix": "0134",
+      "files": [
+        "0134_conversational_rfq_risk_sessions.sql",
+        "0134_knowledge_capture_enrichment.sql",
+        "0134_project_revisions.sql"
+      ]
+    },
+    {
+      "prefix": "0135",
+      "files": [
+        "0135_p2_po_contract_review_role.sql",
+        "0135_pto_balances_and_schedules.sql"
+      ]
+    },
+    {
+      "prefix": "0136",
+      "files": [
+        "0136_p1_fulfillment_attempts.sql",
+        "0136_p2_production_change_form_approvals.sql"
+      ]
+    },
+    {
+      "prefix": "0139",
+      "files": [
+        "0139_p2_production_orders_project_id.sql",
+        "0139_wad_dashboard_assignment.sql"
+      ]
+    },
+    {
+      "prefix": "0186",
+      "files": [
+        "0186_draft_bom_draft_access_controls.sql",
+        "0186_inventory_items_machined_part_fields.sql",
+        "0186_p2_bom_definition_inventory_link.sql"
+      ]
+    },
+    {
+      "prefix": "0187",
+      "files": [
+        "0187_cnc_operation_batch_labor_links.sql",
+        "0187_repair_p2_po_unit_serials.sql"
+      ]
+    },
+    {
+      "prefix": "0188",
+      "files": [
+        "0188_rd_projects.sql",
+        "0188b_design_control_add_rd_project_id.sql"
+      ]
+    },
+    {
+      "prefix": "0192",
+      "files": [
+        "0192_backfill_routed_timer_oven_cure_logs.sql",
+        "0192_engineering_packages.sql"
+      ]
+    },
+    {
+      "prefix": "0201",
+      "files": [
+        "0201_close_fully_shipped_p1_purchase_orders.sql",
+        "0201_freezer_temperature_logs.sql"
+      ]
+    },
+    {
+      "prefix": "0210",
+      "files": [
+        "0210_master_document_control_hardening.sql",
+        "0210_project_preproduction_readiness.sql",
+        "0210_repair_freezer_temperature_tracking.sql"
+      ]
+    },
+    {
+      "prefix": "0222",
+      "files": [
+        "0222_p2_v2_quality_product_release.sql",
+        "0222_vendor_scope_approved_for.sql"
+      ]
+    },
+    {
+      "prefix": "0233",
+      "files": [
+        "0233_part_specification_sheet_control.sql",
+        "0233a_spec_sheets_base_table.sql"
+      ]
+    }
+  ],
+  "duplicateCompleteFilenames": [],
+  "duplicateSafeBootRegistrations": [],
+  "unregisteredSafeBootFiles": [],
+  "registeredButMissingFiles": [],
+  "preDeployIdentity": "complete filename stem stored in drizzle.__drizzle_migrations.hash",
+  "preDeployOrder": "lexicographic complete filename order",
+  "safeBootIdentity": "complete filename entry in explicit safeMigrationFiles array; no tracking table",
+  "safeBootOrder": "explicit array order"
+}

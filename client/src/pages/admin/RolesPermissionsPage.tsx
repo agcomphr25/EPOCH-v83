@@ -1,706 +1,883 @@
-import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { queryClient } from '@/lib/queryClient';
-import { apiRequest } from '@/lib/queryClient';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, Printer, Search, ShieldCheck } from 'lucide-react';
+import CertificationAuthorizationMatrix from '@/pages/CertificationAuthorizationMatrix';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { useToast } from '@/hooks/use-toast';
-import { Shield, Plus, Trash2, User, ChevronDown, ChevronRight, Lock, Unlock, Globe, Building2, FolderOpen } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
-interface Capability {
+type Employee = {
   id: number;
-  key: string;
-  description: string;
-  category: string;
-}
-
-interface Role {
+  employeeNumber?: string;
+  name: string;
+  jobTitle?: string;
+  department?: string;
+  supervisor?: string;
+  employmentStatus: string;
+  isActive: boolean;
+  userId?: number;
+  username?: string;
+  role?: string;
+  userIsActive?: boolean;
+  accessStatus?: string;
+  permissionCount?: number;
+  scopedGrantCount?: number;
+  projectAssignmentCount?: number;
+  activeCertificationCount?: number;
+  activeAuthorizationCount?: number;
+  nextExpiration?: string;
+};
+type UserAccount = {
+  id: number;
+  username: string;
+  firstName?: string;
+  lastName?: string;
+  role: string;
+  employeeId?: number | null;
+  employeeDisplayName?: string | null;
+  isActive: boolean;
+  lastLoginAt?: string | null;
+};
+type Authorization = {
+  id: string;
+  employee_id: number;
+  employee_name: string;
+  employee_number: string;
+  authorization_type: string;
+  status: string;
+  program: string;
+  part_number?: string;
+  product_family?: string;
+  department?: string;
+  operation_scope?: string;
+  effective_date?: string;
+  expiration_date?: string;
+  qualification_method?: string;
+  evidence_reference?: string;
+  approver_username?: string;
+  limitations?: string;
+  revision: number;
+};
+type Workspace = {
+  dataAvailability: Record<string, boolean>;
+  employees: Employee[] | null;
+  authorizations: Authorization[] | null;
+  assignments: any[] | null;
+  training: any[] | null;
+  legacyCertifications: any[] | null;
+  auditHistory: any[] | null;
+  enforcement: {
+    environmentEnabled: boolean;
+    databaseEnabled: boolean | null;
+    effectiveEnabled: boolean;
+    controllingSource: string;
+    disagreement: boolean;
+  };
+};
+type Role = {
   id: number;
   name: string;
   description: string;
   isSystem: boolean;
   capabilities: string[];
-}
-
-interface UserOverride {
+};
+type Capability = {
+  id: number;
+  key: string;
+  description: string;
+  category: string;
+};
+type Override = {
   id: number;
   user_id: number;
   username: string;
-  first_name: string;
-  last_name: string;
   capability_key: string;
   capability_description: string;
   effect: 'allow' | 'deny';
-}
-
-interface ScopedGrant {
+};
+type Scope = {
   id: number;
   userId: number;
   username: string;
-  firstName: string;
-  lastName: string;
   capabilityKey: string;
-  scopeType: 'GLOBAL' | 'DEPARTMENT' | 'PROJECT';
-  department: string | null;
-  projectId: string | null;
-}
-
-interface UserOption {
-  id: number;
-  username: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  employeeDisplayName?: string;
-}
-
-function groupByCategory(caps: Capability[]) {
-  const groups: Record<string, Capability[]> = {};
-  for (const c of caps) {
-    if (!groups[c.category]) groups[c.category] = [];
-    groups[c.category].push(c);
-  }
-  return groups;
-}
-
-const SCOPE_TYPE_ICONS = {
-  GLOBAL: <Globe className="h-3 w-3 text-blue-500" />,
-  DEPARTMENT: <Building2 className="h-3 w-3 text-orange-500" />,
-  PROJECT: <FolderOpen className="h-3 w-3 text-purple-500" />,
+  scopeType: string;
+  department?: string;
+  projectId?: string;
 };
 
-const SCOPE_TYPE_LABELS = {
-  GLOBAL: 'Global',
-  DEPARTMENT: 'Department',
-  PROJECT: 'Project',
+const TEMPLATE_NAMES = [
+  'President / Owner',
+  'Vice President of Operations',
+  'Executive Vice President / Design Governance',
+  'QMS Management Representative',
+  'Engineering Manager / Design Authority',
+  'Design Engineer',
+  'P2 Project Manager',
+  'Production Manager',
+  'Manufacturing / Process Engineer',
+  'Quality Manager / Quality Lead',
+  'Quality Inspector',
+  'Authorized Product Releaser',
+  'Certificate of Conformance Approver',
+  'Routing Releaser',
+  'Trainer',
+  'HR / Training Administrator',
+  'Business Manager / Supply Chain',
+  'Buyer / Purchasing',
+  'Receiving Inspector',
+  'Inventory / Material Control',
+  'Production Technician',
+  'Shipping',
+  'Calibration Technician',
+  'Internal Auditor',
+  'EPOCH Administrator',
+  'Read-Only Auditor',
+];
+const authorityLabels: Record<string, string> = {
+  WORK: 'Work',
+  QC_INSPECTION: 'QC Inspection',
+  ROUTING_RELEASE: 'Routing Release',
+  FINAL_QC: 'Final QC',
+  FINAL_PRODUCT_RELEASE: 'Final Product Release',
+  COC_APPROVAL: 'Certificate of Conformance Approval',
 };
+const available = (ok: boolean, value: number | string) =>
+  ok ? value : 'Not available';
+const pretty = (key: string) =>
+  key
+    .split('.')
+    .map((p) => p.replaceAll('_', ' '))
+    .join(' › ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+function SummaryCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm text-muted-foreground">{label}</CardTitle>
+      </CardHeader>
+      <CardContent className="text-2xl font-semibold">{value}</CardContent>
+    </Card>
+  );
+}
 
 export default function RolesPermissionsPage() {
-  const { toast } = useToast();
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
-  const [newRoleName, setNewRoleName] = useState('');
-  const [newRoleDesc, setNewRoleDesc] = useState('');
-  const [overrideUserId, setOverrideUserId] = useState('');
-  const [overrideCapKey, setOverrideCapKey] = useState('');
-  const [overrideEffect, setOverrideEffect] = useState<'allow' | 'deny'>('allow');
-
-  // Scoped grant form state
-  const [scopeUserId, setScopeUserId] = useState('');
-  const [scopeCapKey, setScopeCapKey] = useState('');
-  const [scopeType, setScopeType] = useState<'GLOBAL' | 'DEPARTMENT' | 'PROJECT'>('GLOBAL');
-  const [scopeDepartment, setScopeDepartment] = useState('');
-  const [scopeProjectId, setScopeProjectId] = useState('');
-
-  const { data: roles = [], isLoading: rolesLoading, isError: rolesError } = useQuery<Role[]>({ queryKey: ['/api/permissions/roles'] });
-  const { data: caps = [] } = useQuery<Capability[]>({ queryKey: ['/api/permissions/capabilities'] });
-  const { data: overrides = [] } = useQuery<UserOverride[]>({ queryKey: ['/api/permissions/all-user-overrides'] });
-  const { data: scopedGrants = [] } = useQuery<ScopedGrant[]>({ queryKey: ['/api/permissions/all-scoped-grants'] });
-  const { data: users = [] } = useQuery<UserOption[]>({ queryKey: ['/api/users'] });
-
-  const capGroups = groupByCategory(caps);
-
-  const addRole = useMutation({
-    mutationFn: () => apiRequest('/api/permissions/roles', { method: 'POST', body: { name: newRoleName, description: newRoleDesc } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/permissions/roles'] });
-      setNewRoleName('');
-      setNewRoleDesc('');
-      toast({ title: 'Role created' });
-    },
-    onError: () => toast({ title: 'Failed to create role', variant: 'destructive' }),
+  const [search, setSearch] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const workspace = useQuery<Workspace>({
+    queryKey: ['/api/permissions/authority-workspace'],
   });
-
-  const deleteRole = useMutation({
-    mutationFn: (roleId: number) => apiRequest(`/api/permissions/roles/${roleId}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/permissions/roles'] });
-      if (selectedRole) setSelectedRole(null);
-      toast({ title: 'Role deleted' });
-    },
-    onError: () => toast({ title: 'Cannot delete system role', variant: 'destructive' }),
+  const roles = useQuery<Role[]>({ queryKey: ['/api/permissions/roles'] });
+  const users = useQuery<UserAccount[]>({ queryKey: ['/api/users'] });
+  const capabilities = useQuery<Capability[]>({
+    queryKey: ['/api/permissions/capabilities'],
   });
-
-  const toggleCapability = useMutation({
-    mutationFn: async ({ roleId, capId, hasIt }: { roleId: number; capId: number; hasIt: boolean }) => {
-      if (hasIt) {
-        return apiRequest(`/api/permissions/roles/${roleId}/capabilities/${capId}`, { method: 'DELETE' });
-      } else {
-        return apiRequest(`/api/permissions/roles/${roleId}/capabilities`, { method: 'POST', body: { capabilityId: capId } });
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/permissions/roles'] });
-    },
+  const overrides = useQuery<Override[]>({
+    queryKey: ['/api/permissions/all-user-overrides'],
   });
-
-  const addOverride = useMutation({
-    mutationFn: () => apiRequest('/api/permissions/user-overrides', {
-      method: 'POST',
-      body: {
-        userId: parseInt(overrideUserId),
-        capabilityKey: overrideCapKey,
-        effect: overrideEffect,
-      },
+  const scopes = useQuery<Scope[]>({
+    queryKey: ['/api/permissions/all-scoped-grants'],
+  });
+  const data = workspace.data;
+  const employees = data?.employees ?? [];
+  const auths = data?.authorizations ?? [];
+  const selected = employees.find((e) => e.id === selectedId) ?? null;
+  const filtered = employees.filter((e) =>
+    `${e.name} ${e.employeeNumber ?? ''} ${e.department ?? ''}`
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  );
+  const filteredUsers = (users.data ?? []).filter((user) =>
+    `${user.username} ${user.firstName ?? ''} ${user.lastName ?? ''} ${
+      user.employeeDisplayName ?? ''
+    } ${user.role}`
+      .toLowerCase()
+      .includes(userSearch.toLowerCase())
+  );
+  const employeeAuths = selected
+    ? auths.filter((a) => a.employee_id === selected.id)
+    : [];
+  const employeeAssignments = selected
+    ? (data?.assignments ?? []).filter(
+        (a) => a.employee_id === selected.id || a.user_id === selected.userId
+      )
+    : [];
+  const employeeTraining = selected
+    ? (data?.training ?? []).filter((a) => a.trainee_id === selected.id)
+    : [];
+  const employeeLegacy = selected
+    ? (data?.legacyCertifications ?? []).filter(
+        (a) => a.employee_id === selected.id
+      )
+    : [];
+  const employeeOverrides = selected
+    ? (overrides.data ?? []).filter((o) => o.user_id === selected.userId)
+    : [];
+  const employeeScopes = selected
+    ? (scopes.data ?? []).filter((s) => s.userId === selected.userId)
+    : [];
+  const role = selected
+    ? (roles.data ?? []).find((r) => r.name === selected.role)
+    : undefined;
+  const summary = useMemo(
+    () => ({
+      active: employees.filter(
+        (e) => e.isActive && e.employmentStatus === 'ACTIVE'
+      ).length,
+      linked: employees.filter((e) => e.userId).length,
+      unlinked: employees.filter((e) => e.isActive && !e.userId).length,
+      activeAuth: auths.filter((a) => a.status === 'ACTIVE').length,
+      draft: auths.filter((a) => a.status === 'DRAFT').length,
+      suspended: auths.filter((a) => a.status === 'SUSPENDED').length,
+      expired: auths.filter((a) => a.status === 'EXPIRED').length,
+      expiring: auths.filter(
+        (a) =>
+          a.status === 'ACTIVE' &&
+          a.expiration_date &&
+          new Date(a.expiration_date).getTime() < Date.now() + 60 * 86400000
+      ).length,
     }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/permissions/all-user-overrides'] });
-      setOverrideUserId('');
-      setOverrideCapKey('');
-      toast({ title: 'Override saved' });
-    },
-    onError: () => toast({ title: 'Failed to save override', variant: 'destructive' }),
-  });
-
-  const removeOverride = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/permissions/user-overrides/${id}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/permissions/all-user-overrides'] }),
-  });
-
-  const addScopedGrant = useMutation({
-    mutationFn: () => apiRequest('/api/permissions/scoped-grants', {
-      method: 'POST',
-      body: {
-        userId: parseInt(scopeUserId),
-        capabilityKey: scopeCapKey,
-        scopeType,
-        department: scopeType === 'DEPARTMENT' ? scopeDepartment : null,
-        projectId: scopeType === 'PROJECT' ? scopeProjectId : null,
-      },
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/permissions/all-scoped-grants'] });
-      setScopeUserId('');
-      setScopeCapKey('');
-      setScopeType('GLOBAL');
-      setScopeDepartment('');
-      setScopeProjectId('');
-      toast({ title: 'Scoped grant added' });
-    },
-    onError: (err: any) => toast({
-      title: err?.message?.includes('already exists') ? 'Grant already exists' : 'Failed to add scoped grant',
-      variant: 'destructive',
-    }),
-  });
-
-  const removeScopedGrant = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/permissions/scoped-grants/${id}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/permissions/all-scoped-grants'] }),
-  });
-
-  const toggleCategory = (cat: string) => {
-    setExpandedCategories(prev => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat); else next.add(cat);
-      return next;
-    });
-  };
-
-  const liveSelectedRole = selectedRole ? roles.find(r => r.id === selectedRole.id) ?? selectedRole : null;
-
-  const isScopedGrantFormValid = () => {
-    if (!scopeUserId || !scopeCapKey) return false;
-    if (scopeType === 'DEPARTMENT' && !scopeDepartment.trim()) return false;
-    if (scopeType === 'PROJECT' && !scopeProjectId.trim()) return false;
-    return true;
-  };
-
+    [employees, auths]
+  );
+  const findings = useMemo(
+    () =>
+      employees.flatMap((e) => {
+        const f: { employee: Employee; code: string; detail: string }[] = [];
+        if (e.isActive && !e.userId)
+          f.push({
+            employee: e,
+            code: 'UNLINKED_EMPLOYEE_OR_USER',
+            detail: 'Active employee has no linked EPOCH account.',
+          });
+        if (!e.isActive && e.userIsActive)
+          f.push({
+            employee: e,
+            code: 'UNLINKED_EMPLOYEE_OR_USER',
+            detail: 'Inactive employee appears to have an active account.',
+          });
+        if (
+          (e.role === 'ADMIN' || e.role === 'OWNER') &&
+          (e.activeAuthorizationCount ?? 0) > 0
+        )
+          f.push({
+            employee: e,
+            code: 'ADMINISTRATIVE_BYPASS_RISK',
+            detail:
+              'System administration and controlled authority coexist; review separation of duties.',
+          });
+        return f;
+      }),
+    [employees]
+  );
+  const availability = data?.dataAvailability ?? {};
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <Shield className="h-7 w-7 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold">Roles &amp; Permissions</h1>
-          <p className="text-muted-foreground text-sm">
-            Manage capability-based access control. Changes take effect on next login or page refresh.
-          </p>
-        </div>
+    <div
+      className="p-6 max-w-[1600px] mx-auto space-y-5"
+      data-testid="roles-permissions-authorizations-workspace"
+    >
+      <div>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <ShieldCheck />
+          Roles, Permissions &amp; Authorizations
+        </h1>
+        <p className="text-muted-foreground">
+          Read-only administration and audit workspace. Role templates are
+          recommendations only.
+        </p>
       </div>
-
-      <Tabs defaultValue="roles">
-        <TabsList>
-          <TabsTrigger value="roles">Roles</TabsTrigger>
-          <TabsTrigger value="overrides">User Overrides</TabsTrigger>
-          <TabsTrigger value="scoped">Scoped Grants</TabsTrigger>
+      <Card className="border-blue-300 bg-blue-50">
+        <CardContent className="pt-6">
+          EPOCH permissions control system access. Certifications demonstrate
+          competence. Formal authorizations control designated Quality,
+          Engineering, routing, product-release and Certificate of Conformance
+          actions. Training completion alone does not grant controlled
+          authority.
+        </CardContent>
+      </Card>
+      <Tabs defaultValue="overview">
+        <TabsList className="flex flex-wrap h-auto">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="employees">Employees</TabsTrigger>
+          <TabsTrigger value="profile">Employee Authority Profile</TabsTrigger>
+          <TabsTrigger value="templates">Role Templates</TabsTrigger>
+          <TabsTrigger value="matrix">
+            Certification &amp; Authorization Matrix
+          </TabsTrigger>
+          <TabsTrigger value="permissions">Permissions</TabsTrigger>
+          <TabsTrigger value="conflicts">Conflicts &amp; Review</TabsTrigger>
+          <TabsTrigger value="history">Audit History</TabsTrigger>
         </TabsList>
-
-        {/* ── Roles tab ─────────────────────────────────────────── */}
-        <TabsContent value="roles" className="mt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Role list */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Roles</CardTitle>
-                <CardDescription>Select a role to edit its capabilities</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {rolesLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-                {rolesError && (
-                  <p className="text-sm text-destructive">Failed to load roles. Please refresh the page.</p>
-                )}
-                {roles.map(role => (
-                  <button
-                    key={role.id}
-                    onClick={() => setSelectedRole(role)}
-                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center justify-between group ${
-                      liveSelectedRole?.id === role.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-muted'
-                    }`}
-                  >
-                    <span className="font-medium">{role.name}</span>
-                    <div className="flex items-center gap-1">
-                      {role.isSystem && (
-                        <Lock className="h-3 w-3 opacity-60" />
-                      )}
-                      <Badge variant="secondary" className="text-xs">
-                        {role.capabilities.length}
-                      </Badge>
-                    </div>
-                  </button>
-                ))}
-
-                <Separator className="my-3" />
-
-                {/* Create role */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">New Role</Label>
-                  <Input
-                    placeholder="Role name"
-                    value={newRoleName}
-                    onChange={e => setNewRoleName(e.target.value.toUpperCase().replace(/\s+/g, '_'))}
-                  />
-                  <Input
-                    placeholder="Description (optional)"
-                    value={newRoleDesc}
-                    onChange={e => setNewRoleDesc(e.target.value)}
-                  />
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    disabled={!newRoleName || addRole.isPending}
-                    onClick={() => addRole.mutate()}
-                  >
-                    <Plus className="h-3 w-3 mr-1" /> Create Role
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Capability editor */}
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base">
-                      {liveSelectedRole ? liveSelectedRole.name : 'Select a role'}
-                    </CardTitle>
-                    {liveSelectedRole && (
-                      <CardDescription>{liveSelectedRole.description}</CardDescription>
-                    )}
-                  </div>
-                  {liveSelectedRole && !liveSelectedRole.isSystem && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => deleteRole.mutate(liveSelectedRole.id)}
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" /> Delete Role
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {!liveSelectedRole ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    Select a role from the left to view and edit its capabilities.
-                  </p>
-                ) : (
-                  <ScrollArea className="h-[500px] pr-4">
-                    <div className="space-y-3">
-                      {Object.entries(capGroups).sort().map(([category, categoryCaps]) => {
-                        const expanded = expandedCategories.has(category);
-                        const grantedInCategory = categoryCaps.filter(c =>
-                          liveSelectedRole.capabilities.includes(c.key)
-                        ).length;
-
-                        return (
-                          <div key={category} className="border rounded-lg overflow-hidden">
-                            <button
-                              className="w-full flex items-center justify-between px-4 py-2 bg-muted/50 hover:bg-muted text-sm font-medium capitalize"
-                              onClick={() => toggleCategory(category)}
-                            >
-                              <span className="flex items-center gap-2">
-                                {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                {category.replace(/_/g, ' ')}
-                              </span>
-                              <Badge variant="outline" className="text-xs">
-                                {grantedInCategory}/{categoryCaps.length}
-                              </Badge>
-                            </button>
-
-                            {expanded && (
-                              <div className="divide-y">
-                                {categoryCaps.map(cap => {
-                                  const hasIt = liveSelectedRole.capabilities.includes(cap.key);
-                                  return (
-                                    <label
-                                      key={cap.id}
-                                      className="flex items-start gap-3 px-4 py-2.5 hover:bg-muted/30 cursor-pointer"
-                                    >
-                                      <Checkbox
-                                        checked={hasIt}
-                                        onCheckedChange={() =>
-                                          toggleCapability.mutate({
-                                            roleId: liveSelectedRole.id,
-                                            capId: cap.id,
-                                            hasIt,
-                                          })
-                                        }
-                                        className="mt-0.5"
-                                      />
-                                      <div>
-                                        <p className="text-sm font-mono font-medium">{cap.key}</p>
-                                        <p className="text-xs text-muted-foreground">{cap.description}</p>
-                                      </div>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                )}
-              </CardContent>
-            </Card>
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid md:grid-cols-3 xl:grid-cols-5 gap-3">
+            <SummaryCard
+              label="Active employees"
+              value={available(!!availability.employees, summary.active)}
+            />
+            <SummaryCard
+              label="Employee accounts linked"
+              value={available(!!availability.employees, summary.linked)}
+            />
+            <SummaryCard
+              label="Accounts requiring linkage"
+              value={available(!!availability.employees, summary.unlinked)}
+            />
+            <SummaryCard
+              label="Active authorizations"
+              value={available(
+                !!availability.authorizations,
+                summary.activeAuth
+              )}
+            />
+            <SummaryCard
+              label="Draft authorizations"
+              value={available(!!availability.authorizations, summary.draft)}
+            />
+            <SummaryCard
+              label="Expiring within 60 days"
+              value={available(!!availability.authorizations, summary.expiring)}
+            />
+            <SummaryCard
+              label="Suspended authorizations"
+              value={available(
+                !!availability.authorizations,
+                summary.suspended
+              )}
+            />
+            <SummaryCard
+              label="Expired authorizations"
+              value={available(!!availability.authorizations, summary.expired)}
+            />
+            <SummaryCard
+              label="Potential gaps"
+              value={available(
+                !!availability.employees && !!availability.authorizations,
+                findings.length
+              )}
+            />
+            <SummaryCard
+              label="Potential conflicts"
+              value={available(
+                !!availability.employees,
+                findings.filter(
+                  (f) =>
+                    f.code.includes('CONFLICT') || f.code.includes('BYPASS')
+                ).length
+              )}
+            />
           </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Prospective enforcement controls</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p>
+                Environment enforcement:{' '}
+                <Badge>
+                  {data?.enforcement.environmentEnabled
+                    ? 'Enabled'
+                    : 'Disabled'}
+                </Badge>
+              </p>
+              <p>
+                Database enforcement:{' '}
+                <Badge variant="outline">
+                  {data?.enforcement.databaseEnabled == null
+                    ? 'Not available'
+                    : data.enforcement.databaseEnabled
+                      ? 'Enabled'
+                      : 'Disabled'}
+                </Badge>
+              </p>
+              <p>
+                Effective runtime state:{' '}
+                <b>
+                  {data?.enforcement.effectiveEnabled ? 'Enabled' : 'Disabled'}
+                </b>{' '}
+                (currently controlled by{' '}
+                {data?.enforcement.controllingSource ?? 'Not available'}).
+              </p>
+              {data?.enforcement.disagreement && (
+                <p className="text-amber-700 flex gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  The two controls disagree. No setting was changed.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
-
-        {/* ── User Overrides tab ────────────────────────────────── */}
-        <TabsContent value="overrides" className="mt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Add override form */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Add Override</CardTitle>
-                <CardDescription>
-                  Grant or deny a specific capability for an individual user, overriding their role.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label>User</Label>
-                  <Select value={overrideUserId} onValueChange={setOverrideUserId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select user…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map(u => (
-                        <SelectItem key={u.id} value={String(u.id)}>
-                          {u.employeeDisplayName
-                            ? `${u.employeeDisplayName} (${u.username})`
-                            : u.username + (u.firstName ? ` — ${u.firstName} ${u.lastName}` : '')}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>Capability</Label>
-                  <Select value={overrideCapKey} onValueChange={setOverrideCapKey}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select capability…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(capGroups).sort().map(([cat, categoryCaps]) => (
-                        <div key={cat}>
-                          <div className="px-2 py-1 text-xs text-muted-foreground uppercase font-semibold">
-                            {cat}
-                          </div>
-                          {categoryCaps.map(c => (
-                            <SelectItem key={c.id} value={c.key}>
-                              {c.key}
-                            </SelectItem>
-                          ))}
-                        </div>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>Effect</Label>
-                  <Select value={overrideEffect} onValueChange={v => setOverrideEffect(v as 'allow' | 'deny')}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="allow">
-                        <span className="flex items-center gap-2">
-                          <Unlock className="h-3 w-3 text-green-600" /> Allow
-                        </span>
-                      </SelectItem>
-                      <SelectItem value="deny">
-                        <span className="flex items-center gap-2">
-                          <Lock className="h-3 w-3 text-red-600" /> Deny
-                        </span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Button
-                  className="w-full"
-                  disabled={!overrideUserId || !overrideCapKey || addOverride.isPending}
-                  onClick={() => addOverride.mutate()}
-                >
-                  Save Override
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Existing overrides */}
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Active Overrides</CardTitle>
-                <CardDescription>
-                  These overrides take precedence over the user's role permissions.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {overrides.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    No user overrides configured yet.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {(overrides as any[]).map((ov: any) => (
-                      <div
-                        key={ov.id}
-                        className="flex items-center justify-between px-3 py-2 border rounded-md"
-                      >
-                        <div className="flex items-center gap-3">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <p className="text-sm font-medium">
-                              {ov.username}
-                              {ov.first_name ? ` (${ov.first_name} ${ov.last_name})` : ''}
-                            </p>
-                            <p className="text-xs font-mono text-muted-foreground">{ov.capability_key}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
+        <TabsContent value="users">
+          <Card>
+            <CardHeader>
+              <CardTitle>User accounts</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Complete EPOCH account list. User accounts are shown even when
+                they are not linked to an employee record. This view is
+                read-only.
+              </p>
+              <div className="relative max-w-xl">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search username, employee, name or role"
+                  value={userSearch}
+                  onChange={(event) => setUserSearch(event.target.value)}
+                />
+              </div>
+              {users.isError ? (
+                <p>Not available</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Username</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Linked employee</TableHead>
+                      <TableHead>System role</TableHead>
+                      <TableHead>Account status</TableHead>
+                      <TableHead>Last login</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredUsers.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">
+                          {user.username}
+                        </TableCell>
+                        <TableCell>
+                          {[user.firstName, user.lastName]
+                            .filter(Boolean)
+                            .join(' ') || 'Not available'}
+                        </TableCell>
+                        <TableCell>
+                          {user.employeeDisplayName || (
+                            <Badge variant="outline">Not linked</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{user.role}</TableCell>
+                        <TableCell>
                           <Badge
-                            variant={ov.effect === 'allow' ? 'default' : 'destructive'}
-                            className="text-xs"
+                            variant={user.isActive ? 'default' : 'outline'}
                           >
-                            {ov.effect === 'allow' ? (
-                              <Unlock className="h-3 w-3 mr-1" />
-                            ) : (
-                              <Lock className="h-3 w-3 mr-1" />
-                            )}
-                            {ov.effect}
+                            {user.isActive ? 'Active' : 'Inactive'}
                           </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeOverride.mutate(ov.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </div>
+                        </TableCell>
+                        <TableCell>
+                          {user.lastLoginAt
+                            ? new Date(user.lastLoginAt).toLocaleString()
+                            : 'Never recorded'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              {!users.isLoading && !users.isError && !filteredUsers.length && (
+                <p>No matching user accounts.</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="employees">
+          <Card>
+            <CardHeader>
+              <CardTitle>Employees</CardTitle>
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-3 h-4 w-4" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search employee, number or department"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {[
+                      'Employee',
+                      'Title / department',
+                      'Linked account',
+                      'Role',
+                      'Permissions',
+                      'Scopes',
+                      'Projects',
+                      'Certifications',
+                      'Authorizations',
+                      'Review',
+                    ].map((x) => (
+                      <TableHead key={x}>{x}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((e) => (
+                    <TableRow
+                      key={e.id}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedId(e.id)}
+                    >
+                      <TableCell>
+                        {e.name}
+                        <br />
+                        <span className="text-muted-foreground">
+                          {e.employeeNumber || 'No number'}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {e.jobTitle || 'Not available'}
+                        <br />
+                        {e.department || 'Not available'}
+                      </TableCell>
+                      <TableCell>
+                        {e.username || 'Requires linkage'}
+                        <br />
+                        {e.accessStatus || 'Not available'}
+                      </TableCell>
+                      <TableCell>{e.role || 'Not available'}</TableCell>
+                      <TableCell>
+                        {e.permissionCount ?? 'Not available'}
+                      </TableCell>
+                      <TableCell>
+                        {e.scopedGrantCount ?? 'Not available'}
+                      </TableCell>
+                      <TableCell>
+                        {e.projectAssignmentCount ?? 'Not available'}
+                      </TableCell>
+                      <TableCell>
+                        {e.activeCertificationCount ?? 'Not available'}
+                      </TableCell>
+                      <TableCell>
+                        {e.activeAuthorizationCount ?? 'Not available'}
+                        {e.nextExpiration && (
+                          <>
+                            <br />
+                            <span className="text-amber-700">
+                              Review{' '}
+                              {new Date(e.nextExpiration).toLocaleDateString()}
+                            </span>
+                          </>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm">
+                          Review
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {!availability.employees && <p>Not available</p>}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="profile">
+          {!selected ? (
+            <Card>
+              <CardContent className="pt-6">
+                Select an employee on the Employees tab.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4 print:text-black">
+              <div className="flex justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">{selected.name}</h2>
+                  <p>
+                    {selected.employeeNumber || 'No employee number'} ·{' '}
+                    {selected.jobTitle || 'Job title not available'} ·{' '}
+                    {selected.department || 'Department not available'}
+                  </p>
+                  <p>
+                    Supervisor: {selected.supervisor || 'Not available'} ·
+                    EPOCH: {selected.username || 'Unlinked'} · Role:{' '}
+                    {selected.role || 'Not available'}
+                  </p>
+                </div>
+                <Button variant="outline" onClick={() => window.print()}>
+                  <Printer className="h-4 w-4 mr-2" />
+                  Employee Authority Card
+                </Button>
+              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Resolved permissions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-2 gap-2">
+                    {(role?.capabilities ?? []).map((k) => (
+                      <div key={k}>
+                        <b>{pretty(k)}</b>
+                        <span className="text-xs text-muted-foreground block">
+                          Role · {k}
+                        </span>
                       </div>
                     ))}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  {employeeOverrides.map((o) => (
+                    <p key={o.id}>
+                      {o.effect === 'allow'
+                        ? 'Individual allow'
+                        : 'Individual deny'}
+                      : {o.capability_description || pretty(o.capability_key)}{' '}
+                      <span className="text-xs">({o.capability_key})</span>
+                    </p>
+                  ))}
+                  {employeeScopes.map((s) => (
+                    <p key={s.id}>
+                      {s.scopeType} scope: {pretty(s.capabilityKey)} —{' '}
+                      {s.department || s.projectId || 'Global'}
+                    </p>
+                  ))}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    Assignments, training and legacy evidence
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p>
+                    Design-project assignments:{' '}
+                    {employeeAssignments.length || 'None recorded'}
+                  </p>
+                  <p>
+                    Training certifications:{' '}
+                    {employeeTraining.length || 'None recorded'}
+                  </p>
+                  <p>
+                    Legacy P2 part/department certifications:{' '}
+                    {employeeLegacy.length || 'None recorded'}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Formal authorizations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {employeeAuths.length
+                    ? employeeAuths.map((a) => (
+                        <div key={a.id} className="border-b py-3">
+                          <b>
+                            {authorityLabels[a.authorization_type] ||
+                              a.authorization_type}
+                          </b>{' '}
+                          · {a.status} · {a.program}
+                          <p>
+                            Scope:{' '}
+                            {[
+                              a.part_number,
+                              a.product_family,
+                              a.department,
+                              a.operation_scope,
+                            ]
+                              .filter(Boolean)
+                              .join(' / ') || 'General'}
+                          </p>
+                          <p>
+                            Evidence:{' '}
+                            {a.qualification_method || 'Not available'} ·{' '}
+                            {a.evidence_reference || 'Not available'} ·
+                            Approver: {a.approver_username || 'Pending'}
+                          </p>
+                          <p>
+                            Effective:{' '}
+                            {a.effective_date
+                              ? new Date(a.effective_date).toLocaleDateString()
+                              : 'Not available'}{' '}
+                            · Review:{' '}
+                            {a.expiration_date
+                              ? new Date(a.expiration_date).toLocaleDateString()
+                              : 'No expiration'}{' '}
+                            · Limitations: {a.limitations || 'None recorded'}
+                          </p>
+                        </div>
+                      ))
+                    : 'None recorded'}
+                </CardContent>
+              </Card>
+              <p className="font-semibold">
+                This report describes current EPOCH records. It does not
+                independently grant authority.
+              </p>
+              <p>Current as of {new Date().toLocaleString()}</p>
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="templates">
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {TEMPLATE_NAMES.map((name) => (
+              <Card key={name}>
+                <CardHeader>
+                  <CardTitle className="text-base">{name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <p>
+                    <b>Normal responsibilities:</b> duties associated with this
+                    business function.
+                  </p>
+                  <p>
+                    <b>Recommended capabilities:</b> preview only; compare to
+                    the capability catalog.
+                  </p>
+                  <p>
+                    <b>Required evidence:</b> current competence and objective
+                    evidence appropriate to scope.
+                  </p>
+                  <p>
+                    <b>Formal authority:</b> separately designated where
+                    Quality, Engineering, routing, release or CoC actions apply.
+                  </p>
+                  <p>
+                    <b>Scope:</b> program, part/family, department, operation
+                    and project as applicable.
+                  </p>
+                  <p className="text-amber-700">
+                    Separation-of-duties review and management designation
+                    required where controlled approvals apply.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm">
+                      Preview recommended settings
+                    </Button>
+                    <Button variant="outline" size="sm">
+                      Compare with current employee
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Recommendation only. No Apply action is available.
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </TabsContent>
-
-        {/* ── Scoped Grants tab ─────────────────────────────────── */}
-        <TabsContent value="scoped" className="mt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Add scoped grant form */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Add Scoped Grant</CardTitle>
-                <CardDescription>
-                  Assign a capability to a user scoped to a specific department or project, or grant it globally.
-                  ADMIN and OWNER roles bypass all scope checks.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label>User</Label>
-                  <Select value={scopeUserId} onValueChange={setScopeUserId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select user…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map(u => (
-                        <SelectItem key={u.id} value={String(u.id)}>
-                          {u.employeeDisplayName
-                            ? `${u.employeeDisplayName} (${u.username})`
-                            : u.username + (u.firstName ? ` — ${u.firstName} ${u.lastName}` : '')}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>Capability</Label>
-                  <Select value={scopeCapKey} onValueChange={setScopeCapKey}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select capability…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(capGroups).sort().map(([cat, categoryCaps]) => (
-                        <div key={cat}>
-                          <div className="px-2 py-1 text-xs text-muted-foreground uppercase font-semibold">
-                            {cat}
-                          </div>
-                          {categoryCaps.map(c => (
-                            <SelectItem key={c.id} value={c.key}>
-                              {c.key}
-                            </SelectItem>
-                          ))}
+        <TabsContent value="matrix">
+          <CertificationAuthorizationMatrix />
+        </TabsContent>
+        <TabsContent value="permissions">
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              Read-only view. Capability keys are shown only as technical
+              details.
+            </p>
+            {(roles.data ?? []).map((r) => (
+              <Card key={r.id}>
+                <CardHeader>
+                  <CardTitle>{r.name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p>{r.description}</p>
+                  <div className="grid md:grid-cols-2 gap-2 mt-3">
+                    {r.capabilities.map((k) => {
+                      const cap = capabilities.data?.find((c) => c.key === k);
+                      return (
+                        <div key={k}>
+                          <b>{cap?.description || pretty(k)}</b>
+                          <span className="block text-xs text-muted-foreground">
+                            {k} · Server capability control · ADMIN/OWNER bypass
+                            applies in central middleware; formal authorization
+                            may also be required.
+                          </span>
                         </div>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>Scope Type</Label>
-                  <Select value={scopeType} onValueChange={v => setScopeType(v as 'GLOBAL' | 'DEPARTMENT' | 'PROJECT')}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="GLOBAL">
-                        <span className="flex items-center gap-2">
-                          <Globe className="h-3 w-3 text-blue-500" /> Global — applies everywhere
-                        </span>
-                      </SelectItem>
-                      <SelectItem value="DEPARTMENT">
-                        <span className="flex items-center gap-2">
-                          <Building2 className="h-3 w-3 text-orange-500" /> Department — limited to one department
-                        </span>
-                      </SelectItem>
-                      <SelectItem value="PROJECT">
-                        <span className="flex items-center gap-2">
-                          <FolderOpen className="h-3 w-3 text-purple-500" /> Project — limited to one project
-                        </span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {scopeType === 'DEPARTMENT' && (
-                  <div className="space-y-1.5">
-                    <Label>Department Name</Label>
-                    <Input
-                      placeholder="e.g. Layup, CNC, Final QC"
-                      value={scopeDepartment}
-                      onChange={e => setScopeDepartment(e.target.value)}
-                    />
+                      );
+                    })}
                   </div>
-                )}
-
-                {scopeType === 'PROJECT' && (
-                  <div className="space-y-1.5">
-                    <Label>Project ID (UUID)</Label>
-                    <Input
-                      placeholder="e.g. 550e8400-e29b-41d4-a716-…"
-                      value={scopeProjectId}
-                      onChange={e => setScopeProjectId(e.target.value)}
-                    />
-                  </div>
-                )}
-
-                <Button
-                  className="w-full"
-                  disabled={!isScopedGrantFormValid() || addScopedGrant.isPending}
-                  onClick={() => addScopedGrant.mutate()}
-                >
-                  <Plus className="h-3 w-3 mr-1" /> Add Scoped Grant
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Existing scoped grants */}
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Active Scoped Grants</CardTitle>
-                <CardDescription>
-                  These grants restrict capability authority to the specified scope. Requests outside the scope are denied.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {(scopedGrants as ScopedGrant[]).length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    No scoped grants configured yet.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {(scopedGrants as ScopedGrant[]).map(grant => (
-                      <div
-                        key={grant.id}
-                        className="flex items-center justify-between px-3 py-2 border rounded-md"
-                      >
-                        <div className="flex items-center gap-3">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <p className="text-sm font-medium">
-                              {grant.username}
-                              {grant.firstName ? ` (${grant.firstName} ${grant.lastName})` : ''}
-                            </p>
-                            <p className="text-xs font-mono text-muted-foreground">{grant.capabilityKey}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs flex items-center gap-1">
-                            {SCOPE_TYPE_ICONS[grant.scopeType]}
-                            {SCOPE_TYPE_LABELS[grant.scopeType]}
-                            {grant.scopeType === 'DEPARTMENT' && grant.department && (
-                              <span className="ml-1 text-muted-foreground">— {grant.department}</span>
-                            )}
-                            {grant.scopeType === 'PROJECT' && grant.projectId && (
-                              <span className="ml-1 text-muted-foreground font-mono">
-                                — {grant.projectId.slice(0, 8)}…
-                              </span>
-                            )}
-                          </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeScopedGrant.mutate(grant.id)}
-                            disabled={removeScopedGrant.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            ))}
           </div>
+        </TabsContent>
+        <TabsContent value="conflicts">
+          <Card>
+            <CardHeader>
+              <CardTitle>Advisory findings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {findings.length ? (
+                findings.map((f, i) => (
+                  <div key={`${f.employee.id}-${i}`} className="border-b py-3">
+                    <Badge variant="outline">{f.code}</Badge>
+                    <b className="ml-2">{f.employee.name}</b>
+                    <p>{f.detail}</p>
+                    <div className="flex gap-2 mt-2">
+                      <Button variant="outline" size="sm">
+                        Review
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        Export
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        title="Records review acknowledgement only; does not correct or change access"
+                      >
+                        Mark reviewed
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p>
+                  {availability.employees
+                    ? 'No locally derived findings. This does not prove production access is fully documented.'
+                    : 'Not available'}
+                </p>
+              )}
+              <p className="mt-4 text-muted-foreground">
+                All findings are advisory. Review actions do not alter access or
+                claim correction.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="history">
+          <Card>
+            <CardHeader>
+              <CardTitle>Authorization and assignment history</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data?.auditHistory?.length ? (
+                data.auditHistory.map((e: any, i: number) => (
+                  <div key={i} className="border-b py-2">
+                    {e.event_type} · authorization {e.authorization_id} ·
+                    revision {e.revision} ·{' '}
+                    {new Date(e.occurred_at).toLocaleString()}
+                  </div>
+                ))
+              ) : (
+                <p>
+                  {availability.auditHistory
+                    ? 'No authorization history recorded. Role, override, scope and project-assignment history may not exist in a unified immutable ledger; current state is not presented as history.'
+                    : 'Not available'}
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

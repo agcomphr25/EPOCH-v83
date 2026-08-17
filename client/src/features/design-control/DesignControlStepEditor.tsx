@@ -180,6 +180,27 @@ export function DesignControlStepEditor({
   const lastInitializedKey = useRef(definition.key);
 
   useEffect(() => {
+    const navigatedToAnotherStep =
+      lastInitializedKey.current !== definition.key;
+    if (!navigatedToAnotherStep && dirtyRef.current) return;
+
+    setFormData(step?.formData ?? {});
+    setChecklist(step?.checklist ?? {});
+    setChangeReason('');
+    setManualPersonFields(new Set());
+    setManualProjectFields(new Set());
+    setLastSavedAt(step?.updatedAt ?? null);
+    setDirty(false);
+    lastInitializedKey.current = definition.key;
+  }, [
+    definition.key,
+    step?.currentContentVersionId,
+    step?.formData,
+    step?.checklist,
+    step?.updatedAt,
+  ]);
+
+  useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!dirty) return;
       event.preventDefault();

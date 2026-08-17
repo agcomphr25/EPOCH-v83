@@ -78,12 +78,6 @@ async function verifiedApprover(
       'APPROVER_NOT_ACTIVE_OR_LINKED',
       'Each approver must be an active employee with an active linked EPOCH account'
     );
-  if (candidate.userRole === 'ADMIN' || candidate.userRole === 'OWNER')
-    throw new DesignControlApprovalError(
-      422,
-      'ADMIN_APPROVAL_BYPASS_FORBIDDEN',
-      'Administrative account status does not confer Design Control approval authority'
-    );
   const permissions = await getUserPermissions(
     candidate.userId,
     candidate.userRole
@@ -126,29 +120,22 @@ export async function listEligibleDesignControlApprovers(
       )
     );
   const candidates = await Promise.all(
-    rows
-      .filter(
-        (row) => row.accountRole !== 'ADMIN' && row.accountRole !== 'OWNER'
-      )
-      .map(async (row) => {
-        const permissions = await getUserPermissions(
-          row.userId,
-          row.accountRole
-        );
-        return {
-          ...row,
-          eligibleApprovalKeys: context.definition.approvals
-            .filter((slot) =>
-              permissions.permissionSet.has(slot.requiredCapability!)
-            )
-            .map((slot) => slot.key),
-          eligibleApprovalRoles: context.definition.approvals
-            .filter((slot) =>
-              permissions.permissionSet.has(slot.requiredCapability!)
-            )
-            .map((slot) => slot.label),
-        };
-      })
+    rows.map(async (row) => {
+      const permissions = await getUserPermissions(row.userId, row.accountRole);
+      return {
+        ...row,
+        eligibleApprovalKeys: context.definition.approvals
+          .filter((slot) =>
+            permissions.permissionSet.has(slot.requiredCapability!)
+          )
+          .map((slot) => slot.key),
+        eligibleApprovalRoles: context.definition.approvals
+          .filter((slot) =>
+            permissions.permissionSet.has(slot.requiredCapability!)
+          )
+          .map((slot) => slot.label),
+      };
+    })
   );
   return {
     approvalSlots: context.definition.approvals,

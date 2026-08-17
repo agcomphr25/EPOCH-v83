@@ -922,7 +922,8 @@ export function DesignControlStepEditor({
                       : 'Authenticated reviewer required'}
                   </p>
                   {canReassignApprovers &&
-                    slot.assignment?.status === 'PENDING' && (
+                    (!slot.assignment ||
+                      slot.assignment.status === 'PENDING') && (
                       <Button
                         className="mt-2"
                         onClick={() => {
@@ -934,7 +935,9 @@ export function DesignControlStepEditor({
                         type="button"
                         variant="outline"
                       >
-                        Change approver
+                        {slot.assignment
+                          ? 'Change approver'
+                          : 'Assign verified approver'}
                       </Button>
                     )}
                   {reassignmentRole === slot.key && (
@@ -972,7 +975,11 @@ export function DesignControlStepEditor({
                       </select>
                       <Input
                         aria-label="Reassignment reason"
-                        placeholder="Reason for changing this submitted-version assignment"
+                        placeholder={
+                          slot.assignment
+                            ? 'Reason for changing this submitted-version assignment'
+                            : 'Reason for assigning this migrated submitted version'
+                        }
                         value={reassignmentReason}
                         onChange={(event) =>
                           setReassignmentReason(event.target.value)
@@ -989,7 +996,9 @@ export function DesignControlStepEditor({
                           size="sm"
                           type="button"
                         >
-                          Save reassignment
+                          {slot.assignment
+                            ? 'Save reassignment'
+                            : 'Save verified assignment'}
                         </Button>
                         <Button
                           onClick={() => setReassignmentRole(null)}

@@ -1135,12 +1135,6 @@ export async function reassignDesignControlStepApprover(
         )
       )
       .limit(1);
-    if (!prior)
-      throw new DesignControlApprovalError(
-        409,
-        'ASSIGNMENT_NOT_PENDING',
-        'Only a pending assignment may be reassigned'
-      );
     const candidate = await verifiedApprover(
       {
         approvalKey: input.approvalKey,
@@ -1150,18 +1144,20 @@ export async function reassignDesignControlStepApprover(
       slot,
       tx as Client
     );
-    await tx
-      .update(designControlStepApprovalAssignments)
-      .set({
-        status: 'REASSIGNED',
-        metadata: {
-          ...(prior.metadata ?? {}),
-          reassignedByUserId: input.actor.id,
-          reassignedAt: new Date().toISOString(),
-          reassignmentReason: input.reason.trim(),
-        },
-      })
-      .where(eq(designControlStepApprovalAssignments.id, prior.id));
+    if (prior) {
+      await tx
+        .update(designControlStepApprovalAssignments)
+        .set({
+          status: 'REASSIGNED',
+          metadata: {
+            ...(prior.metadata ?? {}),
+            reassignedByUserId: input.actor.id,
+            reassignedAt: new Date().toISOString(),
+            reassignmentReason: input.reason.trim(),
+          },
+        })
+        .where(eq(designControlStepApprovalAssignments.id, prior.id));
+    }
     const [replacement] = await tx
       .insert(designControlStepApprovalAssignments)
       .values({
@@ -1181,9 +1177,11 @@ export async function reassignDesignControlStepApprover(
         requiredCapabilitySnapshot: slot.requiredCapability,
         assignedByUserId: input.actor.id,
         metadata: {
-          evidenceHash: prior.metadata?.evidenceHash,
-          provenance: 'AUDITED_AUTHORIZED_REASSIGNMENT',
-          priorAssignmentId: prior.id,
+          evidenceHash: prior?.metadata?.evidenceHash,
+          provenance: prior
+            ? 'AUDITED_AUTHORIZED_REASSIGNMENT'
+            : 'AUDITED_LEGACY_ASSIGNMENT_RECOVERY',
+          priorAssignmentId: prior?.id ?? null,
           reason: input.reason.trim(),
         },
       })
@@ -1191,17 +1189,23 @@ export async function reassignDesignControlStepApprover(
     await recordAuditEvent(
       {
         ...auditBase(context, input.actor, input.requestMetadata ?? {}),
-        eventType: 'DESIGN_CONTROL_APPROVER_REASSIGNED',
+        eventType: prior
+          ? 'DESIGN_CONTROL_APPROVER_REASSIGNED'
+          : 'DESIGN_CONTROL_APPROVER_ASSIGNED',
         reason: input.reason.trim(),
         fieldsChanged: {
-          assignedUserId: { before: prior.userId, after: replacement.userId },
+          assignedUserId: {
+            before: prior?.userId ?? null,
+            after: replacement.userId,
+          },
         },
         payload: {
           approvalKey: slot.key,
           contentVersionId: input.contentVersionId,
           employeeId: replacement.employeeId,
           userId: replacement.userId,
-          priorAssignmentId: prior.id,
+          priorAssignmentId: prior?.id ?? null,
+          recoveredLegacyAssignment: !prior,
         },
       },
       tx

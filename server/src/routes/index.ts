@@ -249,6 +249,7 @@ import materialIntelligenceRoutes from './materialIntelligence';
 import emailTemplatesRoutes from './emailTemplates';
 import arInvoicesRoutes from './arInvoices';
 import arPaymentsRoutes from './arPayments';
+import paymentSettlementsRoutes from './paymentSettlements';
 import arPaymentAttachmentsRoutes from './arPaymentAttachments';
 import apBillsRoutes from './apBills';
 import permissionsRoutes from './permissions';
@@ -1618,6 +1619,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/material-intelligence', materialIntelligenceRoutes);
   app.use('/api/ar-invoices', arInvoicesRoutes);
   app.use('/api/ar-payments', arPaymentsRoutes);
+  app.use('/api/payment-settlements', paymentSettlementsRoutes);
   app.use('/api/ar-payment-attachments', arPaymentAttachmentsRoutes);
   app.use('/api/ap-bills', apBillsRoutes);
   app.use('/api/permissions', permissionsRoutes);

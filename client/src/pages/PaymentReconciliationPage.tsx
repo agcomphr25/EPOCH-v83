@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import PaymentSettlementWorkspace from '@/components/finance/PaymentSettlementWorkspace';
 
 interface ReconciliationRow {
   paymentId: number;
@@ -252,6 +253,8 @@ export default function PaymentReconciliationPage() {
           Export CSV
         </Button>
       </div>
+
+      <PaymentSettlementWorkspace />
 
       {/* Date Range Picker */}
       <Card>

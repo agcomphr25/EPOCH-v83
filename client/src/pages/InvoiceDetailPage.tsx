@@ -749,8 +749,15 @@ export default function InvoiceDetailPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Source</p>
-                  <p className="font-medium">{isP1Invoice ? 'P1 PO Invoice' : 'P2 PO Invoice'}</p>
+                  <p className="font-medium">{invoice.invoiceType === 'MATERIAL_DEPOSIT' ? 'P2 Material Deposit' : isP1Invoice ? 'P1 PO Invoice' : 'P2 PO Invoice'}</p>
+                  {invoice.invoiceType === 'MATERIAL_DEPOSIT' && <Badge variant="secondary" className="mt-1">Liability · 20600 Customer Deposits</Badge>}
                 </div>
+                {invoice.invoiceType === 'MATERIAL_DEPOSIT' && invoice.projectId && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Project</p>
+                    <Button variant="link" className="h-auto p-0" onClick={() => setLocation(`/projects/${invoice.projectId}`)}>Open project</Button>
+                  </div>
+                )}
                 <div>
                   <p className="text-sm text-muted-foreground">Invoice Date</p>
                   <p className="font-medium">{formatDate(invoice.invoiceDate)}</p>

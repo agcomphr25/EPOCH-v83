@@ -952,11 +952,15 @@ const addControlledDocumentFooter = async (
   const footerText = `Doc #: ${doc.documentNumber || 'N/A'} | Version: ${revision.versionNumber || 'N/A'} | Effective: ${footerDate} | Status: ${lifecycleStatus}`;
 
   for (const page of pages) {
-    const { x: pageX, y: pageY, width } = page.getCropBox();
+    const { x: pageX, y: pageY, width, height } = page.getCropBox();
+    const mediaBox = page.getMediaBox();
     const marginX = 36;
-    const bottomInset = 24;
+    const footerAreaHeight = 48;
+    const bottomInset = 18;
     const footerHeight = 24;
     const fontSize = 8;
+    const footerAreaY = pageY - footerAreaHeight;
+    const mediaBottom = Math.min(mediaBox.y, footerAreaY);
     const text = truncateTextToWidth(
       footerText,
       width - marginX * 2,
@@ -964,9 +968,19 @@ const addControlledDocumentFooter = async (
       fontSize
     );
 
+    // Give the control footer its own printable strip below the original page
+    // instead of covering document content near the existing bottom edge.
+    page.setMediaBox(
+      mediaBox.x,
+      mediaBottom,
+      mediaBox.width,
+      mediaBox.y + mediaBox.height - mediaBottom
+    );
+    page.setCropBox(pageX, footerAreaY, width, height + footerAreaHeight);
+
     page.drawRectangle({
       x: pageX,
-      y: pageY + bottomInset,
+      y: footerAreaY + bottomInset,
       width,
       height: footerHeight,
       color: rgb(1, 1, 1),
@@ -975,18 +989,18 @@ const addControlledDocumentFooter = async (
     page.drawLine({
       start: {
         x: pageX + marginX,
-        y: pageY + bottomInset + footerHeight,
+        y: footerAreaY + bottomInset + footerHeight,
       },
       end: {
         x: pageX + width - marginX,
-        y: pageY + bottomInset + footerHeight,
+        y: footerAreaY + bottomInset + footerHeight,
       },
       thickness: 0.5,
       color: rgb(0.72, 0.72, 0.72),
     });
     page.drawText(text, {
       x: pageX + marginX,
-      y: pageY + bottomInset + 8,
+      y: footerAreaY + bottomInset + 8,
       size: fontSize,
       font,
       color: rgb(0.2, 0.2, 0.2),

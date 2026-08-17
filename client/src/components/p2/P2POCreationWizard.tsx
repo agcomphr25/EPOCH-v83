@@ -27,6 +27,7 @@ import {
   Trash2,
   AlertCircle,
   GitBranch,
+  Save,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -68,6 +69,7 @@ export interface SourcePO {
   poNumber: string;
   customerId: string;
   expectedDelivery?: string | null;
+  poDate?: string | null;
   toleranceAuthorizerId?: number | null;
   notes?: string | null;
   assignedToId?: number | null;
@@ -100,6 +102,7 @@ const customerSchema = z.object({
 
 const detailsSchema = z.object({
   customerPONumber: z.string().min(1, 'Customer PO number is required'),
+  poDate: z.string().min(1, 'PO date is required'),
   dueDate: z.string().min(1, 'Due date is required'),
   toleranceAuthorizer: z.string().min(1, 'Tolerance authorizer is required for quality control'),
   assignedTo: z.string().optional(),
@@ -146,6 +149,7 @@ export default function P2POCreationWizard({
     internalName: '',
   });
   const [sourcePrefilled, setSourcePrefilled] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -245,6 +249,7 @@ export default function P2POCreationWizard({
     resolver: zodResolver(detailsSchema),
     defaultValues: {
       customerPONumber: '',
+      poDate: new Date().toISOString().slice(0, 10),
       dueDate: '',
       toleranceAuthorizer: '',
       assignedTo: '',
@@ -253,6 +258,12 @@ export default function P2POCreationWizard({
       projectId: initialProjectId || NO_PROJECT_VALUE,
       projectName: '',
     },
+  });
+
+  const draftQuery = useQuery<any>({
+    queryKey: ['/api/projects', initialProjectId, 'p2-order-draft'],
+    queryFn: () => apiRequest(`/api/projects/${initialProjectId}/p2-order-draft`),
+    enabled: !!initialProjectId && !isReviseMode,
   });
 
   useEffect(() => {
@@ -268,6 +279,37 @@ export default function P2POCreationWizard({
     setSelectedCustomer((current: any) => current || customer);
   }, [customerForm, initialCustomerId, p2Customers]);
 
+  useEffect(() => {
+    const draft = draftQuery.data;
+    if (!draft || draftRestored || p2Customers.length === 0 || projects.length === 0) return;
+    const savedCustomer = draft.draftData?.customerForm || {};
+    const savedDetails = draft.draftData?.detailsForm || {};
+    customerForm.reset({ customerId: String(savedCustomer.customerId || '') });
+    detailsForm.reset({
+      customerPONumber: String(savedDetails.customerPONumber || ''),
+      poDate: String(savedDetails.poDate || new Date().toISOString().slice(0, 10)),
+      dueDate: String(savedDetails.dueDate || ''),
+      toleranceAuthorizer: String(savedDetails.toleranceAuthorizer || ''),
+      assignedTo: String(savedDetails.assignedTo || ''),
+      productionLead: String(savedDetails.productionLead || ''),
+      notes: String(savedDetails.notes || ''),
+      projectId: String(savedDetails.projectId || initialProjectId || NO_PROJECT_VALUE),
+      projectName: String(savedDetails.projectName || ''),
+    });
+    const customer = p2Customers.find((candidate: any) => String(candidate.id) === String(savedCustomer.customerId || ''));
+    setSelectedCustomer(customer || null);
+    const selectedProject = projects.find((project) => project.id === (savedDetails.projectId || initialProjectId));
+    setPODetails({
+      ...savedDetails,
+      projectId: selectedProject?.id || initialProjectId || '',
+      projectName: selectedProject ? renderProjectLabel(selectedProject) : String(savedDetails.projectName || ''),
+    } as z.infer<typeof detailsSchema>);
+    setLineItems(Array.isArray(draft.draftData?.lineItems) ? draft.draftData.lineItems : []);
+    setCurrentStep(Math.max(0, Math.min(3, Number(draft.currentStep || 0))));
+    setDraftRestored(true);
+    toast({ title: 'Saved P2 order restored', description: 'Continue where you left off.' });
+  }, [customerForm, detailsForm, draftQuery.data, draftRestored, initialProjectId, p2Customers, projects, toast]);
+
   // Pre-populate from sourcePO (revise mode) — wait for all data to load
   useEffect(() => {
     if (!editableSourcePO || sourcePrefilled || p2Customers.length === 0 || employees.length === 0) return;
@@ -282,6 +324,9 @@ export default function P2POCreationWizard({
     // PO Details — strip any -RX revision suffix from PO number for the new revision
     const basePONumber = existingPoId ? editableSourcePO.poNumber : editableSourcePO.poNumber.replace(/-R[A-Z]+$/, '');
     detailsForm.setValue('customerPONumber', basePONumber);
+    if (editableSourcePO.poDate) {
+      detailsForm.setValue('poDate', editableSourcePO.poDate.split('T')[0]);
+    }
     if (editableSourcePO.expectedDelivery) {
       detailsForm.setValue('dueDate', editableSourcePO.expectedDelivery.split('T')[0]);
     }
@@ -327,6 +372,30 @@ export default function P2POCreationWizard({
     setLineItems(items);
   }, [editableSourcePO, loadedRevisionPO, sourcePOItems]);
 
+  const saveDraftMutation = useMutation({
+    mutationFn: async () => {
+      const projectId = initialProjectId || detailsForm.getValues('projectId');
+      if (!projectId || projectId === NO_PROJECT_VALUE) throw new Error('Select a project before saving this draft');
+      return apiRequest(`/api/projects/${projectId}/p2-order-draft`, {
+        method: 'PUT',
+        body: {
+          currentStep,
+          draftData: {
+            customerForm: customerForm.getValues(),
+            detailsForm: detailsForm.getValues(),
+            lineItems,
+          },
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', initialProjectId, 'p2-order-draft'] });
+      toast({ title: 'P2 order draft saved', description: 'You can reopen this project and continue later.' });
+      onCancel();
+    },
+    onError: (error: Error) => toast({ title: 'Unable to save draft', description: error.message, variant: 'destructive' }),
+  });
+
   const createPOMutation = useMutation({
     mutationFn: async (data: any) => {
       const po = await apiRequest('/api/p2-purchase-orders-bypass', {
@@ -339,7 +408,10 @@ export default function P2POCreationWizard({
       });
       return po;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      if (initialProjectId) {
+        await apiRequest(`/api/projects/${initialProjectId}/p2-order-draft`, { method: 'DELETE' }).catch(() => undefined);
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
       toast({
@@ -470,6 +542,7 @@ export default function P2POCreationWizard({
     return {
       customerId: selectedCustomer.customerId,
       customerPONumber: poDetails?.customerPONumber,
+      poDate: poDetails?.poDate,
       dueDate: poDetails?.dueDate,
       toleranceAuthorizerId: selectedAuthorizer?.id || null,
       toleranceAuthorizerName: getEmployeeName(selectedAuthorizer),
@@ -524,9 +597,14 @@ export default function P2POCreationWizard({
               Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
             </CardDescription>
           </div>
-          <Button variant="ghost" onClick={onCancel}>
-            Cancel
-          </Button>
+          <div className="flex items-center gap-2">
+            {!isReviseMode && (
+              <Button variant="outline" onClick={() => saveDraftMutation.mutate()} disabled={saveDraftMutation.isPending} data-testid="button-save-p2-draft">
+                <Save className="mr-2 h-4 w-4" /> {saveDraftMutation.isPending ? 'Saving...' : 'Save Draft'}
+              </Button>
+            )}
+            <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+          </div>
         </div>
 
         {isReviseMode && (
@@ -634,6 +712,20 @@ export default function P2POCreationWizard({
                       <FormLabel>Customer PO Number</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="e.g., PO-2024-001" data-testid="input-customer-po" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={detailsForm.control}
+                  name="poDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>PO Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-po-date" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -961,6 +1053,7 @@ export default function P2POCreationWizard({
                 </CardHeader>
                 <CardContent className="space-y-1">
                   <p><span className="text-muted-foreground">Customer PO:</span> {poDetails?.customerPONumber}</p>
+                  <p><span className="text-muted-foreground">PO Date:</span> {poDetails?.poDate}</p>
                   <p><span className="text-muted-foreground">Due Date:</span> {poDetails?.dueDate}</p>
                   {isReviseMode && (
                     <p><span className="text-muted-foreground">New Revision:</span>{' '}

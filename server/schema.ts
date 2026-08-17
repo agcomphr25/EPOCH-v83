@@ -6361,6 +6361,26 @@ export const p2PurchaseOrderItems = pgTable(
   })
 );
 
+export const p2OrderDrafts = pgTable(
+  'p2_order_drafts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references((): AnyPgColumn => projects.id, { onDelete: 'cascade' }),
+    currentStep: integer('current_step').notNull().default(0),
+    draftData: jsonb('draft_data').notNull().default(sql`'{}'::jsonb`),
+    createdBy: text('created_by'),
+    updatedBy: text('updated_by'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    projectUnique: unique('p2_order_drafts_project_unique').on(table.projectId),
+    projectIdx: index('p2_order_drafts_project_idx').on(table.projectId),
+  })
+);
+
 // P2 customer-demand quantity event ledger. Migration 0262 is the database
 // authority for immutability triggers and CHECK constraints; this schema
 // entry exists so Drizzle's schema-diff produces the correct composite FK

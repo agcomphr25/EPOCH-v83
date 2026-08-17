@@ -148,6 +148,10 @@ describe('authenticated Design Control approvals', () => {
     );
     expect(service).toContain("'DESIGN_CONTROL_APPROVER_REASSIGNED'");
     expect(service).toContain("'AUDITED_AUTHORIZED_REASSIGNMENT'");
+    expect(service).toContain("'AUDITED_LEGACY_ASSIGNMENT_RECOVERY'");
+    expect(service).toContain("'DESIGN_CONTROL_APPROVER_ASSIGNED'");
+    expect(service).toContain('recoveredLegacyAssignment: !prior');
+    expect(service).not.toContain("'ASSIGNMENT_NOT_PENDING'");
     expect(service).toContain("'LEGACY_UNVERIFIED_APPROVAL_EVIDENCE'");
     expect(service).toContain('satisfiesAuthenticatedGate: false');
   });
@@ -169,6 +173,8 @@ describe('authenticated Design Control approvals', () => {
     expect(editor).toContain('Select an active employee...');
     expect(editor).toContain('canRouteApprovers');
     expect(editor).toContain('Change approver');
+    expect(editor).toContain('Assign verified approver');
+    expect(editor).toContain('Save verified assignment');
     expect(editor).toContain('/reassign');
   });
 });

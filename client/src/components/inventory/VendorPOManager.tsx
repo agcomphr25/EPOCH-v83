@@ -81,6 +81,7 @@ import {
   ShieldX,
   Ban,
 } from 'lucide-react';
+import VendorFlowdownReview from './VendorFlowdownReview';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'react-hot-toast';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -3911,6 +3912,8 @@ export default function VendorPOManager({
               onOpenModal={() => openComplianceModal(selectedVendorPO.id)}
             />
 
+            <VendorFlowdownReview vendorPoId={selectedVendorPO.id} />
+
             <Card>
               <CardHeader>
                 <CardTitle>Attachments</CardTitle>
@@ -4405,14 +4408,6 @@ function PurchasingControlsDialog({
   const [debarmentSource, setDebarmentSource] = useState<'sam.gov' | 'manual_attestation' | 'document_upload'>('manual_attestation');
   const [debarmentResult, setDebarmentResult] = useState<'pass' | 'fail' | 'inconclusive'>('pass');
 
-  const { data: clauses = [] } = useQuery<any[]>({ queryKey: ['/api/far-flowdown-clauses'] });
-  const { data: appliedFlowdowns = [], refetch: refetchFlowdowns } = useQuery<any[]>({
-    queryKey: ['/api/far-flowdown-clauses/po', vendorPo.id],
-    queryFn: () => apiRequest(`/api/far-flowdown-clauses/po/${vendorPo.id}`),
-    enabled: open,
-  });
-  const [flowdownReasoning, setFlowdownReasoning] = useState<string>('Required by contract scope');
-
   const saveBasics = useMutation({
     mutationFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}`, {
       method: 'PUT',
@@ -4450,32 +4445,6 @@ function PurchasingControlsDialog({
     onSuccess: () => { toast.success('Debarment check recorded'); setDebarmentNotes(''); onChanged(); },
     onError: (e: any) => toast.error(e?.message ?? 'Record failed'),
   });
-
-  // The backend uses PUT /api/far-flowdown-clauses/po/:poId with the FULL list
-  // (replace-all semantics). Compose the new list locally and PUT it.
-  const putFlowdowns = useMutation({
-    mutationFn: (flowdowns: { clauseId: number; applicable: boolean; reasoning: string }[]) =>
-      apiRequest(`/api/far-flowdown-clauses/po/${vendorPo.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ flowdowns }),
-      }),
-    onSuccess: () => { toast.success('FAR flowdowns saved'); refetchFlowdowns(); onChanged(); },
-    onError: (e: any) => toast.error(e?.message ?? 'Update failed'),
-  });
-
-  const appliedById = new Map<number, any>(appliedFlowdowns.map((f: any) => [f.clauseId, f]));
-  const toggleClause = (clauseId: number, applicable: boolean) => {
-    const next = clauses.map((c: any) => {
-      const existing = appliedById.get(c.id);
-      const isThis = c.id === clauseId;
-      const eff = isThis ? applicable : (existing?.applicable ?? false);
-      const reasoning = isThis
-        ? (flowdownReasoning.trim() || 'Required by contract scope')
-        : (existing?.reasoning ?? 'Not applicable');
-      return { clauseId: c.id, applicable: eff, reasoning };
-    });
-    putFlowdowns.mutate(next);
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -4517,34 +4486,12 @@ function PurchasingControlsDialog({
             </Button>
           </section>
 
-          <section className="space-y-2">
-            <h3 className="font-semibold">FAR Flowdown Checklist</h3>
-            <div>
-              <Label>Applicability Reasoning (used when toggling on)</Label>
-              <Input value={flowdownReasoning} onChange={(e) => setFlowdownReasoning(e.target.value)} data-testid="input-flowdown-reasoning" />
-            </div>
-            <div className="border rounded divide-y max-h-60 overflow-y-auto">
-              {clauses.map((c: any) => {
-                const existing = appliedById.get(c.id);
-                const on = !!existing?.applicable;
-                return (
-                  <div key={c.id} className="p-2 flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={on}
-                      onCheckedChange={(v) => toggleClause(c.id, !!v)}
-                      data-testid={`checkbox-flowdown-${c.id}`}
-                    />
-                    <div className="flex-1">
-                      <div className="font-mono text-xs">{c.clauseNumber}</div>
-                      <div>{c.title}</div>
-                      {existing?.reasoning && (
-                        <div className="text-xs text-gray-500 italic">{existing.reasoning}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <section className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+            <h3 className="font-semibold">Government Flowdown Review</h3>
+            <p className="mt-1">
+              FAR/DFARS applicability is managed in the guided Government Flowdown Applicability card on the PO details page.
+              That review is the authoritative source for clause decisions and the supplier exhibit.
+            </p>
           </section>
 
           <section className="hidden">

@@ -541,6 +541,7 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
   const {
     purchaseRequisitions,
     vendorPoFarFlowdowns,
+    vendorPoFlowdownAssessments,
     vendorDebarmentChecks,
     procurementSettings,
     vendors,
@@ -634,6 +635,14 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
     purchasingBlockers.push('FAR flowdown checklist has not been recorded for this PO');
   } else if (flowdowns.some((fd) => !fd.reasoning || fd.reasoning.trim().length < 3)) {
     purchasingBlockers.push('One or more FAR flowdown entries is missing applicability reasoning');
+  }
+
+  const complianceReviewForFlowdown = isP2 ? await storage.getVendorPOComplianceReview(vendorPO.id) : null;
+  if (complianceReviewForFlowdown?.governmentContract) {
+    const [flowdownAssessment] = await drizzleDb.select().from(vendorPoFlowdownAssessments)
+      .where(dEq(vendorPoFlowdownAssessments.vendorPoId, vendorPO.id)).limit(1);
+    if (!flowdownAssessment) purchasingBlockers.push('Government flowdown applicability review has not been started');
+    else if (flowdownAssessment.reviewStatus !== 'APPROVED') purchasingBlockers.push(`Government flowdown applicability review is ${flowdownAssessment.reviewStatus.toLowerCase().replaceAll('_', ' ')}`);
   }
 
   const complianceBlockers = isP2 ? await getVendorPOComplianceBlockers(vendorPO.id) : [];

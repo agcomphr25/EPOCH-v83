@@ -14,8 +14,72 @@ import {
 } from '../../schema';
 import { requirePermission } from '../../middleware/requirePermission';
 import { auditService } from '../services/auditService';
+import { getVendorPoFlowdownWorkspace, saveVendorPoFlowdownWorkspace } from '../services/flowdownApplicabilityService';
+import { generateVendorFlowdownExhibitPdf } from '../../utils/pdf/vendorFlowdownExhibitPdf';
 
 const router = Router();
+
+const flowdownAnswersSchema = z.record(z.union([z.boolean(), z.null()]));
+
+router.get('/po/:poId/workspace', requirePermission('purchasing.view_requisitions'), async (req, res) => {
+  try {
+    res.json(await getVendorPoFlowdownWorkspace(Number(req.params.poId)));
+  } catch (error: any) {
+    res.status(error?.message === 'Vendor PO not found' ? 404 : 500).json({ error: error?.message || 'Failed to load flowdown review' });
+  }
+});
+
+router.put('/po/:poId/workspace', requirePermission('purchasing.manage_pos'), async (req: Request, res: Response) => {
+  try {
+    const payload = z.object({
+      assessment: z.object({
+        governmentSupported: z.boolean(),
+        internalContractReference: z.string().nullable().optional(),
+        sourceDocumentReference: z.string().nullable().optional(),
+        discloseContractReference: z.boolean().optional(),
+        procurementClass: z.enum(['UNKNOWN','COTS','COMMERCIAL_PRODUCT','COMMERCIAL_SERVICE','NONCOMMERCIAL_SUPPLY','SERVICE','CONSTRUCTION','MIXED']),
+        answers: flowdownAnswersSchema,
+        reviewStatus: z.enum(['DRAFT','REVIEW_REQUIRED','APPROVED','BLOCKED']),
+        reviewNotes: z.string(),
+      }),
+      decisions: z.array(z.object({
+        clauseId: z.number().int().positive(),
+        decision: z.enum(['INCLUDE','EXCLUDE']),
+        decisionReason: z.string(),
+        recommendation: z.enum(['INCLUDE','EXCLUDE','REVIEW']),
+        triggerReason: z.string(),
+        inclusionMethod: z.string(),
+      })),
+    }).parse(req.body);
+    const user = (req as any).user;
+    const saved = await saveVendorPoFlowdownWorkspace({ vendorPoId: Number(req.params.poId), ...payload, actor: { id: user?.id, name: user?.username } });
+    await auditService.logEvent({
+      entityType: 'order' as any,
+      entityId: String(req.params.poId),
+      action: 'PO_FLOWDOWN_APPLICABILITY_REVIEW_SAVED',
+      actor: { id: user?.id, username: user?.username, role: user?.role },
+      meta: { status: saved.reviewStatus, included: payload.decisions.filter((row) => row.decision === 'INCLUDE').length, internalContractReferenceDisclosed: false },
+    }).catch(() => {});
+    res.json(saved);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: error.errors });
+    res.status(409).json({ error: error?.message || 'Failed to save flowdown review' });
+  }
+});
+
+router.get('/po/:poId/exhibit.pdf', requirePermission('purchasing.view_requisitions'), async (req, res) => {
+  try {
+    const workspace = await getVendorPoFlowdownWorkspace(Number(req.params.poId));
+    if (workspace.assessment.reviewStatus !== 'APPROVED') return res.status(409).json({ error: 'Approve the flowdown review before generating an exhibit' });
+    const pdf = await generateVendorFlowdownExhibitPdf(workspace);
+    const poLabel = workspace.po.poNumber || workspace.po.id;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="AG_Flowdown_Exhibit_${poLabel}_R${workspace.assessment.exhibitRevision}.pdf"`);
+    res.send(pdf);
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || 'Failed to generate flowdown exhibit' });
+  }
+});
 
 // PUBLIC clause library list (any user with view requisitions can read)
 router.get('/', requirePermission('purchasing.view_requisitions'), async (_req: Request, res: Response) => {

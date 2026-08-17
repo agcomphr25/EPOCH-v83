@@ -24,6 +24,38 @@ export const normalizeTemplateFieldValues = (
     ? { ...(fieldValues as Record<string, unknown>) }
     : {};
 
+  // Browser template metadata and database template metadata can retain
+  // different field names after a template revision even though the visible
+  // label is unchanged. Reconcile those names before required-field
+  // validation so a value entered under either definition reaches every
+  // field with that same label.
+  const fieldNamesByLabel = new Map<string, Set<string>>();
+  for (const field of fieldDefinitions) {
+    const fieldName = field.fieldName ?? field.field_name;
+    const fieldLabel = field.fieldLabel ?? field.field_label;
+    if (typeof fieldName !== 'string' || typeof fieldLabel !== 'string') continue;
+
+    const normalizedLabel = normalizeFieldKey(fieldLabel);
+    if (!normalizedLabel) continue;
+
+    const fieldNames = fieldNamesByLabel.get(normalizedLabel) ?? new Set<string>();
+    fieldNames.add(fieldName);
+    fieldNamesByLabel.set(normalizedLabel, fieldNames);
+  }
+
+  for (const [normalizedLabel, fieldNames] of fieldNamesByLabel) {
+    for (const key of Object.keys(values)) {
+      if (normalizeFieldKey(key) === normalizedLabel) fieldNames.add(key);
+    }
+
+    const submittedKey = Array.from(fieldNames).find((key) => hasSubmittedValue(values[key]));
+    if (!submittedKey) continue;
+
+    for (const fieldName of fieldNames) {
+      if (!hasSubmittedValue(values[fieldName])) values[fieldName] = values[submittedKey];
+    }
+  }
+
   // Work Instructions templates have used partList, partsList, parts_list,
   // and display-label keys over time. Resolve any populated Part List variant
   // to both names still consumed by validation and legacy PDF rendering.

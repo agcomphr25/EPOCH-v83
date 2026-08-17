@@ -42,6 +42,31 @@ describe('document-from-template legacy part-list compatibility', () => {
     expect(result.partList).toBe('1 | 26246 | Body, Heated Pitot');
   });
 
+  it('reconciles PPE field names that share the same visible label', () => {
+    const result = normalizeTemplateFieldValues(
+      { selectedPpe: 'Safety glasses and nitrile gloves' },
+      [
+        { fieldName: 'selectedPpe', fieldLabel: 'PPE (Personal Protective Equipment)' },
+        { field_name: 'requiredPpe', field_label: 'PPE (Personal Protective Equipment)' },
+      ],
+    );
+
+    expect(result.requiredPpe).toBe('Safety glasses and nitrile gloves');
+  });
+
+  it('does not replace separately populated fields that share a label', () => {
+    const result = normalizeTemplateFieldValues(
+      { browserPpe: 'Safety glasses', storedPpe: 'Face shield' },
+      [
+        { fieldName: 'browserPpe', fieldLabel: 'PPE' },
+        { fieldName: 'storedPpe', fieldLabel: 'PPE' },
+      ],
+    );
+
+    expect(result.browserPpe).toBe('Safety glasses');
+    expect(result.storedPpe).toBe('Face shield');
+  });
+
   it('normalizes submitted values before required-field validation and PDF rendering', () => {
     expect(handler).toContain(
       'const values = normalizeTemplateFieldValues(fieldValues, [...defaultFields, ...templateFields])',

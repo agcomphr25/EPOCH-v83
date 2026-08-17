@@ -99,6 +99,7 @@ async function loadAuthority(
        FROM rd_projects rp
        JOIN design_control_records dcr ON dcr.rd_project_id = rp.id
       WHERE rp.id = $1
+        AND dcr.authority_status = 'authoritative'
         AND ($2::uuid IS NULL OR dcr.id = $2::uuid)
       ORDER BY dcr.created_at DESC LIMIT 1`,
     [projectId, recordId ?? null]

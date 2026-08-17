@@ -525,7 +525,9 @@ export function DesignControlStepEditor({
             return (
               <div
                 className={`space-y-1.5 ${
-                  presentation.kind === 'textarea' ? 'md:col-span-2' : ''
+                  ['textarea', 'attachment'].includes(presentation.kind)
+                    ? 'md:col-span-2'
+                    : ''
                 }`}
                 key={field.key}
               >
@@ -535,7 +537,39 @@ export function DesignControlStepEditor({
                     *
                   </span>
                 </Label>
-                {presentation.kind === 'textarea' ? (
+                {presentation.kind === 'attachment' ? (
+                  <div className="space-y-2 rounded-md border p-3">
+                    <Input
+                      aria-describedby={`${fieldId}-help`}
+                      aria-invalid={missing}
+                      id={fieldId}
+                      placeholder={presentation.placeholder}
+                      value={value}
+                      onChange={(event) => update(event.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        document
+                          .getElementById(
+                            `design-control-evidence-step-${definition.key}`
+                          )
+                          ?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                          })
+                      }
+                    >
+                      Open evidence upload
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Create or open the controlled step form below, then select
+                      Attach evidence. The file is retained with that form; this
+                      field records its controlled reference.
+                    </p>
+                  </div>
+                ) : presentation.kind === 'textarea' ? (
                   <Textarea
                     aria-describedby={`${fieldId}-help`}
                     aria-invalid={missing}

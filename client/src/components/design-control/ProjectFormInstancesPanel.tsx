@@ -357,7 +357,10 @@ export function ProjectFormInstancesPanel({
   };
 
   return (
-    <Card>
+    <Card
+      id={stepKey ? `design-control-evidence-step-${stepKey}` : undefined}
+      className="scroll-mt-4"
+    >
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
           <CardTitle>Controlled Form Instances</CardTitle>
@@ -383,6 +386,13 @@ export function ProjectFormInstancesPanel({
         {message && (
           <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
             {message}
+          </div>
+        )}
+        {visibleCatalog.length === 0 && (
+          <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+            No controlled step-form template is available for this checkpoint,
+            so evidence upload cannot start. Contact Document Control to release
+            the required template.
           </div>
         )}
         {visibleCatalog.map((definition) => {

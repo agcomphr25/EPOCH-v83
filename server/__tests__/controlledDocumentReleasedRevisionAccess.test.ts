@@ -47,9 +47,13 @@ describe('Master Document Register released-revision access', () => {
 
   it('keeps stamped footer control information inside the printable page area', () => {
     expect(route).toContain('page.getCropBox()');
-    expect(route).toContain('const bottomInset = 24');
-    expect(route).toContain('y: pageY + bottomInset');
-    expect(route).toContain('y: pageY + bottomInset + 8');
+    expect(route).toContain('const footerAreaHeight = 48');
+    expect(route).toContain('const bottomInset = 18');
+    expect(route).toContain('const footerAreaY = pageY - footerAreaHeight');
+    expect(route).toContain('page.setMediaBox(');
+    expect(route).toContain('page.setCropBox(');
+    expect(route).toContain('y: footerAreaY + bottomInset');
+    expect(route).toContain('y: footerAreaY + bottomInset + 8');
     expect(route).not.toMatch(/page\.drawText\(text, \{[\s\S]*?y: 8,/);
   });
 

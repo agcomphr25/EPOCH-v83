@@ -138,7 +138,7 @@ describe('authenticated Design Control approvals', () => {
     expect(service).toContain("eq(employees.employmentStatus, 'ACTIVE')");
     expect(service).toContain("'APPROVER_NOT_ASSIGNED'");
     expect(service).toContain("'INDEPENDENCE_REQUIRED'");
-    expect(service).toContain("'ADMIN_APPROVAL_BYPASS_FORBIDDEN'");
+    expect(service).not.toContain("'ADMIN_APPROVAL_BYPASS_FORBIDDEN'");
     expect(service).not.toMatch(/employeeName\s*===\s*/);
   });
 
@@ -163,6 +163,9 @@ describe('authenticated Design Control approvals', () => {
       'permissions.permissionSet.has(slot.requiredCapability!)'
     );
     expect(service).not.toContain('APPROVER_ROLE_MISMATCH');
+    expect(service).not.toContain(
+      "row.accountRole !== 'ADMIN' && row.accountRole !== 'OWNER'"
+    );
     expect(editor).toContain('Select an active employee...');
     expect(editor).toContain('canRouteApprovers');
     expect(editor).toContain('Change approver');

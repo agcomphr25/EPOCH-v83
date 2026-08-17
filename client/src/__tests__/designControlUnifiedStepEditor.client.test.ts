@@ -96,6 +96,11 @@ describe('unified Design Control step editor', () => {
     );
 
     expect(editor).toContain("window.addEventListener('beforeunload'");
+    expect(editor).toContain('setFormData(step?.formData ?? {})');
+    expect(editor).toContain('setChecklist(step?.checklist ?? {})');
+    expect(editor).toContain(
+      'if (!navigatedToAnotherStep && dirtyRef.current) return'
+    );
     expect(editor).toContain('Save and Continue');
     expect(editor).toContain('payload.message || payload.error');
     expect(editor).toContain('Select an active project assignment');

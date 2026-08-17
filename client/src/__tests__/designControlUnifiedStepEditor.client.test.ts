@@ -106,10 +106,15 @@ describe('unified Design Control step editor', () => {
     expect(editor).toContain('Select an active project assignment');
     expect(editor).toContain('Enter another accountable person');
     expect(editor).toContain('Enter another customer or order link');
+    expect(editor).toContain('Open evidence upload');
+    expect(editor).toContain('design-control-evidence-step-');
     expect(editor).not.toContain('<datalist');
     expect(forms).toContain("window.addEventListener('beforeunload'");
     expect(forms).toContain('/attachments`');
     expect(forms).toContain('Objective evidence attached');
+    expect(forms).toContain(
+      'No controlled step-form template is available for this checkpoint'
+    );
     expect(release).toContain('/engineering-release-preview`');
     expect(release).toContain('/engineering-release`');
     expect(release).toContain('disabled={!preview.ready || busy}');

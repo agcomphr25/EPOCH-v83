@@ -18,11 +18,7 @@ export type DesignControlFieldPresentation = {
 };
 
 export type StructuredDesignControlRecordType =
-  | 'REQUIREMENT'
-  | 'RISK'
-  | 'REVIEW'
-  | 'VERIFICATION'
-  | 'VALIDATION';
+  'REQUIREMENT' | 'RISK' | 'REVIEW' | 'VERIFICATION' | 'VALIDATION';
 
 export const STRUCTURED_RECORD_TYPE_BY_STEP: Partial<
   Record<string, StructuredDesignControlRecordType>
@@ -114,7 +110,7 @@ export function getDesignControlFieldPresentation(
   if (attachmentPattern.test(label)) {
     return {
       kind: 'attachment',
-      help: 'Identify the controlled artifact here, then upload objective evidence in the controlled-form evidence section below.',
+      help: 'Enter the controlled artifact reference, then use Open evidence upload to attach the file to this step form.',
       placeholder: 'Document number, revision, or retained evidence reference',
     };
   }

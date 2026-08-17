@@ -343,6 +343,7 @@ export const safeMigrationFiles = [
   '0280_move_forward.sql',
   '0281_contain_shipped_p1_auto_populate_regression.sql',
   '0282_car_form_data.sql',
+  '0283_remove_legacy_rma_change_control_projections.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -430,6 +431,7 @@ export const criticalMigrationFiles = new Set([
   '0279_vendor_international_contact_fields.sql',
   '0281_contain_shipped_p1_auto_populate_regression.sql',
   '0282_car_form_data.sql',
+  '0283_remove_legacy_rma_change_control_projections.sql',
 ]);
 
 export async function runSafeBootMigrations() {

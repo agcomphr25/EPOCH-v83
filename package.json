@@ -21,6 +21,7 @@
     "maintenance:safe-migrations": "tsx server/scripts/migrations/runSafeBootMigrations.ts",
     "repair:vendor-email-contacts": "tsx server/scripts/repairVendorEmailTemplateContacts.ts",
     "repair:p2-invoice-links": "tsx server/scripts/repairP2PackingSlipInvoiceLinks.ts",
+    "repair:project-to-p2-v2": "tsx server/scripts/convertLegacyProjectToP2V2.ts",
     "trace:ar-invoice-number": "tsx server/scripts/traceArInvoiceNumber.ts",
     "timekeeping:import-timetrakgo-pdf": "tsx server/scripts/importTimeTrakGoTimeCardPdf.ts",
     "predb:push": "npx tsx server/pre-deploy-migrate.ts",

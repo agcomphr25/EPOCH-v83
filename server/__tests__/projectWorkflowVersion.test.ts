@@ -47,15 +47,15 @@ describe('project workflow version resolution', () => {
     });
   });
 
-  it.each([undefined, 'false', 'invalid', 'TRUE', ' true', 'true '])(
-    'keeps new creation on legacy_v1 unless the flag is exactly true: %s',
+  it.each([undefined, 'true', 'invalid', 'TRUE', ' true', 'true '])(
+    'selects p2_v2 unless the rollback flag is exactly false: %s',
     (flag) => {
-      expect(getWorkflowVersionForNewProject(flag)).toBe('legacy_v1');
+      expect(getWorkflowVersionForNewProject(flag)).toBe('p2_v2');
     }
   );
 
-  it('selects p2_v2 for new projects only when the flag is exactly true', () => {
-    expect(getWorkflowVersionForNewProject('true')).toBe('p2_v2');
+  it('selects legacy_v1 only when the rollback flag is exactly false', () => {
+    expect(getWorkflowVersionForNewProject('false')).toBe('legacy_v1');
   });
 });
 

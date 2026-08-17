@@ -47,5 +47,8 @@ export function serializeProjectWorkflowVersion<
 export function getWorkflowVersionForNewProject(
   flagValue = process.env.P2_V2_WORKFLOW_CREATION_ENABLED
 ): ProjectWorkflowVersion {
-  return flagValue === 'true' ? 'p2_v2' : 'legacy_v1';
+  // P2 V2 is the released workflow for new projects. Keep an exact, explicit
+  // false value as the operational rollback switch; a missing deployment
+  // variable must not silently create another legacy project.
+  return flagValue === 'false' ? 'legacy_v1' : 'p2_v2';
 }

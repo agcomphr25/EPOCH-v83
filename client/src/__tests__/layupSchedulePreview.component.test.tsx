@@ -161,4 +161,62 @@ describe('LayupSchedulePreview printing', () => {
       'Schedule saved, but the barcode was not ready to print. Reprint it from Schedule History.'
     );
   });
+
+  it('prints every Thursday order across deterministic continuation pages', async () => {
+    const writes: string[] = [];
+    const printWindow = {
+      document: {
+        write: vi.fn((value: string) => writes.push(value)),
+        open: vi.fn(),
+        close: vi.fn(),
+      },
+      close: vi.fn(),
+      print: vi.fn(),
+      onload: null as null | (() => void),
+    };
+    vi.spyOn(window, 'open').mockReturnValue(printWindow as unknown as Window);
+
+    const thursdayItems = Array.from({ length: 25 }, (_, index) => ({
+      ...scheduledItems[0],
+      orderId: `THURSDAY-${String(index + 1).padStart(2, '0')}`,
+      scheduledDate: '2026-07-23',
+      dayOfWeek: 4,
+      dayName: 'Thursday',
+    }));
+
+    render(
+      <LayupSchedulePreview
+        open
+        onClose={vi.fn()}
+        scheduledItems={thursdayItems}
+        overflowItems={[]}
+        weekStart="2026-07-20"
+        totalItems={thursdayItems.length}
+        onApprove={vi.fn().mockResolvedValue({ entriesSaved: thursdayItems.length })}
+        isApproving={false}
+      />
+    );
+
+    await waitFor(() =>
+      expect(document.querySelector('svg rect')).not.toBeNull()
+    );
+    fireEvent.click(screen.getByTestId('button-print-schedule'));
+
+    await waitFor(() =>
+      expect(writes.some((value) => value.startsWith('<!DOCTYPE html>'))).toBe(
+        true
+      )
+    );
+
+    const printHtml = writes.find((value) => value.startsWith('<!DOCTYPE html>')) || '';
+    expect(printHtml.match(/data-print-day="Thursday"/g)).toHaveLength(3);
+    expect(printHtml).toContain('Thursday (continued)');
+    expect(printHtml).toContain('page 3 of 3');
+    expect(printHtml).toContain('overflow: visible');
+    expect(printHtml).not.toContain('page-break-inside: avoid; \n      margin-bottom');
+
+    for (const item of thursdayItems) {
+      expect(printHtml.match(new RegExp(item.orderId, 'g'))).toHaveLength(1);
+    }
+  });
 });

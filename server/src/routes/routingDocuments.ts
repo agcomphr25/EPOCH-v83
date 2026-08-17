@@ -2530,7 +2530,7 @@ const createDocumentFromTemplate = async (req: Request, res: Response) => {
       };
     });
 
-    const values = normalizeTemplateFieldValues(fieldValues);
+    const values = normalizeTemplateFieldValues(fieldValues, [...defaultFields, ...templateFields]);
     for (const field of templateFields) {
       const fieldValue = values[field.fieldName];
       if (field.isRequired && (fieldValue == null || fieldValue === '' || (Array.isArray(fieldValue) && fieldValue.length < (field.minimumRows || 1)))) {

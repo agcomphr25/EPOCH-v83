@@ -50,6 +50,16 @@ function stockModelLabel(item: {
   return item.stockModelDisplayName || item.stockModel || item.originalRef || 'Unresolved stock model';
 }
 
+const PRINT_ITEMS_PER_PAGE = 12;
+
+function chunkItems<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
 interface LayupSchedulePreviewProps {
   open: boolean;
   onClose: () => void;
@@ -229,6 +239,16 @@ export function LayupSchedulePreview({
   const generatePrintHTML = (barcodeDataURL: string) => {
     const dayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     const scheduledDays = [1, 2, 3, 4, 5].filter(day => itemsByDay[day]?.length > 0);
+    const printableDayPages = scheduledDays.flatMap((day) => {
+      const dayItems = itemsByDay[day] || [];
+      return chunkItems(dayItems, PRINT_ITEMS_PER_PAGE).map((items, pageIndex, pages) => ({
+        day,
+        items,
+        pageIndex,
+        pageCount: pages.length,
+        totalForDay: dayItems.length,
+      }));
+    });
     
     return `<!DOCTYPE html>
 <html>
@@ -307,12 +327,21 @@ export function LayupSchedulePreview({
       font-weight: 700;
       color: #2c3e50;
     }
+    .day-page {
+      break-after: page;
+      page-break-after: always;
+    }
+    .day-page:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
     .day-section { 
-      page-break-inside: avoid; 
+      break-inside: auto;
+      page-break-inside: auto;
       margin-bottom: 10px;
       border: 1px solid #dee2e6; 
       border-radius: 4px;
-      overflow: hidden;
+      overflow: visible;
       box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     .day-header { 
@@ -451,7 +480,11 @@ export function LayupSchedulePreview({
     }
     @media print { 
       body { padding: 0; }
+      .day-page { break-after: page; page-break-after: always; }
+      .day-page:last-child { break-after: auto; page-break-after: auto; }
+      .day-header { break-after: avoid; page-break-after: avoid; }
       .order-item { break-inside: avoid; }
+      .signature { break-inside: avoid; page-break-inside: avoid; }
     }
   </style>
 </head>
@@ -482,14 +515,15 @@ export function LayupSchedulePreview({
     </div>
   </div>
   
-  ${scheduledDays.map(day => `
+  ${printableDayPages.map(({ day, items, pageIndex, pageCount, totalForDay }) => `
+    <div class="day-page" data-print-day="${dayNames[day]}" data-print-page="${pageIndex + 1}">
     <div class="day-section">
       <div class="day-header">
-        <span>${dayNames[day]}</span>
-        <span class="count">${itemsByDay[day]?.length || 0} items</span>
+        <span>${dayNames[day]}${pageIndex > 0 ? ' (continued)' : ''}</span>
+        <span class="count">${totalForDay} items${pageCount > 1 ? ` • page ${pageIndex + 1} of ${pageCount}` : ''}</span>
       </div>
       <div class="day-content">
-        ${itemsByDay[day]?.map(item => `
+        ${items.map(item => `
           <div class="order-item">
             <div class="checkbox"></div>
             <div class="order-details">
@@ -532,7 +566,7 @@ export function LayupSchedulePreview({
             })()}
           </div>
         `).join('')}
-        <div class="signature">
+        ${pageIndex === pageCount - 1 ? `<div class="signature">
           <div class="sig-field">
             <div class="sig-label">Completed By</div>
             <div class="sig-line"></div>
@@ -541,8 +575,9 @@ export function LayupSchedulePreview({
             <div class="sig-label">Date</div>
             <div class="sig-line"></div>
           </div>
-        </div>
+        </div>` : ''}
       </div>
+    </div>
     </div>
   `).join('')}
 </body>

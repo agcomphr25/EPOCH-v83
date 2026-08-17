@@ -1638,6 +1638,10 @@ function App() {
                           component={QMSCorrectiveActionsPage}
                         />
                         <Route
+                          path="/qms/corrective-actions"
+                          component={QMSCorrectiveActionsPage}
+                        />
+                        <Route
                           path="/my-quality-actions"
                           component={MyQualityActionsPage}
                         />

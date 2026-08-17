@@ -36,6 +36,22 @@ describe('Roles, Permissions & Authorizations workspace continuity', () => {
     expect(page).toContain('Not linked');
   });
 
+  it('provides a combined employee-to-user access and authority matrix', () => {
+    const normalizedPage = page.replace(/\s+/g, ' ');
+    expect(page).toContain('defaultValue="access-matrix"');
+    expect(page).toContain('Employee Access Matrix');
+    expect(page).toContain('Employee name');
+    expect(page).toContain('Username');
+    expect(page).toContain('System role');
+    expect(page).toContain('Authorization allowed');
+    expect(page).toContain('No linked employee');
+    expect(page).toContain('No linked user');
+    expect(page).toContain("authorization.status === 'ACTIVE'");
+    expect(normalizedPage).toContain(
+      'System role permissions and training do not create formal authority.'
+    );
+  });
+
   it('reuses the Training-owned matrix and distinguishes competence from authority', () => {
     const normalizedPage = page.replace(/\s+/g, ' ');
     expect(page).toContain('<CertificationAuthorizationMatrix />');

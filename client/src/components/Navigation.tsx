@@ -400,9 +400,9 @@ export default function Navigation() {
     },
     {
       path: '/admin/roles-permissions',
-      label: 'Roles & Permissions',
+      label: 'Roles, Permissions & Authorizations',
       icon: Shield,
-      description: 'Manage capability-based role permissions and individual user overrides',
+      description: 'Review system access, competence evidence and formal authorizations',
     },
     {
       path: '/admin/operator-sessions',

@@ -1,0 +1,64 @@
+{
+  "dataClassification": "SYNTHETIC",
+  "asOf": "2026-08-14T12:00:00.000Z",
+  "employees": [
+    {
+      "id": 900001,
+      "employeeNumber": "SYN-001",
+      "name": "Synthetic Quality Inspector",
+      "employmentStatus": "ACTIVE",
+      "isActive": true,
+      "department": "Quality",
+      "jobTitle": "Synthetic Inspector"
+    }
+  ],
+  "users": [
+    {
+      "id": 990001,
+      "employeeId": 900001,
+      "username": "synthetic-inspector",
+      "role": "QUALITY",
+      "isActive": true,
+      "accessStatus": "ACTIVE"
+    }
+  ],
+  "roleCapabilities": { "QUALITY": ["quality.inspection.perform"] },
+  "overrides": [],
+  "scopedGrants": [
+    {
+      "userId": 990001,
+      "capability": "quality.inspection.perform",
+      "scopeType": "DEPARTMENT",
+      "department": "Quality"
+    }
+  ],
+  "projectAssignments": [
+    {
+      "employeeId": 900001,
+      "projectId": "SYN-PROJECT",
+      "projectRole": "QUALITY_REVIEWER"
+    }
+  ],
+  "designProjectAssignments": [],
+  "trainingRecords": [
+    { "employeeId": 900001, "trainingId": "SYN-TRAINING", "status": "COMPLETE" }
+  ],
+  "certifications": [
+    { "employeeId": 900001, "certificationId": "SYN-CERT", "status": "CURRENT" }
+  ],
+  "authorizations": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "employeeId": 900001,
+      "authorizationType": "QC_INSPECTION",
+      "status": "ACTIVE",
+      "effectiveDate": "2026-01-01T00:00:00.000Z",
+      "scope": "P2 / SYN-PART",
+      "qualificationMethod": "SYNTHETIC_DEMONSTRATION",
+      "evidenceReference": "SYN-EVIDENCE-001",
+      "approver": "Synthetic Approver",
+      "limitations": "Synthetic data only"
+    }
+  ],
+  "legacyP2Certifications": []
+}

@@ -110,7 +110,7 @@ function shipToAddress(invoice: any): string[] {
 function consolidateLines(lines: any[]): any[] {
   const grouped = new Map<string, any>();
   for (const line of lines) {
-    const key = JSON.stringify([line.partNumber || '', line.description || '', String(line.unitPrice ?? '')]);
+    const key = JSON.stringify([line.partNumber || '', line.dimensionTags?.clinNumber || '', line.description || '', String(line.unitPrice ?? '')]);
     const existing = grouped.get(key);
     if (existing) {
       existing.qty = String(Number(existing.qty || 0) + Number(line.qty || 0));
@@ -247,6 +247,9 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
       lotId: arInvoices.lotId,
       invoiceType: arInvoices.invoiceType,
       depositPurpose: arInvoices.depositPurpose,
+      pointOfContactName: arInvoices.pointOfContactName,
+      pointOfContactPhone: arInvoices.pointOfContactPhone,
+      pointOfContactEmail: arInvoices.pointOfContactEmail,
       projectCode: projects.projectCode,
       subtotal: arInvoices.subtotal,
       discountAmount: arInvoices.discountAmount,
@@ -442,7 +445,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   const detailRows: Array<[string, string]> = [
     ['Invoice Date:', date(invoice.invoiceDate)],
     ['Due Date:', date(invoice.dueDate)],
-    ['Terms:', String(invoice.terms || 'N/A')],
+    ['Terms:', String(invoice.terms || 'N/A').replaceAll('_', ' ').replace(/^NET /, 'Net ')],
     ['Customer PO:', String(invoice.poOverride || invoice.poNumber || invoice.poId || 'N/A')],
     ...(isMaterialDeposit
       ? [['Project:', String(invoice.projectCode || 'N/A')]]
@@ -458,9 +461,17 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   }
 
   y = Math.min(leftY, rightY) - 15;
+  if (isMaterialDeposit && (invoice.pointOfContactName || invoice.pointOfContactPhone || invoice.pointOfContactEmail)) {
+    ensureSpace(42);
+    page.drawText('POINT OF CONTACT', { x: PAGE.MARGIN, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });
+    y -= 13;
+    const contactParts = [invoice.pointOfContactName, invoice.pointOfContactPhone, invoice.pointOfContactEmail].filter(Boolean);
+    page.drawText(contactParts.join(' | '), { x: PAGE.MARGIN, y, size: FONT_SIZE.BODY, font, color: COLOR.TEXT });
+    y -= 18;
+  }
   page.drawRectangle({ x: PAGE.MARGIN, y: y - 18, width: PAGE.WIDTH - PAGE.MARGIN * 2, height: 18, color: COLOR.ACCENT });
   const cols = { part: PAGE.MARGIN + 5, desc: PAGE.MARGIN + 105, qty: PAGE.MARGIN + 350, unit: PAGE.MARGIN + 405, total: PAGE.MARGIN + 475 };
-  page.drawText(isP1Invoice ? 'PO #' : 'Part #', { x: cols.part, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
+  page.drawText(isP1Invoice ? 'PO #' : (isMaterialDeposit ? 'CLIN' : 'Part #'), { x: cols.part, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText(isP1Invoice ? 'Contents' : 'Description', { x: cols.desc, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText('Qty', { x: cols.qty, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText('Unit', { x: cols.unit, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
@@ -475,7 +486,8 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
       y = PAGE.HEIGHT - PAGE.MARGIN;
     }
     if (idx % 2 === 1) page.drawRectangle({ x: PAGE.MARGIN, y: y - rowHeight + 3, width: PAGE.WIDTH - PAGE.MARGIN * 2, height: rowHeight, color: COLOR.ALT });
-    page.drawText(isP1Invoice ? String(invoice.poOverride || invoice.poNumber || invoice.poId || '') : (line.partNumber || ''), { x: cols.part, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
+    const p2LineReference = isMaterialDeposit ? String(line.dimensionTags?.clinNumber || '') : (line.partNumber || '');
+    page.drawText(isP1Invoice ? String(invoice.poOverride || invoice.poNumber || invoice.poId || '') : p2LineReference, { x: cols.part, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     descLines.forEach((dl, i) => page.drawText(dl, { x: cols.desc, y: y - 8 - i * 10, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT }));
     page.drawText(quantity(line.qty), { x: cols.qty, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     page.drawText(money(line.unitPrice), { x: cols.unit, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });

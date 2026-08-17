@@ -7,6 +7,7 @@ import {
   p2Customers,
   p2DepositApplications,
   p2PurchaseOrders,
+  projectClins,
   projects,
 } from '../../schema';
 import { createOrReplaceAccountingPosting } from './accountingPostingService';
@@ -28,7 +29,9 @@ function addDays(value: string, days: number): string {
 }
 
 function termsDays(terms: string): number {
+  if (terms === 'DUE_ON_RECEIPT') return 0;
   if (terms === 'NET_15') return 15;
+  if (terms === 'NET_45') return 45;
   if (terms === 'NET_60') return 60;
   return 30;
 }
@@ -97,8 +100,26 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
      ORDER BY ai.invoice_number
   `);
 
-  return { project, deposits: deposits.rows, finalInvoices: finalInvoices.rows };
+  const clins = await db
+    .select({
+      id: projectClins.id,
+      clinNumber: projectClins.clinNumber,
+      description: projectClins.description,
+    })
+    .from(projectClins)
+    .where(and(eq(projectClins.projectId, projectId), eq(projectClins.active, true)));
+
+  return { project, deposits: deposits.rows, finalInvoices: finalInvoices.rows, clins };
 }
+
+type DepositClinAllocation = {
+  clinId: number;
+  amount: number;
+  calculationMethod: 'FIXED_AMOUNT' | 'PERCENTAGE';
+  percentage?: number | null;
+  contractLineValue?: number | null;
+  description?: string | null;
+};
 
 export async function createP2MaterialDepositInvoice(input: {
   projectId: string;
@@ -110,17 +131,45 @@ export async function createP2MaterialDepositInvoice(input: {
   description?: string;
   depositPurpose?: string;
   customerVisibleNotes?: string | null;
+  pointOfContactName?: string | null;
+  pointOfContactPhone?: string | null;
+  pointOfContactEmail?: string | null;
+  clinAllocations?: DepositClinAllocation[];
   internalReason: string;
   createdBy?: string | null;
 }) {
   const workspace = await getP2ProjectDepositWorkspace(input.projectId);
-  const amount = money(input.amount);
+  const requestedAllocations = input.clinAllocations || [];
+  const amount = money(requestedAllocations.length
+    ? requestedAllocations.reduce((sum, allocation) => sum + money(allocation.amount), 0)
+    : input.amount);
   if (amount <= 0) throw new Error('Deposit amount must be greater than zero');
   if (!input.internalReason?.trim()) throw new Error('An internal audit reason is required');
 
   const invoiceDate = input.invoiceDate || dateOnly(new Date());
   const terms = input.terms || workspace.project.paymentTerms || 'NET_30';
   const dueDate = input.dueDate || addDays(invoiceDate, termsDays(terms));
+  const availableClins = new Map(workspace.clins.map((clin) => [clin.id, clin]));
+  if (new Set(requestedAllocations.map((allocation) => allocation.clinId)).size !== requestedAllocations.length) {
+    throw new Error('Each CLIN may only appear once on a material deposit invoice');
+  }
+  const allocations = requestedAllocations.map((allocation) => {
+    const clin = availableClins.get(allocation.clinId);
+    if (!clin) throw new Error(`CLIN ${allocation.clinId} is not active on this project`);
+    const allocationAmount = money(allocation.amount);
+    if (allocationAmount <= 0) throw new Error(`Deposit amount for CLIN ${clin.clinNumber} must be greater than zero`);
+    if (allocation.calculationMethod === 'PERCENTAGE') {
+      const percentage = Number(allocation.percentage || 0);
+      const contractLineValue = money(allocation.contractLineValue);
+      if (percentage <= 0 || percentage > 100 || contractLineValue <= 0) {
+        throw new Error(`CLIN ${clin.clinNumber} requires a contract value and percentage between 0 and 100`);
+      }
+      if (money(contractLineValue * percentage / 100) !== allocationAmount) {
+        throw new Error(`CLIN ${clin.clinNumber} percentage calculation does not match its deposit amount`);
+      }
+    }
+    return { ...allocation, amount: allocationAmount, clin };
+  });
   const reservation = await reserveP2InvoiceNumber({
     customerId: workspace.project.customerId,
     customerName: workspace.project.customerName || workspace.project.customerId,
@@ -146,13 +195,37 @@ export async function createP2MaterialDepositInvoice(input: {
       invoiceType: 'MATERIAL_DEPOSIT',
       projectId: input.projectId,
       depositPurpose: input.depositPurpose?.trim() || 'MATERIAL',
+      pointOfContactName: input.pointOfContactName?.trim() || 'Glenn Jones',
+      pointOfContactPhone: input.pointOfContactPhone?.trim() || '(256) 797-5405',
+      pointOfContactEmail: input.pointOfContactEmail?.trim() || 'glenn.jones@agadvanced.com',
       autoCreated: false,
       customerVisibleNotes: input.customerVisibleNotes || null,
       internalNotes: `Material deposit for ${workspace.project.projectCode}. ${input.internalReason.trim()}`,
       createdBy: input.createdBy || null,
     }).returning();
 
-    await tx.insert(arInvoiceLines).values({
+    const invoiceLines = allocations.length ? allocations.map((allocation) => ({
+      invoiceId: invoice.id,
+      productionLine: 'P2',
+      projectId: input.projectId,
+      projectNameSnapshot: workspace.project.projectName,
+      description: allocation.description?.trim() || allocation.clin.description || input.description?.trim() || `Material deposit - CLIN ${allocation.clin.clinNumber}`,
+      qty: '1',
+      unitPrice: allocation.amount.toFixed(2),
+      lineTotal: allocation.amount.toFixed(2),
+      dimensionTags: {
+        source: 'p2_material_deposit',
+        invoiceType: 'MATERIAL_DEPOSIT',
+        depositPurpose: input.depositPurpose?.trim() || 'MATERIAL',
+        projectId: input.projectId,
+        projectCode: workspace.project.projectCode,
+        clinId: allocation.clin.id,
+        clinNumber: allocation.clin.clinNumber,
+        calculationMethod: allocation.calculationMethod,
+        percentage: allocation.percentage ?? null,
+        contractLineValue: allocation.contractLineValue ?? null,
+      },
+    })) : [{
       invoiceId: invoice.id,
       productionLine: 'P2',
       projectId: input.projectId,
@@ -161,14 +234,9 @@ export async function createP2MaterialDepositInvoice(input: {
       qty: '1',
       unitPrice: amount.toFixed(2),
       lineTotal: amount.toFixed(2),
-      dimensionTags: {
-        source: 'p2_material_deposit',
-        invoiceType: 'MATERIAL_DEPOSIT',
-        depositPurpose: input.depositPurpose?.trim() || 'MATERIAL',
-        projectId: input.projectId,
-        projectCode: workspace.project.projectCode,
-      },
-    });
+      dimensionTags: { source: 'p2_material_deposit', invoiceType: 'MATERIAL_DEPOSIT', depositPurpose: input.depositPurpose?.trim() || 'MATERIAL', projectId: input.projectId, projectCode: workspace.project.projectCode },
+    }];
+    await tx.insert(arInvoiceLines).values(invoiceLines);
 
     return invoice;
   });
@@ -180,7 +248,7 @@ export async function createP2MaterialDepositInvoice(input: {
     action: 'RESERVE_FOR_PROJECT_DEPOSIT',
     reason: input.internalReason,
     changedBy: input.createdBy || 'system',
-    metadata: { projectId: input.projectId, purpose: input.depositPurpose?.trim() || 'MATERIAL', amount },
+    metadata: { projectId: input.projectId, purpose: input.depositPurpose?.trim() || 'MATERIAL', amount, clinAllocations: allocations.map((allocation) => ({ clinId: allocation.clin.id, clinNumber: allocation.clin.clinNumber, amount: allocation.amount, calculationMethod: allocation.calculationMethod })) },
   });
 
   return result;

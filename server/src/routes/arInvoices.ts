@@ -649,6 +649,17 @@ const materialDepositSchema = z.object({
   description: z.string().min(1).optional(),
   depositPurpose: z.string().min(1).optional(),
   customerVisibleNotes: z.string().nullable().optional(),
+  pointOfContactName: z.string().trim().min(1).optional(),
+  pointOfContactPhone: z.string().trim().min(1).optional(),
+  pointOfContactEmail: z.string().trim().email().optional(),
+  clinAllocations: z.array(z.object({
+    clinId: z.coerce.number().int().positive(),
+    amount: z.coerce.number().positive(),
+    calculationMethod: z.enum(['FIXED_AMOUNT', 'PERCENTAGE']),
+    percentage: z.coerce.number().positive().max(100).nullable().optional(),
+    contractLineValue: z.coerce.number().positive().nullable().optional(),
+    description: z.string().trim().nullable().optional(),
+  })).optional(),
   internalReason: z.string().min(3),
 });
 
@@ -675,7 +686,7 @@ router.post('/project-deposits', requirePermission('finance.post_invoice'), asyn
       subjectId: invoice.id,
       sourceService: 'arInvoices.route',
       actor: { username: (req as any).user?.username || null },
-      payload: { projectId: input.projectId, amount: input.amount, reason: input.internalReason },
+      payload: { projectId: input.projectId, amount: input.amount, terms: input.terms, clinAllocations: input.clinAllocations || [], reason: input.internalReason },
       reason: input.internalReason,
     });
     res.status(201).json(invoice);

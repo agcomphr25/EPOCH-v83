@@ -112,6 +112,7 @@ interface PartRouting {
 
 export default function P2ControlCenter() {
   const [location, navigate] = useLocation();
+  const { toast } = useToast();
   const urlParams = new URLSearchParams(window.location.search);
   const tabFromUrl = urlParams.get('tab');
   const poFromUrl = urlParams.get('po') || undefined;

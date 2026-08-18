@@ -1,51 +1,51 @@
 export const DESIGN_CONTROL_PHASES = [
   {
-    key: 'define-project',
+    key: 'start-plan',
     order: 1,
-    title: 'Define the Project',
+    title: 'Start & Plan',
     stepKeys: ['1', '2'],
     explanation:
-      'Describe the project, its purpose, responsibilities, plan, and required evidence.',
+      'Define the project, responsibility, schedule, required activities, and resources.',
   },
   {
     key: 'requirements-risks',
     order: 2,
-    title: 'Requirements and Risks',
+    title: 'Requirements & Risks',
     stepKeys: ['3', '4', '5'],
     explanation:
       'Confirm what the design must do, resolve unclear requirements, and control design risk.',
   },
   {
-    key: 'develop-design',
+    key: 'design-outputs',
     order: 3,
-    title: 'Develop the Design',
+    title: 'Design Outputs',
     stepKeys: ['6', '7'],
     explanation:
-      'Review the design direction and create controlled outputs that satisfy the requirements.',
+      'Review the design direction and link the drawings, bill of materials, specifications, and other authoritative outputs.',
   },
   {
-    key: 'build-review-test',
+    key: 'review-verify-validate',
     order: 4,
-    title: 'Build, Review, and Test',
+    title: 'Review, Verify & Validate',
     stepKeys: ['8', '9', '10'],
     explanation:
-      'Build the correct configuration and retain separate verification and validation evidence.',
+      'Review readiness, verify that the design is correct, and validate that it works for its intended use.',
   },
   {
-    key: 'final-approval',
+    key: 'approve-release',
     order: 5,
-    title: 'Final Design Approval',
-    stepKeys: ['11'],
+    title: 'Approve & Release',
+    stepKeys: ['11', '12'],
     explanation:
-      'Resolve readiness blockers and obtain an authenticated final design decision.',
+      'Resolve readiness blockers, obtain the required approvals, and create the Engineering Release baseline.',
   },
   {
-    key: 'manufacturing-release',
+    key: 'control-changes',
     order: 6,
-    title: 'Release to Manufacturing',
-    stepKeys: ['12'],
+    title: 'Control Changes',
+    stepKeys: [],
     explanation:
-      'Create the separately approved, immutable Engineering Release baseline.',
+      'After Engineering Release, use approved change requests and change notices to revise the controlled baseline.',
   },
 ] as const;
 

@@ -37,6 +37,13 @@ describe('P2 material deposit CLIN, terms, and contact enhancement', () => {
     expect(component).toContain('Quantity × unit price from the selected PO line.');
   });
 
+  it('supports a PO linked from the PO side when projects.po_id is empty', () => {
+    const service = read('server/src/services/p2ProjectDepositService.ts');
+    expect(service).toContain('po.project_id = ${projectId}::uuid');
+    expect(service).toContain('po.is_current_revision DESC');
+    expect(service).toContain('poId: effectivePo?.id ?? storedProject.poId');
+  });
+
   it('renders the point of contact and CLIN reference on the customer PDF', () => {
     const pdf = read('server/utils/pdf/arInvoicePdf.ts');
     expect(pdf).toContain("'POINT OF CONTACT'");

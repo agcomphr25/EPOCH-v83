@@ -2,6 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { runMigrationSafetyCheck } from '../utils/migrationSafetyCheck';
+import {
+  criticalMigrationFiles,
+  safeMigrationFiles,
+} from '../scripts/migrations/runSafeBootMigrations';
 
 const migrationPath = path.resolve(
   process.cwd(),
@@ -22,5 +26,11 @@ describe('P2 customer contacts migration', () => {
     expect(sql).toMatch(/REFERENCES p2_customers\s*\(id\)/i);
     expect(sql).toMatch(/ON DELETE CASCADE/i);
     expect(sql).toMatch(/p2_customer_contacts_customer_id_idx/i);
+  });
+
+  it('is registered as a required production boot migration', () => {
+    const migrationName = '0284_p2_customer_contacts.sql';
+    expect(safeMigrationFiles).toContain(migrationName);
+    expect(criticalMigrationFiles.has(migrationName)).toBe(true);
   });
 });

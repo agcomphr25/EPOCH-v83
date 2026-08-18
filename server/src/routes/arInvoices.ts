@@ -654,6 +654,7 @@ const materialDepositSchema = z.object({
   pointOfContactEmail: z.string().trim().email().optional(),
   clinAllocations: z.array(z.object({
     clinId: z.coerce.number().int().positive(),
+    customerClin: z.string().trim().max(100).nullable().optional(),
     amount: z.coerce.number().positive(),
     calculationMethod: z.enum(['FIXED_AMOUNT', 'PERCENTAGE']),
     percentage: z.coerce.number().positive().max(100).nullable().optional(),

@@ -110,7 +110,7 @@ function shipToAddress(invoice: any): string[] {
 function consolidateLines(lines: any[]): any[] {
   const grouped = new Map<string, any>();
   for (const line of lines) {
-    const key = JSON.stringify([line.partNumber || '', line.dimensionTags?.clinNumber || '', line.description || '', String(line.unitPrice ?? '')]);
+    const key = JSON.stringify([line.partNumber || '', line.dimensionTags?.poLineNumber || '', line.dimensionTags?.clinNumber || '', line.description || '', String(line.unitPrice ?? '')]);
     const existing = grouped.get(key);
     if (existing) {
       existing.qty = String(Number(existing.qty || 0) + Number(line.qty || 0));
@@ -499,8 +499,11 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     y -= 18;
   }
   page.drawRectangle({ x: PAGE.MARGIN, y: y - 18, width: PAGE.WIDTH - PAGE.MARGIN * 2, height: 18, color: COLOR.ACCENT });
-  const cols = { part: PAGE.MARGIN + 5, desc: PAGE.MARGIN + 105, qty: PAGE.MARGIN + 350, unit: PAGE.MARGIN + 405, total: PAGE.MARGIN + 475 };
-  page.drawText(isP1Invoice ? 'PO #' : (isMaterialDeposit ? 'CLIN' : 'Part #'), { x: cols.part, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
+  const cols = isMaterialDeposit
+    ? { part: PAGE.MARGIN + 5, clin: PAGE.MARGIN + 58, desc: PAGE.MARGIN + 125, qty: PAGE.MARGIN + 355, unit: PAGE.MARGIN + 405, total: PAGE.MARGIN + 475 }
+    : { part: PAGE.MARGIN + 5, clin: 0, desc: PAGE.MARGIN + 105, qty: PAGE.MARGIN + 350, unit: PAGE.MARGIN + 405, total: PAGE.MARGIN + 475 };
+  page.drawText(isP1Invoice ? 'PO #' : (isMaterialDeposit ? 'PO Line' : 'Part #'), { x: cols.part, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
+  if (isMaterialDeposit) page.drawText('CLIN / SLIN', { x: cols.clin, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText(isP1Invoice ? 'Contents' : 'Description', { x: cols.desc, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText('Qty', { x: cols.qty, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText('Unit', { x: cols.unit, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
@@ -508,15 +511,16 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   y -= 24;
 
   lines.forEach((line, idx) => {
-    const descLines = wrap(line.description, 240, font, FONT_SIZE.TABLE);
+    const descLines = wrap(line.description, isMaterialDeposit ? 220 : 240, font, FONT_SIZE.TABLE);
     const rowHeight = Math.max(17, descLines.length * 10 + 6);
     if (y - rowHeight < PAGE.MARGIN + 120) {
       page = pdf.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
       y = PAGE.HEIGHT - PAGE.MARGIN;
     }
     if (idx % 2 === 1) page.drawRectangle({ x: PAGE.MARGIN, y: y - rowHeight + 3, width: PAGE.WIDTH - PAGE.MARGIN * 2, height: rowHeight, color: COLOR.ALT });
-    const p2LineReference = isMaterialDeposit ? String(line.dimensionTags?.clinNumber || '') : (line.partNumber || '');
+    const p2LineReference = isMaterialDeposit ? String(line.dimensionTags?.poLineNumber || '-') : (line.partNumber || '');
     page.drawText(isP1Invoice ? String(invoice.poOverride || invoice.poNumber || invoice.poId || '') : p2LineReference, { x: cols.part, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
+    if (isMaterialDeposit) page.drawText(String(line.dimensionTags?.clinNumber || '-'), { x: cols.clin, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     descLines.forEach((dl, i) => page.drawText(dl, { x: cols.desc, y: y - 8 - i * 10, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT }));
     page.drawText(quantity(line.qty), { x: cols.qty, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     page.drawText(money(line.unitPrice), { x: cols.unit, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });

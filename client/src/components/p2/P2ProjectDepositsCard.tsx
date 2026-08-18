@@ -21,8 +21,8 @@ const addDays = (dateValue: string, days: number) => {
   return value.toISOString().slice(0, 10);
 };
 const dueDateForTerms = (invoiceDate: string, terms: string) => addDays(invoiceDate, terms === 'DUE_ON_RECEIPT' ? 0 : Number(terms.replace('NET_', '')) || 30);
-type ClinAllocation = { clinId: string; calculationMethod: 'FIXED_AMOUNT' | 'PERCENTAGE'; fixedAmount: string; percentage: string; contractLineValue: string; description: string };
-const emptyAllocation = (): ClinAllocation => ({ clinId: '', calculationMethod: 'FIXED_AMOUNT', fixedAmount: '', percentage: '', contractLineValue: '', description: '' });
+type ClinAllocation = { clinId: string; customerClin: string; calculationMethod: 'FIXED_AMOUNT' | 'PERCENTAGE'; fixedAmount: string; percentage: string; contractLineValue: string; description: string };
+const emptyAllocation = (): ClinAllocation => ({ clinId: '', customerClin: '', calculationMethod: 'FIXED_AMOUNT', fixedAmount: '', percentage: '', contractLineValue: '', description: '' });
 
 export default function P2ProjectDepositsCard({ projectId }: { projectId: string }) {
   const [, navigate] = useLocation();
@@ -48,6 +48,7 @@ export default function P2ProjectDepositsCard({ projectId }: { projectId: string
     setAllocations(allocations.map((row, rowIndex) => rowIndex === index ? {
       ...row,
       clinId,
+      customerClin: selectedClin?.customerClin || '',
       contractLineValue: Number(selectedClin?.contractLineValue || 0) > 0
         ? String(selectedClin.contractLineValue)
         : '',
@@ -75,6 +76,7 @@ export default function P2ProjectDepositsCard({ projectId }: { projectId: string
       pointOfContactEmail: form.pointOfContactEmail,
       clinAllocations: allocations.map((allocation) => ({
         clinId: Number(allocation.clinId),
+        customerClin: allocation.customerClin.trim() || null,
         amount: Number(allocationAmount(allocation).toFixed(2)),
         calculationMethod: allocation.calculationMethod,
         percentage: allocation.calculationMethod === 'PERCENTAGE' ? Number(allocation.percentage) : null,
@@ -139,7 +141,7 @@ export default function P2ProjectDepositsCard({ projectId }: { projectId: string
             <div className="md:col-span-2"><Label>Customer notes</Label><Textarea value={form.customerNotes} onChange={(e) => setForm({ ...form, customerNotes: e.target.value })} /></div>
             <div className="md:col-span-2 rounded-md border p-3"><p className="mb-3 font-medium">Accounting Point of Contact</p><div className="grid gap-3 md:grid-cols-3"><div><Label>Name *</Label><Input value={form.pointOfContactName} onChange={(e) => setForm({ ...form, pointOfContactName: e.target.value })} /></div><div><Label>Phone *</Label><Input value={form.pointOfContactPhone} onChange={(e) => setForm({ ...form, pointOfContactPhone: e.target.value })} /></div><div><Label>Email *</Label><Input type="email" value={form.pointOfContactEmail} onChange={(e) => setForm({ ...form, pointOfContactEmail: e.target.value })} /></div></div></div>
             <div className="md:col-span-2 space-y-3 rounded-md border p-3">
-              <div className="flex items-center justify-between"><div><p className="font-medium">CLIN Allocations</p><p className="text-xs text-muted-foreground">Allocate this deposit by fixed amount or as a percentage of the CLIN contract value.</p></div><Button type="button" size="sm" variant="outline" onClick={() => setAllocations([...allocations, emptyAllocation()])}>Add CLIN</Button></div>
+              <div className="flex items-center justify-between"><div><p className="font-medium">PO Line Allocations</p><p className="text-xs text-muted-foreground">Allocate by customer PO line. Enter a CLIN or SLIN only when the customer has provided one.</p></div><Button type="button" size="sm" variant="outline" onClick={() => setAllocations([...allocations, emptyAllocation()])}>Add PO Line</Button></div>
               {workspace.isError ? (
                 <p className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
                   Unable to load PO lines: {workspaceError}
@@ -147,11 +149,12 @@ export default function P2ProjectDepositsCard({ projectId }: { projectId: string
               ) : clins.length === 0 ? (
                 <p className="rounded bg-amber-50 p-2 text-sm text-amber-900">No PO lines are available for this project. Link an active customer PO with line items before creating a deposit invoice.</p>
               ) : null}
-              {allocations.map((allocation, index) => <div key={index} className="grid gap-2 rounded border p-3 md:grid-cols-6">
-                <div className="md:col-span-2"><Label>PO line / CLIN *</Label><Select value={allocation.clinId} onValueChange={(value) => updateAllocationClin(index, value)}><SelectTrigger><SelectValue placeholder="Select PO line" /></SelectTrigger><SelectContent>{clins.map((clin: any) => <SelectItem key={clin.id} value={String(clin.id)}>Line {clin.clinNumber}{clin.description ? ` - ${clin.description}` : ''}{Number(clin.contractLineValue || 0) > 0 ? ` (${money(clin.contractLineValue)})` : ''}</SelectItem>)}</SelectContent></Select></div>
+              {allocations.map((allocation, index) => <div key={index} className="grid gap-2 rounded border p-3 md:grid-cols-8">
+                <div className="md:col-span-3"><Label>PO Line *</Label><Select value={allocation.clinId} onValueChange={(value) => updateAllocationClin(index, value)}><SelectTrigger><SelectValue placeholder="Select PO line" /></SelectTrigger><SelectContent>{clins.map((clin: any) => <SelectItem key={clin.id} value={String(clin.id)}>PO Line {clin.poLineNumber || clin.clinNumber}{clin.description ? ` - ${clin.description}` : ''}{Number(clin.contractLineValue || 0) > 0 ? ` (${money(clin.contractLineValue)})` : ''}</SelectItem>)}</SelectContent></Select></div>
+                <div className="md:col-span-2"><Label>CLIN / SLIN (optional)</Label><Input value={allocation.customerClin} onChange={(e) => setAllocations(allocations.map((row, rowIndex) => rowIndex === index ? { ...row, customerClin: e.target.value } : row))} placeholder="e.g. 0001AA" /></div>
                 <div className="md:col-span-2"><Label>Method *</Label><Select value={allocation.calculationMethod} onValueChange={(value: 'FIXED_AMOUNT' | 'PERCENTAGE') => setAllocations(allocations.map((row, rowIndex) => rowIndex === index ? { ...row, calculationMethod: value } : row))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="FIXED_AMOUNT">Fixed amount</SelectItem><SelectItem value="PERCENTAGE">Percentage</SelectItem></SelectContent></Select></div>
                 {allocation.calculationMethod === 'FIXED_AMOUNT' ? <div><Label>Deposit *</Label><Input type="number" min="0.01" step="0.01" value={allocation.fixedAmount} onChange={(e) => setAllocations(allocations.map((row, rowIndex) => rowIndex === index ? { ...row, fixedAmount: e.target.value } : row))} /></div> : <><div><Label>Full PO line value *</Label><Input type="number" min="0.01" step="0.01" value={allocation.contractLineValue} readOnly className="bg-muted" /><p className="mt-1 text-xs text-muted-foreground">Quantity × unit price from the selected PO line.</p></div><div><Label>Deposit percent *</Label><Input type="number" min="0.01" max="100" step="0.01" value={allocation.percentage} onChange={(e) => setAllocations(allocations.map((row, rowIndex) => rowIndex === index ? { ...row, percentage: e.target.value } : row))} /></div></>}
-                <div className="flex items-end justify-between gap-2 md:col-span-6"><span className="text-sm font-medium">Allocation: {money(allocationAmount(allocation))}</span>{allocations.length > 1 && <Button type="button" size="sm" variant="ghost" onClick={() => setAllocations(allocations.filter((_, rowIndex) => rowIndex !== index))}>Remove</Button>}</div>
+                <div className="flex items-end justify-between gap-2 md:col-span-8"><span className="text-sm font-medium">Allocation: {money(allocationAmount(allocation))}</span>{allocations.length > 1 && <Button type="button" size="sm" variant="ghost" onClick={() => setAllocations(allocations.filter((_, rowIndex) => rowIndex !== index))}>Remove</Button>}</div>
               </div>)}
               <div className="text-right text-lg font-semibold">Deposit total: {money(depositTotal)}</div>
             </div>

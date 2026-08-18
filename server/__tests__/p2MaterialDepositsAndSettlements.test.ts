@@ -11,6 +11,8 @@ describe('P2 material deposits and customer payment settlements', () => {
   const depositService = read('server/src/services/p2ProjectDepositService.ts');
   const settlementService = read('server/src/services/paymentSettlementService.ts');
   const invoicePdf = read('server/utils/pdf/arInvoicePdf.ts');
+  const invoiceRoutes = read('server/src/routes/arInvoices.ts');
+  const invoiceDetail = read('client/src/pages/InvoiceDetailPage.tsx');
 
   it('uses an additive migration accepted by the safety scanner', () => {
     expect(() => runMigrationSafetyCheck(migration, '0285_p2_material_deposits_and_payment_settlements.sql')).not.toThrow();
@@ -37,5 +39,21 @@ describe('P2 material deposits and customer payment settlements', () => {
   it('labels a deposit PDF distinctly from a shipment invoice', () => {
     expect(invoicePdf).toContain("isMaterialDeposit ? 'MATERIAL DEPOSIT' : 'INVOICE'");
     expect(invoicePdf).toContain("['Project:', String(invoice.projectCode || 'N/A')]");
+  });
+
+  it('posts the final invoice and applies a selected deposit atomically', () => {
+    expect(invoiceRoutes).toContain('depositApplication = z.object');
+    expect(invoiceRoutes).toContain('}, tx)');
+    expect(invoiceRoutes).toContain("eventType: 'P2_MATERIAL_DEPOSIT_APPLIED'");
+    expect(depositService).toContain("['POSTED', 'SENT'].includes(finalInvoice.status)");
+    expect(invoiceDetail).toContain('Post & Apply Deposit');
+  });
+
+  it('shows applied deposits and the true remaining balance on the customer PDF', () => {
+    expect(invoicePdf).toContain('depositApplications.rows.map');
+    expect(invoicePdf).toContain('deposit.invoice_number');
+    expect(invoicePdf).toContain("pda.status = 'POSTED'");
+    expect(invoicePdf).toContain("page.drawText(money(amountDue)");
+    expect(invoiceDetail).toContain('Material deposit applied:');
   });
 });

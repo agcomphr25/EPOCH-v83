@@ -237,11 +237,21 @@ export default function InvoiceDetailPage() {
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
+  const [selectedDepositId, setSelectedDepositId] = useState('');
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositReason, setDepositReason] = useState('Apply paid material deposit to final packing-slip invoice');
 
   const { data: invoice, isLoading } = useQuery<any>({
     queryKey: ['/api/ar-invoices', id],
     enabled: !!id,
   });
+
+  const { data: depositWorkspace } = useQuery<any>({
+    queryKey: ['/api/ar-invoices/project-deposits', invoice?.projectId],
+    queryFn: () => apiRequest(`/api/ar-invoices/project-deposits?projectId=${encodeURIComponent(invoice.projectId)}`),
+    enabled: !!invoice?.projectId && invoice?.invoiceType !== 'MATERIAL_DEPOSIT',
+  });
+  const availableDeposits = (depositWorkspace?.deposits || []).filter((deposit: any) => Number(deposit.availableAmount || 0) > 0);
 
   const { data: linkedCreditMemos = [] } = useQuery<any[]>({
     queryKey: ['/api/credit-memos/invoice', id],
@@ -277,12 +287,21 @@ export default function InvoiceDetailPage() {
   });
 
   const postInvoiceMutation = useMutation({
-    mutationFn: () => apiRequest(`/api/ar-invoices/${id}/post`, { method: 'POST' }),
+    mutationFn: () => apiRequest(`/api/ar-invoices/${id}/post`, {
+      method: 'POST',
+      body: selectedDepositId ? {
+        depositApplication: {
+          depositInvoiceId: selectedDepositId,
+          amount: Number(depositAmount),
+          reason: depositReason,
+        },
+      } : {},
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (query) =>
         Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
       });
-      toast({ title: 'Invoice posted', description: 'Invoice is ready to send.' });
+      toast({ title: selectedDepositId ? 'Invoice posted and deposit applied' : 'Invoice posted', description: 'Invoice is ready to send.' });
     },
     onError: (error: any) => {
       toast({ title: 'Post failed', description: error.message, variant: 'destructive' });
@@ -644,11 +663,11 @@ export default function InvoiceDetailPage() {
             <Button
               variant="outline"
               onClick={() => postInvoiceMutation.mutate()}
-              disabled={postInvoiceMutation.isPending || invoice.pricingMismatch || invoice.pricingAmbiguous}
+              disabled={postInvoiceMutation.isPending || invoice.pricingMismatch || invoice.pricingAmbiguous || (!!selectedDepositId && (Number(depositAmount) <= 0 || depositReason.trim().length < 3))}
               title={invoice.pricingMismatch || invoice.pricingAmbiguous ? 'Resolve pricing before posting' : 'Post invoice'}
             >
               <CheckCircle className="mr-2 h-4 w-4" />
-              {postInvoiceMutation.isPending ? 'Posting...' : 'Post'}
+              {postInvoiceMutation.isPending ? 'Posting...' : selectedDepositId ? 'Post & Apply Deposit' : 'Post'}
             </Button>
           )}
           {['REVIEW', 'POSTED', 'SENT'].includes(invoice.status) && (
@@ -830,6 +849,38 @@ export default function InvoiceDetailPage() {
 
               <Separator className="my-4" />
 
+              {invoice.invoiceType !== 'MATERIAL_DEPOSIT' && invoice.projectId && ['DRAFT', 'REVIEW'].includes(invoice.status) && (
+                <>
+                  <div>
+                    <p className="text-sm font-medium mb-2">Available Material Deposit</p>
+                    {availableDeposits.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No paid, unapplied material deposit is available for this project.</p>
+                    ) : (
+                      <div className="grid gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 md:grid-cols-3">
+                        <div>
+                          <Label>Deposit invoice</Label>
+                          <Select value={selectedDepositId} onValueChange={(value) => {
+                            const deposit = availableDeposits.find((row: any) => row.id === value);
+                            setSelectedDepositId(value);
+                            setDepositAmount(String(Math.min(Number(deposit?.availableAmount || 0), Number(invoice.balance || invoice.totalAmount || 0))));
+                          }}>
+                            <SelectTrigger><SelectValue placeholder="Do not apply a deposit" /></SelectTrigger>
+                            <SelectContent>
+                              {availableDeposits.map((deposit: any) => <SelectItem key={deposit.id} value={deposit.id}>{deposit.invoiceNumber} · {formatCurrency(deposit.availableAmount)} available</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div><Label>Amount to apply</Label><Input type="number" min="0.01" step="0.01" value={depositAmount} onChange={(event) => setDepositAmount(event.target.value)} disabled={!selectedDepositId} /></div>
+                        <div><Label>Audit reason</Label><Input value={depositReason} onChange={(event) => setDepositReason(event.target.value)} disabled={!selectedDepositId} /></div>
+                        {selectedDepositId && <Button type="button" variant="ghost" className="justify-self-start" onClick={() => { setSelectedDepositId(''); setDepositAmount(''); }}>Clear deposit selection</Button>}
+                      </div>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground">When selected, posting creates the shipment-invoice journal entry and applies the deposit in the same database transaction.</p>
+                  </div>
+                  <Separator className="my-4" />
+                </>
+              )}
+
               <div>
                 <p className="text-sm font-medium mb-2">Accounting Posting</p>
                 {invoice.journalEntryId ? (
@@ -875,6 +926,12 @@ export default function InvoiceDetailPage() {
                         {formatCurrency(invoice.amountPaid)}
                       </span>
                     </div>
+                    {Number(invoice.depositApplied || 0) > 0 && (
+                      <div className="flex justify-between w-56">
+                        <span className="text-muted-foreground">Material deposit applied:</span>
+                        <span className="font-medium text-blue-600 dark:text-blue-400">-{formatCurrency(invoice.depositApplied)}</span>
+                      </div>
+                    )}
                     <Separator className="w-56 my-1" />
                     <div className="flex justify-between w-56">
                       <span className="font-bold">Balance Due:</span>

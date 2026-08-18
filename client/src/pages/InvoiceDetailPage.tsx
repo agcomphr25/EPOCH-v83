@@ -153,6 +153,16 @@ type InvoiceAttachment = {
 type SendInvoicePayload = {
   recipients: string[];
   attachmentMediaIds: string[];
+  customerMessage: string;
+};
+
+type InvoiceEmailPreview = {
+  to: string;
+  cc: string[];
+  subject: string;
+  text: string;
+  html: string;
+  attachments: Array<{ filename: string; type?: string; disposition?: string }>;
 };
 
 function RecipientPickerList({
@@ -235,6 +245,8 @@ export default function InvoiceDetailPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedAttachmentMediaIds, setSelectedAttachmentMediaIds] = useState<string[]>([]);
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
+  const [customerMessage, setCustomerMessage] = useState('');
+  const [previewCustomerMessage, setPreviewCustomerMessage] = useState('');
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [selectedDepositId, setSelectedDepositId] = useState('');
@@ -274,6 +286,26 @@ export default function InvoiceDetailPage() {
     setSelectedAttachmentMediaIds(invoiceAttachments.map((item) => item.media.id));
   }, [sendDialogOpen, invoiceAttachments]);
 
+  useEffect(() => {
+    if (!sendDialogOpen) return;
+    const timer = window.setTimeout(() => setPreviewCustomerMessage(customerMessage), 350);
+    return () => window.clearTimeout(timer);
+  }, [customerMessage, sendDialogOpen]);
+
+  const emailPreview = useQuery<InvoiceEmailPreview>({
+    queryKey: ['/api/ar-invoices', id, 'email-preview', selectedRecipients, selectedAttachmentMediaIds, previewCustomerMessage],
+    queryFn: () => apiRequest(`/api/ar-invoices/${id}/email-preview`, {
+      method: 'POST',
+      body: {
+        recipients: selectedRecipients,
+        attachmentMediaIds: selectedAttachmentMediaIds,
+        customerMessage: previewCustomerMessage.trim() || undefined,
+      },
+    }),
+    enabled: sendDialogOpen && !!id && selectedRecipients.length > 0 && !isLoadingRecipients,
+    staleTime: 0,
+  });
+
   const { data: packingSlipInfo } = useQuery<any>({
     queryKey: ['/api/p2/packing-slips', invoice?.packingSlipId],
     queryFn: () => fetch(`/api/p2/packing-slips/${invoice.packingSlipId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
@@ -309,10 +341,10 @@ export default function InvoiceDetailPage() {
   });
 
   const sendInvoiceMutation = useMutation({
-    mutationFn: ({ recipients, attachmentMediaIds }: SendInvoicePayload) =>
+    mutationFn: ({ recipients, attachmentMediaIds, customerMessage }: SendInvoicePayload) =>
       apiRequest(`/api/ar-invoices/${id}/send`, {
         method: 'POST',
-        body: { recipients, attachmentMediaIds },
+        body: { recipients, attachmentMediaIds, customerMessage: customerMessage.trim() || undefined },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (query) =>
@@ -370,6 +402,8 @@ export default function InvoiceDetailPage() {
   };
 
   const handleOpenSendDialog = () => {
+    setCustomerMessage('');
+    setPreviewCustomerMessage('');
     setSendDialogOpen(true);
     queryClient.invalidateQueries({ queryKey: ['/api/media/attachments', 'invoice', id] });
     loadInvoiceRecipients();
@@ -1162,7 +1196,7 @@ export default function InvoiceDetailPage() {
       </Tabs>
 
       <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Send Invoice</DialogTitle>
             <DialogDescription>
@@ -1177,6 +1211,17 @@ export default function InvoiceDetailPage() {
                 selected={selectedRecipients}
                 onChange={setSelectedRecipients}
                 isLoading={isLoadingRecipients}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="invoice-customer-message">Customer Message (optional)</Label>
+              <Textarea
+                id="invoice-customer-message"
+                rows={3}
+                value={customerMessage}
+                onChange={(event) => setCustomerMessage(event.target.value)}
+                placeholder="Leave blank to use the customer-visible notes already saved on the invoice."
               />
             </div>
 
@@ -1264,6 +1309,44 @@ export default function InvoiceDetailPage() {
                 </p>
               )}
             </div>
+
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-sm font-semibold">Email Preview</Label>
+                {(emailPreview.isFetching || customerMessage !== previewCustomerMessage) && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Updating</span>
+                )}
+              </div>
+              {emailPreview.isError ? (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                  Preview unavailable: {(emailPreview.error as Error).message}
+                </div>
+              ) : !emailPreview.data ? (
+                <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Generating the exact customer email...
+                </div>
+              ) : (
+                <div className="space-y-3 text-sm">
+                  <div className="grid gap-2 md:grid-cols-[80px_1fr]">
+                    <span className="font-medium text-muted-foreground">Subject</span><span>{emailPreview.data.subject}</span>
+                    <span className="font-medium text-muted-foreground">To</span><span>{emailPreview.data.to}</span>
+                    <span className="font-medium text-muted-foreground">CC</span><span>{emailPreview.data.cc.length ? emailPreview.data.cc.join(', ') : 'None'}</span>
+                  </div>
+                  <div>
+                    <p className="mb-1 font-medium text-muted-foreground">HTML Body</p>
+                    <div className="rounded-md border bg-white p-3 text-black" dangerouslySetInnerHTML={{ __html: emailPreview.data.html }} />
+                  </div>
+                  <div>
+                    <p className="mb-1 font-medium text-muted-foreground">Attachments</p>
+                    <ul className="space-y-1">
+                      {emailPreview.data.attachments.map((attachment) => (
+                        <li key={attachment.filename} className="flex items-center gap-2"><Paperclip className="h-3.5 w-3.5" /> {attachment.filename}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSendDialogOpen(false)}>
@@ -1273,8 +1356,9 @@ export default function InvoiceDetailPage() {
               onClick={() => sendInvoiceMutation.mutate({
                 recipients: selectedRecipients,
                 attachmentMediaIds: selectedAttachmentMediaIds,
+                customerMessage,
               })}
-              disabled={sendInvoiceMutation.isPending || isLoadingRecipients || selectedRecipients.length === 0}
+              disabled={sendInvoiceMutation.isPending || isLoadingRecipients || selectedRecipients.length === 0 || emailPreview.isFetching || !emailPreview.data || emailPreview.isError || customerMessage !== previewCustomerMessage}
             >
               {sendInvoiceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Send Invoice

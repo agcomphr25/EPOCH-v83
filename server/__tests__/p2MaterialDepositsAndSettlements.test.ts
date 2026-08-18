@@ -13,12 +13,18 @@ describe('P2 material deposits and customer payment settlements', () => {
   const invoicePdf = read('server/utils/pdf/arInvoicePdf.ts');
   const invoiceRoutes = read('server/src/routes/arInvoices.ts');
   const invoiceDetail = read('client/src/pages/InvoiceDetailPage.tsx');
+  const safeBootMigrations = read('server/scripts/migrations/runSafeBootMigrations.ts');
 
   it('uses an additive migration accepted by the safety scanner', () => {
     expect(() => runMigrationSafetyCheck(migration, '0285_p2_material_deposits_and_payment_settlements.sql')).not.toThrow();
     expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS p2_deposit_applications/i);
     expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS ar_payment_settlements/i);
     expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS ar_payment_settlement_items/i);
+  });
+
+  it('applies the deposit schema during every production boot', () => {
+    expect(safeBootMigrations).toContain("'0285_p2_material_deposits_and_payment_settlements.sql'");
+    expect(safeBootMigrations).toContain("'0287_p2_deposit_invoice_clin_contact.sql'");
   });
 
   it('posts deposit invoices and applications through Customer Deposits', () => {

@@ -5027,8 +5027,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            po.status AS "poStatus"
          FROM p2_purchase_order_items poi
          JOIN p2_purchase_orders po ON po.id = poi.po_id
+         LEFT JOIN projects p ON (po.project_id = p.id OR p.po_id = po.id)
          WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')
            AND po.is_current_revision IS NOT FALSE
+           AND (p.id IS NULL OR p.current_stage = 'IN_PRODUCTION')
          ORDER BY poi.po_id, poi.created_at, poi.id`
       );
       const poItems = Array.isArray(poItemResult)

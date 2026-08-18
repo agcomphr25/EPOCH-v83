@@ -24,6 +24,19 @@ describe('P2 material deposit CLIN, terms, and contact enhancement', () => {
     expect(service).toContain('Each CLIN may only appear once');
   });
 
+  it('derives deposit CLIN choices and values from the linked customer PO', () => {
+    const service = read('server/src/services/p2ProjectDepositService.ts');
+    const component = read('client/src/components/p2/P2ProjectDepositsCard.tsx');
+    expect(service).toContain('FROM p2_billing_allocations');
+    expect(service).toContain('FROM p2_purchase_order_items');
+    expect(service).toContain('quantity::numeric * unit_price::numeric');
+    expect(service).toContain('onConflictDoUpdate');
+    expect(service).toContain('clin.contractLineValue ?? allocation.contractLineValue');
+    expect(component).toContain('updateAllocationClin');
+    expect(component).toContain('Full PO line value');
+    expect(component).toContain('Quantity × unit price from the selected PO line.');
+  });
+
   it('renders the point of contact and CLIN reference on the customer PDF', () => {
     const pdf = read('server/utils/pdf/arInvoicePdf.ts');
     expect(pdf).toContain("'POINT OF CONTACT'");

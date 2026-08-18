@@ -55,6 +55,58 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
 
   if (!project) throw new Error('Project not found');
 
+  // Project deposits are created before shipping, so p2_billing_allocations may
+  // not exist yet. Build the selectable CLIN list from the linked customer PO:
+  // prefer explicit customer PO line numbers when billing allocations exist,
+  // otherwise use the stable display order of the PO items.
+  const poClinSource = project.poId ? await db.execute(sql`
+    WITH explicit_clins AS (
+      SELECT NULLIF(BTRIM(customer_po_line), '') AS "clinNumber",
+             COALESCE(
+               MAX(NULLIF(BTRIM(description), '')),
+               MAX(NULLIF(BTRIM(bucket_label), ''))
+             ) AS description,
+             SUM(quantity_authorized::numeric * unit_price::numeric)::numeric AS "contractLineValue",
+             1 AS source_priority
+        FROM p2_billing_allocations
+       WHERE po_id = ${project.poId}
+         AND active = true
+         AND NULLIF(BTRIM(customer_po_line), '') IS NOT NULL
+       GROUP BY NULLIF(BTRIM(customer_po_line), '')
+    ), po_item_clins AS (
+      SELECT ROW_NUMBER() OVER (ORDER BY id)::text AS "clinNumber",
+             CONCAT(part_number, CASE WHEN NULLIF(BTRIM(part_name), '') IS NOT NULL THEN ' - ' || part_name ELSE '' END) AS description,
+             COALESCE(total_price::numeric, quantity::numeric * unit_price::numeric, 0)::numeric AS "contractLineValue",
+             2 AS source_priority
+        FROM p2_purchase_order_items
+       WHERE po_id = ${project.poId}
+    ), preferred_source AS (
+      SELECT * FROM explicit_clins
+      UNION ALL
+      SELECT * FROM po_item_clins
+       WHERE NOT EXISTS (SELECT 1 FROM explicit_clins)
+    )
+    SELECT "clinNumber", description, "contractLineValue"
+      FROM preferred_source
+     ORDER BY source_priority, "clinNumber"
+  `) : { rows: [] };
+
+  for (const source of poClinSource.rows as Array<{ clinNumber: string; description: string | null }>) {
+    await db.insert(projectClins).values({
+      projectId,
+      clinNumber: source.clinNumber,
+      description: source.description,
+      active: true,
+    }).onConflictDoUpdate({
+      target: [projectClins.projectId, projectClins.clinNumber],
+      set: {
+        description: source.description,
+        active: true,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
   const deposits = await db.execute(sql`
     SELECT ai.id, ai.invoice_number AS "invoiceNumber", ai.invoice_date AS "invoiceDate",
            ai.due_date AS "dueDate", ai.status, ai.total_amount::numeric AS "totalAmount",
@@ -100,7 +152,7 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
      ORDER BY ai.invoice_number
   `);
 
-  const clins = await db
+  const storedClins = await db
     .select({
       id: projectClins.id,
       clinNumber: projectClins.clinNumber,
@@ -108,6 +160,15 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
     })
     .from(projectClins)
     .where(and(eq(projectClins.projectId, projectId), eq(projectClins.active, true)));
+
+  const clinValues = new Map(
+    (poClinSource.rows as Array<{ clinNumber: string; contractLineValue: string | number | null }>)
+      .map((source) => [source.clinNumber, money(source.contractLineValue)])
+  );
+  const clins = storedClins.map((clin) => ({
+    ...clin,
+    contractLineValue: clinValues.get(clin.clinNumber) ?? null,
+  }));
 
   return { project, deposits: deposits.rows, finalInvoices: finalInvoices.rows, clins };
 }
@@ -160,7 +221,7 @@ export async function createP2MaterialDepositInvoice(input: {
     if (allocationAmount <= 0) throw new Error(`Deposit amount for CLIN ${clin.clinNumber} must be greater than zero`);
     if (allocation.calculationMethod === 'PERCENTAGE') {
       const percentage = Number(allocation.percentage || 0);
-      const contractLineValue = money(allocation.contractLineValue);
+      const contractLineValue = money(clin.contractLineValue ?? allocation.contractLineValue);
       if (percentage <= 0 || percentage > 100 || contractLineValue <= 0) {
         throw new Error(`CLIN ${clin.clinNumber} requires a contract value and percentage between 0 and 100`);
       }
@@ -168,7 +229,14 @@ export async function createP2MaterialDepositInvoice(input: {
         throw new Error(`CLIN ${clin.clinNumber} percentage calculation does not match its deposit amount`);
       }
     }
-    return { ...allocation, amount: allocationAmount, clin };
+    return {
+      ...allocation,
+      amount: allocationAmount,
+      contractLineValue: allocation.calculationMethod === 'PERCENTAGE'
+        ? money(clin.contractLineValue ?? allocation.contractLineValue)
+        : null,
+      clin,
+    };
   });
   const reservation = await reserveP2InvoiceNumber({
     customerId: workspace.project.customerId,

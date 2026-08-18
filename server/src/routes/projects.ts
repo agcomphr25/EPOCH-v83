@@ -599,6 +599,69 @@ const projectClinBodySchema = z.object({
   active: z.boolean().optional(),
 });
 
+const p2OrderDraftBodySchema = z.object({
+  currentStep: z.number().int().min(0).max(3),
+  draftData: z.object({
+    customerForm: z.record(z.unknown()).optional(),
+    detailsForm: z.record(z.unknown()).optional(),
+    lineItems: z.array(z.record(z.unknown())).optional(),
+  }),
+});
+
+router.get('/:id/p2-order-draft', async (req, res) => {
+  try {
+    const projectId = uuidStringSchema.parse(req.params.id);
+    const rows = await pool.query(
+      `SELECT id, project_id AS "projectId", current_step AS "currentStep",
+              draft_data AS "draftData", created_by AS "createdBy",
+              updated_by AS "updatedBy", created_at AS "createdAt",
+              updated_at AS "updatedAt"
+         FROM p2_order_drafts
+        WHERE project_id = $1
+        LIMIT 1`,
+      [projectId]
+    );
+    res.json(rows[0] || null);
+  } catch (error) {
+    res.status(error instanceof z.ZodError ? 400 : 500).json({ message: 'Failed to load P2 order draft' });
+  }
+});
+
+router.put('/:id/p2-order-draft', async (req: Request, res: Response) => {
+  try {
+    const projectId = uuidStringSchema.parse(req.params.id);
+    const input = p2OrderDraftBodySchema.parse(req.body);
+    const actor = String((req as any).user?.username || (req as any).user?.email || 'unknown');
+    const rows = await pool.query(
+      `INSERT INTO p2_order_drafts (project_id, current_step, draft_data, created_by, updated_by)
+       VALUES ($1, $2, $3::jsonb, $4, $4)
+       ON CONFLICT (project_id) DO UPDATE
+         SET current_step = EXCLUDED.current_step,
+             draft_data = EXCLUDED.draft_data,
+             updated_by = EXCLUDED.updated_by,
+             updated_at = now()
+       RETURNING id, project_id AS "projectId", current_step AS "currentStep",
+                 draft_data AS "draftData", created_by AS "createdBy",
+                 updated_by AS "updatedBy", created_at AS "createdAt",
+                 updated_at AS "updatedAt"`,
+      [projectId, input.currentStep, JSON.stringify(input.draftData), actor]
+    );
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(error instanceof z.ZodError ? 400 : 500).json({ message: 'Failed to save P2 order draft' });
+  }
+});
+
+router.delete('/:id/p2-order-draft', async (req: Request, res: Response) => {
+  try {
+    const projectId = uuidStringSchema.parse(req.params.id);
+    await pool.query('DELETE FROM p2_order_drafts WHERE project_id = $1', [projectId]);
+    res.status(204).send();
+  } catch (error) {
+    res.status(error instanceof z.ZodError ? 400 : 500).json({ message: 'Failed to delete P2 order draft' });
+  }
+});
+
 async function getNextProjectRevisionNumber(
   projectId: string
 ): Promise<number> {

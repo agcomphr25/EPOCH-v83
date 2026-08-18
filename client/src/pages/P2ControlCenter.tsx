@@ -47,6 +47,7 @@ import RoutingDocumentManagement from './RoutingDocumentManagement';
 import P2ChangesTab from '@/components/p2/P2ChangesTab';
 import P2ShippingTab from '@/components/p2/P2ShippingTab';
 import P2NonconformingTab from '@/components/p2/P2ScrappedItemsTab';
+import { P2POItemsManager } from '@/components/P2POItemsManager';
 import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import ProgramManufacturingOrchestration from '@/components/p2/ProgramManufacturingOrchestration';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -137,6 +138,9 @@ export default function P2ControlCenter() {
   const [selectedPOForBOM, setSelectedPOForBOM] = useState<number | null>(null);
   const [selectedPOIds, setSelectedPOIds] = useState<number[]>([]);
   const [editingPOId, setEditingPOId] = useState<number | null>(editPoIdFromUrl);
+  const [lineItemCorrection, setLineItemCorrection] = useState<{ poId: number; poNumber: string } | null>(null);
+  const [pendingLineItemCorrection, setPendingLineItemCorrection] = useState<{ poId: number; poNumber: string } | null>(null);
+  const [lineItemCorrectionReason, setLineItemCorrectionReason] = useState('');
 
   const { data: stats } = useQuery<P2Stats>({
     queryKey: ['/api/p2/control-center/stats'],
@@ -191,6 +195,36 @@ export default function P2ControlCenter() {
     queryKey: ['/api/p2/control-center/po-statuses'],
     refetchInterval: 30000,
   });
+
+  const startLineItemCorrection = useMutation({
+    mutationFn: ({ poId, reason }: { poId: number; reason: string }) =>
+      apiRequest(`/api/p2/purchase-orders/${poId}/line-item-correction/start`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: () => {
+      if (pendingLineItemCorrection) setLineItemCorrection(pendingLineItemCorrection);
+      setPendingLineItemCorrection(null);
+      toast({ title: 'Correction opened', description: 'The PO is temporarily unlocked and the reason was audited.' });
+    },
+    onError: (error: Error) => toast({ title: 'Cannot edit this PO', description: error.message, variant: 'destructive' }),
+  });
+
+  const finishLineItemCorrection = async () => {
+    if (!lineItemCorrection) return;
+    try {
+      await apiRequest(`/api/p2/purchase-orders/${lineItemCorrection.poId}/line-item-correction/complete`, {
+        method: 'POST',
+        body: { reason: lineItemCorrectionReason },
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      toast({ title: 'Correction completed', description: 'The PO was relocked and the correction was audited.' });
+      setLineItemCorrection(null);
+      setLineItemCorrectionReason('');
+    } catch (error) {
+      toast({ title: 'Could not relock PO', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
+    }
+  };
 
   const openPOs = useMemo(
     () => allPOStatuses.filter((po) => po.status !== 'completed'),
@@ -339,6 +373,19 @@ export default function P2ControlCenter() {
             setShowBOMWizard(false);
             setSelectedPOForBOM(null);
           }}
+        />
+      </div>
+    );
+  }
+
+  if (lineItemCorrection) {
+    return (
+      <div className="container mx-auto p-6">
+        <P2POItemsManager
+          poId={lineItemCorrection.poId}
+          poNumber={lineItemCorrection.poNumber}
+          correctionReason={lineItemCorrectionReason}
+          onBack={finishLineItemCorrection}
         />
       </div>
     );
@@ -823,6 +870,10 @@ export default function P2ControlCenter() {
             onViewPO={(poId) => {
               navigate(`/p2/purchase-orders/${poId}/preview`);
             }}
+            onManageItems={(poId, poNumber) => {
+              setPendingLineItemCorrection({ poId, poNumber });
+              setLineItemCorrectionReason('');
+            }}
             selectedPOIds={selectedPOIds}
           />
         </TabsContent>
@@ -933,6 +984,46 @@ export default function P2ControlCenter() {
           <P2NonconformingTab selectedPOIds={selectedPOIds} />
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={!!pendingLineItemCorrection}
+        onOpenChange={(open) => {
+          if (!open && !startLineItemCorrection.isPending) setPendingLineItemCorrection(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Correct PO line items</DialogTitle>
+            <DialogDescription>
+              This is for correcting the original PO before production begins. The PO will be temporarily unlocked and every change will retain this audit reason.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="line-item-correction-reason">Correction reason</Label>
+            <Input
+              id="line-item-correction-reason"
+              value={lineItemCorrectionReason}
+              onChange={(event) => setLineItemCorrectionReason(event.target.value)}
+              placeholder="Example: Add omitted shipping line from original customer PO"
+              data-testid="input-line-item-correction-reason"
+            />
+            <p className="text-xs text-muted-foreground">At least 10 characters are required.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingLineItemCorrection(null)}>Cancel</Button>
+            <Button
+              disabled={lineItemCorrectionReason.trim().length < 10 || startLineItemCorrection.isPending}
+              onClick={() => pendingLineItemCorrection && startLineItemCorrection.mutate({
+                poId: pendingLineItemCorrection.poId,
+                reason: lineItemCorrectionReason.trim(),
+              })}
+              data-testid="button-start-line-item-correction"
+            >
+              {startLineItemCorrection.isPending ? 'Opening...' : 'Open audited correction'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

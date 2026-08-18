@@ -25,6 +25,7 @@ import { format } from 'date-fns';
 interface P2StatusDashboardProps {
   onStartBOM: (poId: number) => void;
   onViewPO?: (poId: number) => void;
+  onManageItems?: (poId: number, poNumber: string) => void;
   selectedPOIds?: number[];
 }
 
@@ -57,7 +58,7 @@ interface POStatus {
   p2WadConnectionLabel?: string;
 }
 
-export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds = [] }: P2StatusDashboardProps) {
+export default function P2StatusDashboard({ onStartBOM, onViewPO, onManageItems, selectedPOIds = [] }: P2StatusDashboardProps) {
   const [activeSortBy, setActiveSortBy] = useState<'default' | 'project_asc' | 'project_desc'>('default');
 
   const {
@@ -377,6 +378,17 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                       </div>
 
                       <div className="flex flex-col gap-2">
+                        {(po.shippedItems ?? 0) === 0 && po.scheduledItems === 0 && po.inProductionItems === 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onManageItems?.(po.id, po.poNumber)}
+                            data-testid={`button-manage-po-items-${po.id}`}
+                          >
+                            <Package className="h-4 w-4 mr-1" />
+                            Manage Line Items
+                          </Button>
+                        )}
                         {po.projectId && (
                           <Link href={`/pm-control-center?project=${po.projectId}`}>
                             <Button

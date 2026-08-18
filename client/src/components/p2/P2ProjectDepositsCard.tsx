@@ -40,6 +40,9 @@ export default function P2ProjectDepositsCard({ projectId }: { projectId: string
   const deposits = workspace.data?.deposits || [];
   const finalInvoices = workspace.data?.finalInvoices || [];
   const clins = workspace.data?.clins || [];
+  const workspaceError = workspace.error instanceof Error
+    ? workspace.error.message
+    : 'The material-deposit workspace could not be loaded.';
   const updateAllocationClin = (index: number, clinId: string) => {
     const selectedClin = clins.find((clin: any) => String(clin.id) === clinId);
     setAllocations(allocations.map((row, rowIndex) => rowIndex === index ? {
@@ -137,7 +140,13 @@ export default function P2ProjectDepositsCard({ projectId }: { projectId: string
             <div className="md:col-span-2 rounded-md border p-3"><p className="mb-3 font-medium">Point of Contact</p><div className="grid gap-3 md:grid-cols-3"><div><Label>Name *</Label><Input value={form.pointOfContactName} onChange={(e) => setForm({ ...form, pointOfContactName: e.target.value })} /></div><div><Label>Phone *</Label><Input value={form.pointOfContactPhone} onChange={(e) => setForm({ ...form, pointOfContactPhone: e.target.value })} /></div><div><Label>Email *</Label><Input type="email" value={form.pointOfContactEmail} onChange={(e) => setForm({ ...form, pointOfContactEmail: e.target.value })} /></div></div></div>
             <div className="md:col-span-2 space-y-3 rounded-md border p-3">
               <div className="flex items-center justify-between"><div><p className="font-medium">CLIN Allocations</p><p className="text-xs text-muted-foreground">Allocate this deposit by fixed amount or as a percentage of the CLIN contract value.</p></div><Button type="button" size="sm" variant="outline" onClick={() => setAllocations([...allocations, emptyAllocation()])}>Add CLIN</Button></div>
-              {clins.length === 0 && <p className="rounded bg-amber-50 p-2 text-sm text-amber-900">No PO lines are available for this project. Link an active customer PO with line items before creating a deposit invoice.</p>}
+              {workspace.isError ? (
+                <p className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
+                  Unable to load PO lines: {workspaceError}
+                </p>
+              ) : clins.length === 0 ? (
+                <p className="rounded bg-amber-50 p-2 text-sm text-amber-900">No PO lines are available for this project. Link an active customer PO with line items before creating a deposit invoice.</p>
+              ) : null}
               {allocations.map((allocation, index) => <div key={index} className="grid gap-2 rounded border p-3 md:grid-cols-6">
                 <div className="md:col-span-2"><Label>PO line / CLIN *</Label><Select value={allocation.clinId} onValueChange={(value) => updateAllocationClin(index, value)}><SelectTrigger><SelectValue placeholder="Select PO line" /></SelectTrigger><SelectContent>{clins.map((clin: any) => <SelectItem key={clin.id} value={String(clin.id)}>Line {clin.clinNumber}{clin.description ? ` - ${clin.description}` : ''}{Number(clin.contractLineValue || 0) > 0 ? ` (${money(clin.contractLineValue)})` : ''}</SelectItem>)}</SelectContent></Select></div>
                 <div className="md:col-span-2"><Label>Method *</Label><Select value={allocation.calculationMethod} onValueChange={(value: 'FIXED_AMOUNT' | 'PERCENTAGE') => setAllocations(allocations.map((row, rowIndex) => rowIndex === index ? { ...row, calculationMethod: value } : row))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="FIXED_AMOUNT">Fixed amount</SelectItem><SelectItem value="PERCENTAGE">Percentage</SelectItem></SelectContent></Select></div>

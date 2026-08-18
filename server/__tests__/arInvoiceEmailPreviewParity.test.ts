@@ -12,7 +12,7 @@ describe('AR invoice email preview parity', () => {
     const envelope = buildInvoiceEmailEnvelope({
       invoiceNumber: 'MI26-300',
       invoiceType: 'MATERIAL_DEPOSIT',
-      totalAmount: '25000.00',
+      totalAmount: '242500.00',
       dueDate: '2026-09-17',
       customerMessage: 'Deposit for PO Line 1.',
       isP1: false,
@@ -24,12 +24,32 @@ describe('AR invoice email preview parity', () => {
     const sent = toSendGridInvoiceMessage(envelope);
 
     expect(preview.subject).toBe('Material Deposit Invoice MI26-300');
+    expect(preview.text).toContain('Amount due: $242,500.00');
+    expect(preview.html).toContain('$242,500.00');
+    expect(preview.html).toContain('Invoice summary');
+    expect(preview.html).not.toContain('Please find attached');
+    expect(preview.html.indexOf('Deposit for PO Line 1.')).toBeLessThan(preview.html.indexOf('Invoice summary'));
     expect(preview.to).toBe(sent.to);
     expect(preview.cc).toEqual(sent.cc);
     expect(preview.subject).toBe(sent.subject);
     expect(preview.text).toBe(sent.text);
     expect(preview.html).toBe(sent.html);
     expect(preview.attachments.map((item) => item.filename)).toEqual(sent.attachments.map((item) => item.filename));
+  });
+
+  it('uses the attachment sentence only when no customer message is provided', () => {
+    const envelope = buildInvoiceEmailEnvelope({
+      invoiceNumber: 'AST26-0001',
+      invoiceType: 'MATERIAL_DEPOSIT',
+      totalAmount: 242500,
+      dueDate: '2026-09-17',
+      isP1: false,
+      to: 'ap@example.com',
+      attachments: [],
+    });
+
+    expect(envelope.html).toContain('Please find attached material deposit invoice AST26-0001.');
+    expect(envelope.html).toContain('$242,500.00');
   });
 
   it('routes both preview and send through the same server preparation function', () => {

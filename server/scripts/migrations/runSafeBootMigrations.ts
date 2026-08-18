@@ -438,7 +438,6 @@ export const criticalMigrationFiles = new Set([
   '0281_contain_shipped_p1_auto_populate_regression.sql',
   '0282_car_form_data.sql',
   '0283_remove_legacy_rma_change_control_projections.sql',
-  '0284_p2_customer_contacts.sql',
   '0285_p2_material_deposits_and_payment_settlements.sql',
   '0287_p2_deposit_invoice_clin_contact.sql',
   '0289_correct_po00021498_customer_line_numbers.sql',

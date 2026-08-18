@@ -6241,9 +6241,7 @@ export const p2Customers = pgTable('p2_customers', {
 // P2 Customer Contacts - Additional contacts for P2 customers
 export const p2CustomerContacts = pgTable('p2_customer_contacts', {
   id: serial('id').primaryKey(),
-  customerId: integer('customer_id')
-    .references(() => p2Customers.id, { onDelete: 'cascade' })
-    .notNull(),
+  customerId: integer('customer_id').notNull(),
   name: text('name').notNull(),
   title: text('title'),
   email: text('email'),

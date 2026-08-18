@@ -7672,9 +7672,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     return po;
   };
 
-  app.post('/api/p2/purchase-orders/:poId/line-item-correction/start', softAuth, requireAdminOrOwner, async (req, res) => {
+  app.post('/api/p2/purchase-orders/:poId/line-item-correction/start', requireAdminOrOwner, async (req, res) => {
     try {
       const poId = parseInt(req.params.poId);
+      if (!Number.isInteger(poId)) return res.status(400).json({ error: 'Invalid P2 purchase order ID' });
       const reason = String(req.body?.reason || '').trim();
       if (reason.length < 10) return res.status(400).json({ error: 'A correction reason of at least 10 characters is required' });
       const po = await assertP2LineItemCorrectionAllowed(poId);
@@ -7683,34 +7684,39 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const user = (req as any).user;
       await auditService.logEvent({
         entityType: 'p2_order', entityId: String(poId), action: 'P2_PO_LINE_ITEM_CORRECTION_STARTED', reason,
-        actor: { id: user?.id, username: user?.username || user?.email, role: user?.role },
+        // audit_events.actor_id is an employees.id foreign key.  The auth user
+        // id belongs to users.id and must never be written into that column.
+        actor: { id: user?.employeeId ?? undefined, username: user?.username || user?.email, role: user?.role },
         ipAddress: req.ip, userAgent: req.get('user-agent') || undefined,
         meta: { poNumber: po.po_number },
       });
       res.json({ success: true, poId, poNumber: po.po_number });
     } catch (error) {
+      console.error('Open P2 PO line-item correction error:', error);
       const status = Number((error as any).status) || 500;
       res.status(status).json({ error: (error as Error).message || 'Failed to open PO correction' });
     }
   });
 
-  app.post('/api/p2/purchase-orders/:poId/line-item-correction/complete', softAuth, requireAdminOrOwner, async (req, res) => {
+  app.post('/api/p2/purchase-orders/:poId/line-item-correction/complete', requireAdminOrOwner, async (req, res) => {
     try {
       const poId = parseInt(req.params.poId);
+      if (!Number.isInteger(poId)) return res.status(400).json({ error: 'Invalid P2 purchase order ID' });
       const reason = String(req.body?.reason || '').trim();
       if (reason.length < 10) return res.status(400).json({ error: 'A correction reason of at least 10 characters is required' });
       const po = await assertP2LineItemCorrectionAllowed(poId);
       const { pool } = await import('../../db');
       const user = (req as any).user;
-      await pool.query('UPDATE p2_purchase_orders SET locked_at = NOW(), locked_by = $1, updated_at = NOW() WHERE id = $2', [user?.id || null, poId]);
+      await pool.query('UPDATE p2_purchase_orders SET locked_at = NOW(), locked_by = $1, updated_at = NOW() WHERE id = $2', [user?.employeeId ?? null, poId]);
       await auditService.logEvent({
         entityType: 'p2_order', entityId: String(poId), action: 'P2_PO_LINE_ITEM_CORRECTION_COMPLETED', reason,
-        actor: { id: user?.id, username: user?.username || user?.email, role: user?.role },
+        actor: { id: user?.employeeId ?? undefined, username: user?.username || user?.email, role: user?.role },
         ipAddress: req.ip, userAgent: req.get('user-agent') || undefined,
         meta: { poNumber: po.po_number },
       });
       res.json({ success: true, poId });
     } catch (error) {
+      console.error('Complete P2 PO line-item correction error:', error);
       const status = Number((error as any).status) || 500;
       res.status(status).json({ error: (error as Error).message || 'Failed to complete PO correction' });
     }

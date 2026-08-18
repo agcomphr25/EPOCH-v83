@@ -236,15 +236,13 @@ export function DesignControlWorkspace({
     DESIGN_CONTROL_WORKFLOW.find((step) => step.key === activeStep) ??
     DESIGN_CONTROL_WORKFLOW[0];
   const selectedStep = stepByKey.get(selectedDefinition.key);
-  const completed = detail.steps.filter((step) =>
-    ['approved', 'complete', 'completed'].includes(step.status || '')
-  ).length;
   const selectedIndex = DESIGN_CONTROL_WORKFLOW.findIndex(
     (step) => step.key === selectedDefinition.key
   );
   const structuredRecordType =
     STRUCTURED_RECORD_TYPE_BY_STEP[selectedDefinition.key];
-  const activePhase = designControlPhaseForStep(selectedDefinition.key)!;
+  const selectedPhase = designControlPhaseForStep(selectedDefinition.key)!;
+  const released = Boolean(detail.record.releasedAt);
   const phaseStatus = (stepKeys: readonly string[]) => {
     const statuses = stepKeys.map(
       (key) => stepByKey.get(key)?.status?.toLowerCase() || 'not_started'
@@ -273,17 +271,44 @@ export function DesignControlWorkspace({
     stepKeys.find((key) => {
       const status = stepByKey.get(key)?.status?.toLowerCase();
       return !['approved', 'complete', 'completed'].includes(status || '');
-    }) ?? stepKeys[stepKeys.length - 1];
+    }) ??
+    stepKeys[stepKeys.length - 1] ??
+    '12';
+  const correctionDefinition = DESIGN_CONTROL_WORKFLOW.find((definition) => {
+    const status = stepByKey.get(definition.key)?.status?.toLowerCase();
+    return [
+      'returned',
+      'returned_for_revision',
+      'rejected',
+      'blocked',
+    ].includes(status || '');
+  });
   const firstIncompleteDefinition =
+    correctionDefinition ??
     DESIGN_CONTROL_WORKFLOW.find((definition) => {
       const status = stepByKey.get(definition.key)?.status?.toLowerCase();
       return !['approved', 'complete', 'completed'].includes(status || '');
-    }) ?? DESIGN_CONTROL_WORKFLOW[DESIGN_CONTROL_WORKFLOW.length - 1];
+    }) ??
+    DESIGN_CONTROL_WORKFLOW[DESIGN_CONTROL_WORKFLOW.length - 1];
+  const currentPhase = released
+    ? DESIGN_CONTROL_PHASES[5]
+    : (designControlPhaseForStep(firstIncompleteDefinition.key) ??
+      DESIGN_CONTROL_PHASES[0]);
+  const currentStep = stepByKey.get(firstIncompleteDefinition.key);
+  const waitingForApproval = ['submitted', 'submitted_for_approval'].includes(
+    currentStep?.status?.toLowerCase() || ''
+  );
   const nextActionLabel = readOnly
     ? 'View Current Design Phase'
-    : completed === DESIGN_CONTROL_WORKFLOW.length
-      ? 'Review Release Readiness'
-      : 'Continue Design';
+    : released
+      ? 'Start Design Change'
+      : waitingForApproval
+        ? 'Awaiting Approval'
+        : correctionDefinition
+          ? 'Resolve Returned Work'
+          : firstIncompleteDefinition.key === '12'
+            ? 'Resolve Release Blockers'
+            : 'Continue Design';
   const selectedFormData = selectedStep?.formData ?? {};
   const selectedExample =
     'examples' in selectedDefinition
@@ -305,6 +330,12 @@ export function DesignControlWorkspace({
       : [];
     return total + actions.length;
   }, 0);
+  const responsibleField = firstIncompleteDefinition.fields.find((field) =>
+    /responsible|owner|manager|representative|engineer/i.test(field.label)
+  );
+  const responsiblePerson = responsibleField
+    ? String(currentStep?.formData?.[responsibleField.key] || '')
+    : '';
 
   return (
     <section className="space-y-4" aria-label="Design Control workspace">
@@ -314,8 +345,8 @@ export function DesignControlWorkspace({
             <div>
               <CardTitle>{detail.record.title}</CardTitle>
               <CardDescription>
-                Record {detail.record.recordNumber || detail.record.id} ·
-                generation {detail.record.recordVersion || 1}
+                Follow the current phase and complete the one action shown
+                below.
               </CardDescription>
               <p className="mt-1 text-sm">
                 R&amp;D project:{' '}
@@ -328,15 +359,9 @@ export function DesignControlWorkspace({
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">
-                Authority: {displayStatus(detail.record.authorityStatus)}
-              </Badge>
-              <Badge variant="outline">
-                Status: {displayStatus(detail.record.status)}
-              </Badge>
-              <Badge variant="outline">Progress: {completed}/12</Badge>
-              <Badge variant="outline">
-                Phase {activePhase.order}: {activePhase.title}
+              <Badge variant="secondary">
+                {currentPhase.title} ·{' '}
+                {released ? 'Released' : phaseStatus(currentPhase.stepKeys)}
               </Badge>
               {readOnly && (
                 <Badge variant="secondary">
@@ -349,50 +374,62 @@ export function DesignControlWorkspace({
         </CardHeader>
         <CardContent className="space-y-4">
           <div
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            className="grid gap-3 sm:grid-cols-3"
             aria-label="Project guidance summary"
           >
             <div className="rounded-md border p-3">
               <span className="text-xs text-muted-foreground">
                 Current phase
               </span>
-              <p className="font-medium">{activePhase.title}</p>
+              <p className="font-medium">{currentPhase.title}</p>
             </div>
             <div className="rounded-md border p-3">
               <span className="text-xs text-muted-foreground">
                 Overall progress
               </span>
               <p className="font-medium">
-                {Math.round((completed / DESIGN_CONTROL_WORKFLOW.length) * 100)}
-                % complete
+                {
+                  DESIGN_CONTROL_PHASES.filter(
+                    (phase) =>
+                      phase.stepKeys.length > 0 &&
+                      phaseStatus(phase.stepKeys) === 'Approved'
+                  ).length
+                }{' '}
+                of 6 phases complete
               </p>
-            </div>
-            <div className="rounded-md border p-3">
-              <span className="text-xs text-muted-foreground">Open risks</span>
-              <p className="font-medium">{openRiskCount}</p>
             </div>
             <div className="rounded-md border p-3">
               <span className="text-xs text-muted-foreground">
-                Open review actions
+                Responsible for the next action
               </span>
-              <p className="font-medium">{openActionCount}</p>
+              <p className="font-medium">
+                {responsiblePerson ||
+                  (waitingForApproval ? 'Assigned approver' : 'Project team')}
+              </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border-2 border-primary/40 bg-primary/5 p-5">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Next required action
+                Do This Next
               </p>
               <p className="font-semibold">{firstIncompleteDefinition.title}</p>
               <p className="text-sm text-muted-foreground">
-                {firstIncompleteDefinition.purpose}
+                {waitingForApproval
+                  ? 'This exact saved version is waiting for the assigned approver. You may continue after it is approved or returned.'
+                  : firstIncompleteDefinition.purpose}
               </p>
             </div>
             <Button
+              disabled={!readOnly && waitingForApproval}
               onClick={() => {
-                setActiveTab('lifecycle');
-                setActiveStep(firstIncompleteDefinition.key);
+                if (released) setActiveTab('changes');
+                else {
+                  setActiveTab('lifecycle');
+                  setActiveStep(firstIncompleteDefinition.key);
+                }
               }}
+              size="lg"
             >
               {nextActionLabel}
             </Button>
@@ -403,15 +440,20 @@ export function DesignControlWorkspace({
           >
             {DESIGN_CONTROL_PHASES.map((phase) => (
               <li
-                className={`rounded-md border p-3 text-sm ${phase.key === activePhase.key ? 'border-primary bg-primary/5' : ''}`}
+                className={`rounded-md border p-3 text-sm ${phase.key === currentPhase.key ? 'border-primary bg-primary/5' : ''}`}
                 key={phase.key}
               >
                 <button
                   className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => {
+                    if (phase.key === 'control-changes') {
+                      if (released) setActiveTab('changes');
+                      return;
+                    }
                     setActiveTab('lifecycle');
                     setActiveStep(phaseEntryStep(phase.stepKeys));
                   }}
+                  disabled={phase.key === 'control-changes' && !released}
                   type="button"
                 >
                   <span className="flex items-start justify-between gap-2">
@@ -419,7 +461,11 @@ export function DesignControlWorkspace({
                       {phase.order}. {phase.title}
                     </span>
                     <Badge variant="outline">
-                      {phaseStatus(phase.stepKeys)}
+                      {phase.key === 'control-changes'
+                        ? released
+                          ? 'Available'
+                          : 'After release'
+                        : phaseStatus(phase.stepKeys)}
                     </Badge>
                   </span>
                   <span className="mt-1 block text-xs text-muted-foreground">
@@ -433,29 +479,58 @@ export function DesignControlWorkspace({
             Follow the six phases in order. Controlled approvals, versions, and
             audit history are preserved automatically.
           </p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Revision A establishes the initial baseline. Released designs use
-            {expandDesignControlTerm('ECR')} approval and{' '}
-            {expandDesignControlTerm('ECN')} implementation before a Revision B+
-            baseline is released.
-          </p>
+          <details className="rounded-md border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">
+              Record Details
+            </summary>
+            <div className="mt-3 flex flex-wrap gap-2 text-muted-foreground">
+              <Badge variant="outline">
+                Record {detail.record.recordNumber || detail.record.id}
+              </Badge>
+              <Badge variant="outline">
+                Version {detail.record.recordVersion || 1}
+              </Badge>
+              <Badge variant="outline">
+                Authority {displayStatus(detail.record.authorityStatus)}
+              </Badge>
+              <Badge variant="outline">
+                Status {displayStatus(detail.record.status)}
+              </Badge>
+              <Badge variant="outline">Open risks {openRiskCount}</Badge>
+              <Badge variant="outline">
+                Open review actions {openActionCount}
+              </Badge>
+            </div>
+            <p className="mt-3 text-muted-foreground">
+              Revision A establishes the initial baseline. Released designs use
+              {expandDesignControlTerm('ECR')} approval and{' '}
+              {expandDesignControlTerm('ECN')} implementation before a Revision
+              B+ baseline is released.
+            </p>
+          </details>
         </CardContent>
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-auto flex-wrap justify-start">
-          <TabsTrigger value="lifecycle">Design phases</TabsTrigger>
-          <TabsTrigger value="evidence">Evidence registers</TabsTrigger>
-          <TabsTrigger value="traceability">Traceability</TabsTrigger>
-          <TabsTrigger value="final-review">Final review</TabsTrigger>
-          <TabsTrigger value="team">Project team</TabsTrigger>
-          <TabsTrigger value="configuration">Configuration</TabsTrigger>
-          <TabsTrigger value="changes">Engineering changes</TabsTrigger>
-          <TabsTrigger value="documents">Forms &amp; copies</TabsTrigger>
-          <TabsTrigger value="dhf">
-            {expandDesignControlTerm('DHF')} &amp; package
-          </TabsTrigger>
+          <TabsTrigger value="lifecycle">Current work</TabsTrigger>
         </TabsList>
+
+        <details className="mt-3 rounded-md border p-3">
+          <summary className="cursor-pointer text-sm font-medium">
+            Evidence, team, changes &amp; history
+          </summary>
+          <TabsList className="mt-3 h-auto flex-wrap justify-start">
+            <TabsTrigger value="evidence">Evidence</TabsTrigger>
+            <TabsTrigger value="traceability">Traceability</TabsTrigger>
+            <TabsTrigger value="final-review">Approval readiness</TabsTrigger>
+            <TabsTrigger value="team">Project team</TabsTrigger>
+            <TabsTrigger value="configuration">Project setup</TabsTrigger>
+            <TabsTrigger value="changes">Design changes</TabsTrigger>
+            <TabsTrigger value="documents">Forms &amp; copies</TabsTrigger>
+            <TabsTrigger value="dhf">History &amp; package</TabsTrigger>
+          </TabsList>
+        </details>
 
         <TabsContent value="lifecycle" className="space-y-4">
           <nav
@@ -497,7 +572,7 @@ export function DesignControlWorkspace({
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-medium text-primary">
-                    Phase {activePhase.order}: {activePhase.title}
+                    Phase {selectedPhase.order}: {selectedPhase.title}
                   </p>
                   <CardTitle>{selectedDefinition.title}</CardTitle>
                 </div>

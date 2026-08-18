@@ -85,7 +85,7 @@ describe('Design Control client authority foundation', () => {
     expect(editorSource).toContain('You have unsaved changes');
     expect(editorSource).toContain('Last saved');
     expect(editorSource).toContain('Next action');
-    expect(editorSource).toContain('Submit current version');
+    expect(editorSource).toContain('Submit for Approval');
     expect(editorSource).toContain('Previous stage');
     expect(editorSource).toContain('Next stage');
     expect(editorSource).toContain("can('design.control.edit')");

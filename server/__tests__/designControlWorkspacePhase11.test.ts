@@ -49,18 +49,18 @@ const phases = fs.readFileSync(
 describe('Phase 11 unified Design Control workspace', () => {
   it('uses the canonical twelve-step definition', () => {
     expect(workspace).toContain('import { DESIGN_CONTROL_WORKFLOW }');
-    expect(workspace).toContain('Progress: {completed}/12');
+    expect(workspace).toContain('DESIGN_CONTROL_WORKFLOW.find');
     expect(workspace).not.toMatch(/const\s+workflowSteps\s*=/);
   });
 
   it('presents six plain-language phases while preserving all twelve stages', () => {
     for (const title of [
-      'Define the Project',
-      'Requirements and Risks',
-      'Develop the Design',
-      'Build, Review, and Test',
-      'Final Design Approval',
-      'Release to Manufacturing',
+      'Start & Plan',
+      'Requirements & Risks',
+      'Design Outputs',
+      'Review, Verify & Validate',
+      'Approve & Release',
+      'Control Changes',
     ]) {
       expect(phases).toContain(title);
     }
@@ -69,13 +69,13 @@ describe('Phase 11 unified Design Control workspace', () => {
     }
     expect(workspace).toContain('Six Design Control phases');
     expect(workspace).toContain('Controlled approvals, versions, and');
-    expect(workspace).toContain('Design phases');
-    expect(workspace).toContain('Next required action');
+    expect(workspace).toContain('Current work');
+    expect(workspace).toContain('Do This Next');
     expect(workspace).toContain('Continue Design');
-    expect(workspace).toContain('setActiveStep(phaseEntryStep(phase.stepKeys))');
     expect(workspace).toContain(
-      'Controlled checkpoint {selectedDefinition.order} of 12'
+      'setActiveStep(phaseEntryStep(phase.stepKeys))'
     );
+    expect(workspace).toContain('Record Details');
     expect(workspace).toContain(
       'aria-label="Controlled Design Control checkpoints"'
     );
@@ -93,6 +93,9 @@ describe('Phase 11 unified Design Control workspace', () => {
     }
     expect(workspace).toContain('.getElementById(');
     expect(workspace).toContain('You can save an incomplete draft');
+    expect(workspace).toContain('Responsible for the next action');
+    expect(workspace).toContain('Awaiting Approval');
+    expect(workspace).toContain('Resolve Returned Work');
   });
 
   it('is shared by R&D project mode and QMS oversight mode', () => {

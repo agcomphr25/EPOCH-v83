@@ -2839,7 +2839,7 @@ export default function VendorPOManager({
       setNoEmailConfirmed(false);
     },
     onError: (error: any) => {
-      toast.error(error?.message || 'Failed to issue PO');
+      toast.error(error?.message || 'Failed to issue PO', { duration: 12000 });
     },
   });
 

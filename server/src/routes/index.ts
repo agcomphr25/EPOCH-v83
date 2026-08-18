@@ -7655,8 +7655,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     const { pool } = await import('../../db');
     const result = await pool.query(
       `SELECT po.id, po.po_number, po.locked_at, po.is_current_revision,
-              (SELECT COUNT(*)::int FROM p2_serialized_items psi WHERE psi.po_id = po.id) AS serialized_count,
-              (SELECT COUNT(*)::int FROM p2_production_orders ppo WHERE ppo.p2_po_id = po.id) AS production_count
+              (SELECT COUNT(*)::int
+                 FROM p2_serialized_items psi
+                WHERE psi.po_id = po.id
+                  AND COALESCE(UPPER(psi.status), 'PENDING') <> 'PENDING') AS active_serialized_count,
+              (SELECT COUNT(*)::int
+                 FROM p2_production_orders ppo
+                WHERE ppo.p2_po_id = po.id
+                  AND (
+                    COALESCE(UPPER(ppo.status), 'PENDING') NOT IN ('PENDING', 'CANCELLED', 'CANCELED')
+                    OR ppo.scheduled_layup_date IS NOT NULL
+                    OR ppo.started_at IS NOT NULL
+                    OR COALESCE(ppo.quantity_manufactured, 0) > 0
+                  )) AS active_production_count
          FROM p2_purchase_orders po
         WHERE po.id = $1`,
       [poId],
@@ -7666,7 +7677,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     if (po.is_current_revision === false) {
       throw Object.assign(new Error('Superseded revisions cannot be corrected'), { status: 409 });
     }
-    if (Number(po.serialized_count) > 0 || Number(po.production_count) > 0) {
+    // PENDING serialized units and PENDING production-order placeholders are
+    // setup records, not evidence that manufacturing has begun.  Corrections
+    // remain safe until a unit is scheduled or otherwise enters production.
+    if (Number(po.active_serialized_count) > 0 || Number(po.active_production_count) > 0) {
       throw Object.assign(new Error('This PO has entered production. Use the formal revision process instead.'), { status: 409 });
     }
     return po;

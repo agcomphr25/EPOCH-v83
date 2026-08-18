@@ -2655,6 +2655,7 @@ router.post('/:id/direct-po-exception', requirePermission('purchasing.direct_po_
 
 // POST /api/vendor-pos/:id/issue - Issue a PO, optionally sending email to vendor
 router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req: Request, res: Response) => {
+  let issueStage = 'request validation';
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -2690,6 +2691,11 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       role: (req as any).user?.role,
     };
 
+    // A deactivated gate must not execute its supporting queries. Previously
+    // these controls were labelled "deactivated" but their queries and audit
+    // observations could still abort issuance before the PO update.
+    if (!VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+    issueStage = 'supplier qualification review';
     const supplierQualificationBlockers = await getVendorQualificationBlockers(id, vendorPO.vendorId, vendorPO.productionLine ?? null);
     if (supplierQualificationBlockers.length > 0) {
       await emitProcurementLedgerEvent({
@@ -2882,7 +2888,10 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
 
     // ── PATH A: Issue WITHOUT emailing vendor (legacy/backfill) ──────────────
+    }
+
     if (skip) {
+      issueStage = 'database issuance without email';
       const trimmedReason = typeof reason === 'string' && reason.trim().length >= 10
         ? reason.trim()
         : 'Issued without vendor email during temporary purchasing controls deactivation.';
@@ -3016,9 +3025,11 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
 
     // Atomic transactional issuance: lock row, generate number, update status
+    issueStage = 'database issuance';
     const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id);
     await markLinkedPartsRequestsOrdered(id, performedBy);
 
+    issueStage = 'issuance audit';
     await emitProcurementLedgerEvent({
       action: 'VENDOR_PO_ISSUED',
       entityId: id,
@@ -3057,6 +3068,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       vendor_message_text: normalizedIssueMessage.text,
     };
 
+    issueStage = 'vendor email delivery';
     const emailResult = await sendCommunication({
       templateKey: 'vendor_po_issue',
       context: issueContext,
@@ -3145,9 +3157,9 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       message: `PO issued successfully. Email sent to ${issueToEmail}.`,
     });
   } catch (error: any) {
-    console.error('Issue vendor PO error:', error);
+    console.error('Issue vendor PO error:', { issueStage, error });
     return sendApiError(res, error, {
-      fallbackMessage: 'Failed to issue vendor PO',
+      fallbackMessage: `Failed to issue vendor PO during ${issueStage}`,
       source: 'vendorPO.issue',
       exposeMessage: true,
     });

@@ -455,17 +455,6 @@ export default function InvoicesPage() {
     onSettled: () => setPendingId(null),
   });
 
-  const sendMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/ar-invoices/${id}/send`, { method: 'POST', body: {} }),
-    onMutate: (id) => setPendingId(id),
-    onSuccess: () => {
-      toast({ title: 'Invoice marked as sent' });
-      invalidateAll();
-    },
-    onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
-    onSettled: () => setPendingId(null),
-  });
-
   const voidMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       apiRequest(`/api/ar-invoices/${id}/void`, { method: 'POST', body: { voidReason: reason } }),
@@ -480,7 +469,7 @@ export default function InvoicesPage() {
   });
 
   const handlePost = (id: string) => postMutation.mutate(id);
-  const handleSend = (id: string) => sendMutation.mutate(id);
+  const handleSend = (id: string) => setLocation(`/finance/invoices/${id}`);
   const handleVoidRequest = (id: string, invoiceNumber: string) =>
     setVoidDialog({ open: true, invoiceId: id, invoiceNumber, reason: '' });
   const handleView = (id: string) => setLocation(`/finance/invoices/${id}`);
@@ -503,7 +492,7 @@ export default function InvoicesPage() {
     onVoidRequest: handleVoidRequest,
     onView: handleView,
     postPending: postMutation.isPending,
-    sendPending: sendMutation.isPending,
+    sendPending: false,
     voidPending: voidMutation.isPending,
     pendingId,
   };

@@ -39,6 +39,12 @@ import {
   recordP2InvoiceNumberAudit,
   syncP2InvoiceSequenceFromManualNumber,
 } from '../services/p2InvoiceNumberService';
+import {
+  buildInvoiceEmailEnvelope,
+  invoiceDocumentLabel,
+  toInvoiceEmailPreview,
+  toSendGridInvoiceMessage,
+} from '../services/arInvoiceEmailService';
 
 const LOCKED_STATUSES = ['POSTED', 'VOID', 'PAID'];
 
@@ -1995,6 +2001,67 @@ async function getLotFileAttachments(lotId: string | null) {
   return attachments;
 }
 
+async function prepareInvoiceEmail(
+  invoice: typeof arInvoices.$inferSelect,
+  body: {
+    recipients?: unknown;
+    customerMessage?: unknown;
+    attachmentMediaIds?: unknown;
+  } = {},
+) {
+  const selectedInvoiceAttachmentIds = Array.isArray(body.attachmentMediaIds)
+    ? new Set(body.attachmentMediaIds.filter((mediaId: unknown): mediaId is string => typeof mediaId === 'string' && Boolean(mediaId.trim())))
+    : undefined;
+  const customerMessage = typeof body.customerMessage === 'string' ? body.customerMessage : undefined;
+  const isP1 = await isP1Invoice(invoice);
+  const availableRecipients = await getInvoiceEmailRecipients(invoice);
+  const { to, cc: selectedCc } = deriveInvoiceToAndCc(body.recipients, availableRecipients);
+  if (!to) {
+    const error = new Error('No customer email found. Add a customer contact email or provide a recipient.');
+    (error as any).statusCode = 422;
+    throw error;
+  }
+  const cc = appendAccountingInvoiceCc(to, selectedCc);
+  const invoicePdf = await generateArInvoicePdf(invoice.id);
+  const mediaEmailAttachments = await getMediaEmailAttachments([
+    { entityType: 'invoice', entityId: invoice.id },
+    ...(invoice.packingSlipId ? [{ entityType: 'packing_slip', entityId: invoice.packingSlipId }] : []),
+    ...(invoice.lotId ? [{ entityType: 'lot', entityId: invoice.lotId }] : []),
+  ], { invoiceAttachmentMediaIds: selectedInvoiceAttachmentIds });
+  const lotAttachments = await getLotFileAttachments(invoice.lotId);
+  const documentLabel = invoiceDocumentLabel(invoice.invoiceType);
+  const attachments = [
+    {
+      content: invoicePdf.toString('base64'),
+      filename: `${documentLabel.replace(/\s+/g, '-')}-${invoice.invoiceNumber}.pdf`,
+      type: 'application/pdf',
+      disposition: 'attachment',
+    },
+    ...mediaEmailAttachments,
+    ...lotAttachments,
+  ];
+  const envelope = buildInvoiceEmailEnvelope({
+    invoiceNumber: invoice.invoiceNumber,
+    invoiceType: invoice.invoiceType,
+    totalAmount: invoice.totalAmount,
+    dueDate: invoice.dueDate,
+    customerVisibleNotes: invoice.customerVisibleNotes,
+    customerMessage,
+    isP1,
+    to,
+    cc,
+    attachments,
+  });
+
+  return {
+    envelope,
+    availableRecipients,
+    selectedInvoiceAttachmentIds,
+    customerMessage,
+    isP1,
+  };
+}
+
 router.get('/:id/email-recipients', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -2028,14 +2095,31 @@ router.get('/:id/email-recipients', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/:id/email-preview', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    if (!['REVIEW', 'POSTED', 'SENT'].includes(invoice.status)) {
+      return res.status(409).json({ error: `Cannot preview an invoice email with status ${invoice.status}` });
+    }
+    if (invoice.pricingMismatch || invoice.pricingAmbiguous) {
+      return res.status(409).json({ error: 'Invoice pricing must be resolved before previewing or sending' });
+    }
+
+    const prepared = await prepareInvoiceEmail(invoice, req.body || {});
+    res.json(toInvoiceEmailPreview(prepared.envelope));
+  } catch (error: any) {
+    console.error('Failed to preview invoice email:', error);
+    res.status(error?.statusCode || 500).json({ error: error?.message || 'Failed to preview invoice email' });
+  }
+});
+
 router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const user = (req as any).user?.username || null;
-    const { recipients: selectedRecipients, customerMessage, attachmentMediaIds } = req.body || {};
-    const selectedInvoiceAttachmentIds = Array.isArray(attachmentMediaIds)
-      ? new Set(attachmentMediaIds.filter((mediaId: unknown): mediaId is string => typeof mediaId === 'string' && Boolean(mediaId.trim())))
-      : undefined;
+    const { recipients: selectedRecipients } = req.body || {};
 
     const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
     if (!invoice) {
@@ -2048,13 +2132,9 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
       return res.status(409).json({ error: 'Invoice pricing must be resolved before sending' });
     }
 
-    const isP1 = await isP1Invoice(invoice);
-    const availableRecipients = await getInvoiceEmailRecipients(invoice);
-    const { to, cc: selectedCc } = deriveInvoiceToAndCc(selectedRecipients, availableRecipients);
-    if (!to) {
-      return res.status(422).json({ error: 'No customer email found. Add a customer contact email or provide a recipient.' });
-    }
-    const cc = appendAccountingInvoiceCc(to, selectedCc);
+    const prepared = await prepareInvoiceEmail(invoice, req.body || {});
+    const { envelope, availableRecipients, selectedInvoiceAttachmentIds, customerMessage, isP1 } = prepared;
+    const { to, cc } = envelope;
 
     const selectedRecipientRecords = availableRecipients.filter((recipient) =>
       [to, ...(Array.isArray(cc) ? cc : cc ? [cc] : [])].includes(recipient.email)
@@ -2081,42 +2161,7 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
       payload: auditPayloadBase,
     });
 
-    const invoicePdf = await generateArInvoicePdf(id);
-    const mediaAttachments = await getMediaEmailAttachments([
-      { entityType: 'invoice', entityId: id },
-      ...(invoice.packingSlipId ? [{ entityType: 'packing_slip', entityId: invoice.packingSlipId }] : []),
-      ...(invoice.lotId ? [{ entityType: 'lot', entityId: invoice.lotId }] : []),
-    ], { invoiceAttachmentMediaIds: selectedInvoiceAttachmentIds });
-    const lotAttachments = await getLotFileAttachments(invoice.lotId);
-
-    const attachments = [
-      {
-        content: invoicePdf.toString('base64'),
-        filename: `Invoice-${invoice.invoiceNumber}.pdf`,
-        type: 'application/pdf',
-        disposition: 'attachment',
-      },
-      ...mediaAttachments,
-      ...lotAttachments,
-    ];
-
-    const text = [
-      `Please find attached invoice ${invoice.invoiceNumber}.`,
-      customerMessage || invoice.customerVisibleNotes || '',
-      '',
-      `Amount due: $${Number(invoice.totalAmount || 0).toFixed(2)}`,
-      invoice.dueDate ? `Due date: ${invoice.dueDate}` : '',
-    ].filter(Boolean).join('\n');
-
-    const result = await sendEmailViaSendGrid({
-      to,
-      cc,
-      fromName: isP1 ? 'AG Composites' : undefined,
-      subject: `Invoice ${invoice.invoiceNumber}`,
-      text,
-      html: `<p>Please find attached invoice <strong>${invoice.invoiceNumber}</strong>.</p>${customerMessage || invoice.customerVisibleNotes ? `<p>${String(customerMessage || invoice.customerVisibleNotes).replace(/\n/g, '<br/>')}</p>` : ''}<p><strong>Amount due:</strong> $${Number(invoice.totalAmount || 0).toFixed(2)}</p>${invoice.dueDate ? `<p><strong>Due date:</strong> ${invoice.dueDate}</p>` : ''}`,
-      attachments,
-    });
+    const result = await sendEmailViaSendGrid(toSendGridInvoiceMessage(envelope));
 
     if (!result.success) {
       await recordInvoiceSendAudit({
@@ -2171,9 +2216,9 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
     });
 
     res.json(updated);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to send invoice:', error);
-    res.status(500).json({ error: 'Failed to send invoice' });
+    res.status(error?.statusCode || 500).json({ error: error?.message || 'Failed to send invoice' });
   }
 });
 

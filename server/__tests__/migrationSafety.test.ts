@@ -543,6 +543,17 @@ const KNOWN_BROKEN_ON_SCHEMA_BASELINE: Record<string, string> = {
     'Adds column/index to charge_code_employee_assignments, which is created at runtime ' +
     '(ensureChargeCodeAssignmentTable in employees.ts), not via a migration. ' +
     'Table exists in production but is absent in a fresh scratch-DB baseline replay.',
+  // Migration 0291 is a one-time audited data correction: it renames Astrion's first
+  // material-deposit invoice from AST26-0002 to AST26-0001 and resets the 2026 sequence.
+  // On a schema-baseline scratch DB neither invoice row exists, so the migration reaches
+  // the intentional AMBIGUOUS_STOP guard ("AST26-0002 was not found and the corrected
+  // AST26-0001 does not exist"). This is structural — the correction already applied to
+  // production at its proper epoch and is a no-op on subsequent live boots (idempotent
+  // success path). It is NOT a step-ordering bug in any in-flight migration.
+  '0291_renumber_astrion_material_deposit_invoice.sql':
+    'One-time data correction renames a specific production invoice (AST26-0002 → AST26-0001). ' +
+    'Neither row exists in a fresh schema-baseline scratch DB, so the AMBIGUOUS_STOP guard fires. ' +
+    'Already applied to production; idempotent on subsequent live boots.',
 };
 
 // ---------------------------------------------------------------------------

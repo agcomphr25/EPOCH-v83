@@ -43,8 +43,8 @@ describe('P2 material deposits and customer payment settlements', () => {
   });
 
   it('labels a deposit PDF distinctly from a shipment invoice', () => {
-    expect(invoicePdf).toContain("isMaterialDeposit ? 'MATERIAL DEPOSIT' : 'INVOICE'");
-    expect(invoicePdf).toContain("['Project:', String(invoice.projectCode || 'N/A')]");
+    expect(invoicePdf).toContain("isMaterialDeposit ? 'MATERIAL DEPOSIT INVOICE' : 'INVOICE'");
+    expect(invoicePdf).not.toContain("['Project:', String(invoice.projectCode || 'N/A')]");
   });
 
   it('posts the final invoice and applies a selected deposit atomically', () => {

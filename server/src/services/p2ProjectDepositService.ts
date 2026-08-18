@@ -88,7 +88,9 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
   // otherwise use the stable display order of the PO items.
   const poClinSource = project.poId ? await db.execute(sql`
     WITH explicit_clins AS (
-      SELECT NULLIF(BTRIM(customer_po_line), '') AS "clinNumber",
+      SELECT NULLIF(BTRIM(customer_po_line), '') AS "referenceKey",
+             NULLIF(BTRIM(customer_po_line), '') AS "poLineNumber",
+             NULL::text AS "customerClin",
              COALESCE(
                MAX(NULLIF(BTRIM(description), '')),
                MAX(NULLIF(BTRIM(bucket_label), ''))
@@ -104,7 +106,12 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
       SELECT COALESCE(
                NULLIF(BTRIM(customer_po_line), ''),
                ROW_NUMBER() OVER (ORDER BY id)::text
-             ) AS "clinNumber",
+             ) AS "referenceKey",
+             COALESCE(
+               NULLIF(BTRIM(customer_po_line), ''),
+               ROW_NUMBER() OVER (ORDER BY id)::text
+             ) AS "poLineNumber",
+             NULLIF(BTRIM(customer_clin), '') AS "customerClin",
              CONCAT(part_number, CASE WHEN NULLIF(BTRIM(part_name), '') IS NOT NULL THEN ' - ' || part_name ELSE '' END) AS description,
              COALESCE(total_price::numeric, quantity::numeric * unit_price::numeric, 0)::numeric AS "contractLineValue",
              2 AS source_priority
@@ -116,15 +123,15 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
       SELECT * FROM po_item_clins
        WHERE NOT EXISTS (SELECT 1 FROM explicit_clins)
     )
-    SELECT "clinNumber", description, "contractLineValue"
+    SELECT "referenceKey", "poLineNumber", "customerClin", description, "contractLineValue"
       FROM preferred_source
-     ORDER BY source_priority, "clinNumber"
+     ORDER BY source_priority, "poLineNumber"
   `) : { rows: [] };
 
-  for (const source of poClinSource.rows as Array<{ clinNumber: string; description: string | null }>) {
+  for (const source of poClinSource.rows as Array<{ referenceKey: string; description: string | null }>) {
     await db.insert(projectClins).values({
       projectId,
-      clinNumber: source.clinNumber,
+      clinNumber: source.referenceKey,
       description: source.description,
       active: true,
     }).onConflictDoUpdate({
@@ -191,20 +198,26 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
     .from(projectClins)
     .where(and(eq(projectClins.projectId, projectId), eq(projectClins.active, true)));
 
-  const clinValues = new Map(
-    (poClinSource.rows as Array<{ clinNumber: string; contractLineValue: string | number | null }>)
-      .map((source) => [source.clinNumber, money(source.contractLineValue)])
+  const poLineSources = new Map(
+    (poClinSource.rows as Array<{ referenceKey: string; poLineNumber: string; customerClin: string | null; contractLineValue: string | number | null }>)
+      .map((source) => [source.referenceKey, source])
   );
-  const clins = storedClins.map((clin) => ({
-    ...clin,
-    contractLineValue: clinValues.get(clin.clinNumber) ?? null,
-  }));
+  const clins = storedClins.map((clin) => {
+    const source = poLineSources.get(clin.clinNumber);
+    return {
+      ...clin,
+      poLineNumber: source?.poLineNumber ?? clin.clinNumber,
+      customerClin: source?.customerClin ?? null,
+      contractLineValue: source ? money(source.contractLineValue) : null,
+    };
+  });
 
   return { project, deposits: deposits.rows, finalInvoices: finalInvoices.rows, clins };
 }
 
 type DepositClinAllocation = {
   clinId: number;
+  customerClin?: string | null;
   amount: number;
   calculationMethod: 'FIXED_AMOUNT' | 'PERCENTAGE';
   percentage?: number | null;
@@ -242,21 +255,21 @@ export async function createP2MaterialDepositInvoice(input: {
   const dueDate = input.dueDate || addDays(invoiceDate, termsDays(terms));
   const availableClins = new Map(workspace.clins.map((clin) => [clin.id, clin]));
   if (new Set(requestedAllocations.map((allocation) => allocation.clinId)).size !== requestedAllocations.length) {
-    throw new Error('Each CLIN may only appear once on a material deposit invoice');
+    throw new Error('Each PO line may only appear once on a material deposit invoice');
   }
   const allocations = requestedAllocations.map((allocation) => {
     const clin = availableClins.get(allocation.clinId);
-    if (!clin) throw new Error(`CLIN ${allocation.clinId} is not active on this project`);
+    if (!clin) throw new Error(`PO line ${allocation.clinId} is not active on this project`);
     const allocationAmount = money(allocation.amount);
-    if (allocationAmount <= 0) throw new Error(`Deposit amount for CLIN ${clin.clinNumber} must be greater than zero`);
+    if (allocationAmount <= 0) throw new Error(`Deposit amount for PO line ${clin.poLineNumber} must be greater than zero`);
     if (allocation.calculationMethod === 'PERCENTAGE') {
       const percentage = Number(allocation.percentage || 0);
       const contractLineValue = money(clin.contractLineValue ?? allocation.contractLineValue);
       if (percentage <= 0 || percentage > 100 || contractLineValue <= 0) {
-        throw new Error(`CLIN ${clin.clinNumber} requires a contract value and percentage between 0 and 100`);
+        throw new Error(`PO line ${clin.poLineNumber} requires a line value and percentage between 0 and 100`);
       }
       if (money(contractLineValue * percentage / 100) !== allocationAmount) {
-        throw new Error(`CLIN ${clin.clinNumber} percentage calculation does not match its deposit amount`);
+        throw new Error(`PO line ${clin.poLineNumber} percentage calculation does not match its deposit amount`);
       }
     }
     return {
@@ -307,7 +320,7 @@ export async function createP2MaterialDepositInvoice(input: {
       productionLine: 'P2',
       projectId: input.projectId,
       projectNameSnapshot: workspace.project.projectName,
-      description: allocation.description?.trim() || allocation.clin.description || input.description?.trim() || `Material deposit - CLIN ${allocation.clin.clinNumber}`,
+      description: allocation.description?.trim() || allocation.clin.description || input.description?.trim() || `Material deposit - PO Line ${allocation.clin.poLineNumber}`,
       qty: '1',
       unitPrice: allocation.amount.toFixed(2),
       lineTotal: allocation.amount.toFixed(2),
@@ -317,8 +330,9 @@ export async function createP2MaterialDepositInvoice(input: {
         depositPurpose: input.depositPurpose?.trim() || 'MATERIAL',
         projectId: input.projectId,
         projectCode: workspace.project.projectCode,
-        clinId: allocation.clin.id,
-        clinNumber: allocation.clin.clinNumber,
+        poLineId: allocation.clin.id,
+        poLineNumber: allocation.clin.poLineNumber,
+        clinNumber: allocation.customerClin?.trim() || allocation.clin.customerClin || null,
         calculationMethod: allocation.calculationMethod,
         percentage: allocation.percentage ?? null,
         contractLineValue: allocation.contractLineValue ?? null,
@@ -346,7 +360,7 @@ export async function createP2MaterialDepositInvoice(input: {
     action: 'RESERVE_FOR_PROJECT_DEPOSIT',
     reason: input.internalReason,
     changedBy: input.createdBy || 'system',
-    metadata: { projectId: input.projectId, purpose: input.depositPurpose?.trim() || 'MATERIAL', amount, clinAllocations: allocations.map((allocation) => ({ clinId: allocation.clin.id, clinNumber: allocation.clin.clinNumber, amount: allocation.amount, calculationMethod: allocation.calculationMethod })) },
+    metadata: { projectId: input.projectId, purpose: input.depositPurpose?.trim() || 'MATERIAL', amount, poLineAllocations: allocations.map((allocation) => ({ poLineId: allocation.clin.id, poLineNumber: allocation.clin.poLineNumber, clinNumber: allocation.customerClin?.trim() || allocation.clin.customerClin || null, amount: allocation.amount, calculationMethod: allocation.calculationMethod })) },
   });
 
   return result;

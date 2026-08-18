@@ -6341,7 +6341,8 @@ export const p2PurchaseOrderItems = pgTable(
     ), // FK to inventory_items
     partNumber: text('part_number').notNull(), // P2-specific part number
     partName: text('part_name').notNull(), // Display name for the part
-    customerPoLine: text('customer_po_line'), // Customer-assigned PO line / CLIN
+    customerPoLine: text('customer_po_line'), // Customer-assigned PO line number
+    customerClin: text('customer_clin'), // Optional customer-provided CLIN / SLIN
     quantity: integer('quantity').notNull(),
     demandLineIdentity: uuid('demand_line_identity').defaultRandom().notNull(),
     dueDate: date('due_date'),

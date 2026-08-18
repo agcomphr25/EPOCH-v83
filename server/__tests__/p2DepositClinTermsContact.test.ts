@@ -16,12 +16,13 @@ describe('P2 material deposit CLIN, terms, and contact enhancement', () => {
     expect(migration).not.toMatch(/\bDROP\b|\bTRUNCATE\b/i);
   });
 
-  it('stores CLIN calculation snapshots on independent invoice lines', () => {
+  it('stores distinct PO line and optional CLIN snapshots on independent invoice lines', () => {
     const service = read('server/src/services/p2ProjectDepositService.ts');
     expect(service).toContain("calculationMethod: 'FIXED_AMOUNT' | 'PERCENTAGE'");
-    expect(service).toContain('clinNumber: allocation.clin.clinNumber');
+    expect(service).toContain('poLineNumber: allocation.clin.poLineNumber');
+    expect(service).toContain('clinNumber: allocation.customerClin?.trim() || allocation.clin.customerClin || null');
     expect(service).toContain('contractLineValue: allocation.contractLineValue ?? null');
-    expect(service).toContain('Each CLIN may only appear once');
+    expect(service).toContain('Each PO line may only appear once');
   });
 
   it('derives deposit CLIN choices and values from the linked customer PO', () => {
@@ -34,8 +35,21 @@ describe('P2 material deposit CLIN, terms, and contact enhancement', () => {
     expect(service).toContain('onConflictDoUpdate');
     expect(service).toContain('clin.contractLineValue ?? allocation.contractLineValue');
     expect(component).toContain('updateAllocationClin');
+    expect(component).toContain('PO Line *');
+    expect(component).toContain('CLIN / SLIN (optional)');
     expect(component).toContain('Full PO line value');
     expect(component).toContain('Quantity × unit price from the selected PO line.');
+  });
+
+  it('adds an optional customer CLIN field without conflating it with the PO line', () => {
+    const migration = read('migrations/0290_p2_po_line_and_clin_distinction.sql');
+    const boot = read('server/scripts/migrations/runSafeBootMigrations.ts');
+    const schema = read('server/schema.ts');
+    expect(() => runMigrationSafetyCheck(migration, '0290_p2_po_line_and_clin_distinction.sql')).not.toThrow();
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS customer_clin');
+    expect(schema).toContain("customerPoLine: text('customer_po_line')");
+    expect(schema).toContain("customerClin: text('customer_clin')");
+    expect(boot).toContain("'0290_p2_po_line_and_clin_distinction.sql'");
   });
 
   it('installs the audited PO00021498 line-number correction at boot', () => {
@@ -57,11 +71,15 @@ describe('P2 material deposit CLIN, terms, and contact enhancement', () => {
     expect(service).toContain('poId: effectivePo?.id ?? storedProject.poId');
   });
 
-  it('renders the point of contact and CLIN reference on the customer PDF', () => {
+  it('renders the point of contact and separate PO Line and CLIN references on the customer PDF', () => {
     const pdf = read('server/utils/pdf/arInvoicePdf.ts');
-    expect(pdf).toContain("'POINT OF CONTACT'");
-    expect(pdf).toContain("isMaterialDeposit ? 'CLIN' : 'Part #'");
+    const component = read('client/src/components/p2/P2ProjectDepositsCard.tsx');
+    expect(pdf).toContain("'ACCOUNTING POINT OF CONTACT'");
+    expect(component).toContain('Accounting Point of Contact');
+    expect(pdf).toContain("isMaterialDeposit ? 'PO Line' : 'Part #'");
+    expect(pdf).toContain("'CLIN / SLIN'");
+    expect(pdf).toContain('line.dimensionTags?.poLineNumber');
     expect(pdf).toContain('line.dimensionTags?.clinNumber');
-    expect(pdf).toContain("line.dimensionTags?.clinNumber || ''");
+    expect(pdf).toContain("line.dimensionTags?.clinNumber || '-'");
   });
 });

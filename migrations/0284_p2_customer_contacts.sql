@@ -10,12 +10,14 @@ CREATE TABLE IF NOT EXISTS p2_customer_contacts (
   phone text,
   is_primary boolean DEFAULT false,
   created_at timestamp DEFAULT now(),
-  updated_at timestamp DEFAULT now(),
-  CONSTRAINT p2_customer_contacts_customer_id_p2_customers_id_fk
-    FOREIGN KEY (customer_id)
-    REFERENCES p2_customers(id)
-    ON DELETE CASCADE
+  updated_at timestamp DEFAULT now()
 );
+
+-- Production contains a legacy p2_customers layout where the numeric id is
+-- not guaranteed by a database-level unique constraint. The application uses
+-- that stable numeric id to address customers, but adding a foreign key to it
+-- would fail migration 0284 and prevent startup. Keep the lookup indexed and
+-- enforce customer existence in the authenticated API route.
 
 CREATE INDEX IF NOT EXISTS p2_customer_contacts_customer_id_idx
   ON p2_customer_contacts (customer_id);

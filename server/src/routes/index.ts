@@ -2607,6 +2607,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     try {
       const { storage } = await import('../../storage');
       const customerId = parseInt(req.params.customerId, 10);
+      if (!Number.isInteger(customerId)) {
+        return res.status(400).json({ error: 'Invalid P2 customer ID' });
+      }
+      const customer = await storage.getP2Customer(customerId);
+      if (!customer) {
+        return res.status(404).json({ error: 'P2 customer not found' });
+      }
       const contact = await storage.createP2CustomerContact({ ...req.body, customerId });
       res.json(contact);
     } catch (_error: any) {

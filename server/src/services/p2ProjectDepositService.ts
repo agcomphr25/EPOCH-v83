@@ -37,7 +37,7 @@ function termsDays(terms: string): number {
 }
 
 export async function getP2ProjectDepositWorkspace(projectId: string) {
-  const [project] = await db
+  const [storedProject] = await db
     .select({
       id: projects.id,
       projectCode: projects.projectCode,
@@ -53,7 +53,34 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
     .leftJoin(p2PurchaseOrders, eq(projects.poId, p2PurchaseOrders.id))
     .where(eq(projects.id, projectId));
 
-  if (!project) throw new Error('Project not found');
+  if (!storedProject) throw new Error('Project not found');
+
+  // P2 POs can be linked in either direction. Older/project-first records use
+  // projects.po_id, while PO-first records use p2_purchase_orders.project_id.
+  // Resolve the same current revision that the Project Hub displays so deposit
+  // CLINs remain available even when only the PO-side association is populated.
+  const effectivePoResult = await db.execute(sql`
+    WITH linked_root AS (
+      SELECT COALESCE(parent_po_id, id) AS root_id
+        FROM p2_purchase_orders
+       WHERE id = ${storedProject.poId ?? null}
+    )
+    SELECT po.id, po.po_number AS "poNumber"
+      FROM p2_purchase_orders po
+     WHERE po.project_id = ${projectId}::uuid
+        OR po.id = (SELECT root_id FROM linked_root)
+        OR po.parent_po_id = (SELECT root_id FROM linked_root)
+     ORDER BY po.is_current_revision DESC,
+              po.revision_number DESC,
+              po.created_at DESC
+     LIMIT 1
+  `);
+  const effectivePo = effectivePoResult.rows[0] as { id: number; poNumber: string } | undefined;
+  const project = {
+    ...storedProject,
+    poId: effectivePo?.id ?? storedProject.poId,
+    poNumber: effectivePo?.poNumber ?? storedProject.poNumber,
+  };
 
   // Project deposits are created before shipping, so p2_billing_allocations may
   // not exist yet. Build the selectable CLIN list from the linked customer PO:

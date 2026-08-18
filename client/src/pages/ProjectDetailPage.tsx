@@ -777,8 +777,8 @@ export default function ProjectDetailPage() {
     enabled: !!id && !!activeLinkPoId,
   });
 
-  const poItemOptions = poLinkOptions?.poItems ?? [];
-  const billingBucketOptions = (poLinkOptions?.billingBuckets ?? []).filter((bucket) => {
+  const poItemOptions = normalizeArray<P2PurchaseOrderItem>(poLinkOptions?.poItems);
+  const billingBucketOptions = normalizeArray<P2BillingBucketOption>(poLinkOptions?.billingBuckets).filter((bucket) => {
     if (!linkPoItemId) return true;
     return !bucket.poItemId || bucket.poItemId === Number(linkPoItemId);
   });
@@ -833,11 +833,12 @@ export default function ProjectDetailPage() {
     });
   };
 
-  const { data: projectRevisions = [] } = useQuery<ProjectRevision[]>({
+  const { data: projectRevisionsRaw } = useQuery<ProjectRevision[]>({
     queryKey: ['/api/projects', id, 'revisions'],
     queryFn: () => fetch(`/api/projects/${id}/revisions`, { credentials: 'include' }).then(r => r.json()),
     enabled: !!id,
   });
+  const projectRevisions = normalizeArray<ProjectRevision>(projectRevisionsRaw);
 
   const createRevisionMutation = useMutation({
     mutationFn: (data: typeof revisionForm) =>
@@ -887,16 +888,18 @@ export default function ProjectDetailPage() {
     queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
   };
 
-  const { data: projectWorkOrders = [] } = useQuery<ProjectWorkOrder[]>({
+  const { data: projectWorkOrdersRaw } = useQuery<ProjectWorkOrder[]>({
     queryKey: ['/api/work-orders/project', id],
     queryFn: () => fetch(`/api/work-orders/project/${id}`).then(r => r.json()),
     enabled: !!id,
   });
+  const projectWorkOrders = normalizeArray<ProjectWorkOrder>(projectWorkOrdersRaw);
 
-  const { data: allStepAttachments = [] } = useQuery<StepAttachment[]>({
+  const { data: allStepAttachmentsRaw } = useQuery<StepAttachment[]>({
     queryKey: ['/api/project-step-attachments/by-project', id],
     enabled: !!id,
   });
+  const allStepAttachments = normalizeArray<StepAttachment>(allStepAttachmentsRaw);
 
   const { data: traceability, isLoading: isLoadingTraceability } = useQuery<TraceabilityData>({
     queryKey: ['/api/projects', id, 'traceability'],
@@ -1279,11 +1282,12 @@ export default function ProjectDetailPage() {
     { label: 'Profit / Fee', value: formatCurrencyLabel(hubRom.categories?.profitFee?.budgetAmount), detail: 'Quote profit or fee target' },
   ];
 
-  const { data: projectFarFlowdowns = [] } = useQuery<ProjectFarFlowdown[]>({
+  const { data: projectFarFlowdownsRaw } = useQuery<ProjectFarFlowdown[]>({
     queryKey: ['/api/far-flowdown-clauses/project', id],
     queryFn: () => fetch(`/api/far-flowdown-clauses/project/${id}`).then(r => r.json()),
     enabled: !!id,
   });
+  const projectFarFlowdowns = normalizeArray<ProjectFarFlowdown>(projectFarFlowdownsRaw);
 
   const releaseToP2Mutation = useMutation({
     mutationFn: () => apiRequest(`/api/projects/${id}/release-to-p2`, { method: 'POST' }),
@@ -1338,11 +1342,12 @@ export default function ProjectDetailPage() {
   const [pdfPreviewTitle, setPdfPreviewTitle] = useState<string>('');
   const [uploadingExternalPdfSlipId, setUploadingExternalPdfSlipId] = useState<string | null>(null);
 
-  const { data: projectDocs = [] } = useQuery<ProjectDoc[]>({
+  const { data: projectDocsRaw } = useQuery<ProjectDoc[]>({
     queryKey: ['/api/projects', id, 'documents'],
     queryFn: () => fetch(`/api/projects/${id}/documents`).then(r => r.json()),
     enabled: !!id,
   });
+  const projectDocs = normalizeArray<ProjectDoc>(projectDocsRaw);
   const manufacturingProjectDocs = projectDocs.filter((doc) => doc.source === 'work_instruction' || doc.source === 'spec_sheet');
   const manualProjectDocs = projectDocs.filter((doc) => !doc.source || doc.source === 'manual');
 

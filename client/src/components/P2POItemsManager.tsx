@@ -50,6 +50,7 @@ interface P2POItemsManagerProps {
   poId: number;
   poNumber: string;
   onBack: () => void;
+  correctionReason?: string;
 }
 
 interface P2POItem {
@@ -69,6 +70,7 @@ export function P2POItemsManager({
   poId,
   poNumber,
   onBack,
+  correctionReason,
 }: P2POItemsManagerProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<P2POItem | null>(null);
@@ -135,7 +137,7 @@ export function P2POItemsManager({
     mutationFn: (data: typeof formData) =>
       apiRequest(`/api/p2/purchase-orders/${poId}/items`, {
         method: 'POST',
-        body: data,
+        body: { ...data, correctionReason },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -194,7 +196,7 @@ export function P2POItemsManager({
     mutationFn: ({ itemId, data }) =>
       apiRequest(`/api/p2/purchase-orders/${poId}/items/${itemId}`, {
         method: 'PUT',
-        body: data,
+        body: { ...data, correctionReason },
       }) as Promise<UpdateResponse>,
     onSuccess: (data) => {
       queryClient.invalidateQueries({
@@ -250,6 +252,7 @@ export function P2POItemsManager({
     mutationFn: (itemId: number) =>
       apiRequest(`/api/p2/purchase-orders/${poId}/items/${itemId}`, {
         method: 'DELETE',
+        body: { correctionReason },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({

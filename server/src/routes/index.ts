@@ -7651,6 +7651,71 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   });
 
   // P2 Purchase Order Items routes
+  const assertP2LineItemCorrectionAllowed = async (poId: number) => {
+    const { pool } = await import('../../db');
+    const result = await pool.query(
+      `SELECT po.id, po.po_number, po.locked_at, po.is_current_revision,
+              (SELECT COUNT(*)::int FROM p2_serialized_items psi WHERE psi.po_id = po.id) AS serialized_count,
+              (SELECT COUNT(*)::int FROM p2_production_orders ppo WHERE ppo.p2_po_id = po.id) AS production_count
+         FROM p2_purchase_orders po
+        WHERE po.id = $1`,
+      [poId],
+    );
+    const po = result.rows[0];
+    if (!po) throw Object.assign(new Error('P2 purchase order not found'), { status: 404 });
+    if (po.is_current_revision === false) {
+      throw Object.assign(new Error('Superseded revisions cannot be corrected'), { status: 409 });
+    }
+    if (Number(po.serialized_count) > 0 || Number(po.production_count) > 0) {
+      throw Object.assign(new Error('This PO has entered production. Use the formal revision process instead.'), { status: 409 });
+    }
+    return po;
+  };
+
+  app.post('/api/p2/purchase-orders/:poId/line-item-correction/start', softAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const poId = parseInt(req.params.poId);
+      const reason = String(req.body?.reason || '').trim();
+      if (reason.length < 10) return res.status(400).json({ error: 'A correction reason of at least 10 characters is required' });
+      const po = await assertP2LineItemCorrectionAllowed(poId);
+      const { pool } = await import('../../db');
+      await pool.query('UPDATE p2_purchase_orders SET locked_at = NULL, locked_by = NULL, updated_at = NOW() WHERE id = $1', [poId]);
+      const user = (req as any).user;
+      await auditService.logEvent({
+        entityType: 'p2_order', entityId: String(poId), action: 'P2_PO_LINE_ITEM_CORRECTION_STARTED', reason,
+        actor: { id: user?.id, username: user?.username || user?.email, role: user?.role },
+        ipAddress: req.ip, userAgent: req.get('user-agent') || undefined,
+        meta: { poNumber: po.po_number },
+      });
+      res.json({ success: true, poId, poNumber: po.po_number });
+    } catch (error) {
+      const status = Number((error as any).status) || 500;
+      res.status(status).json({ error: (error as Error).message || 'Failed to open PO correction' });
+    }
+  });
+
+  app.post('/api/p2/purchase-orders/:poId/line-item-correction/complete', softAuth, requireAdminOrOwner, async (req, res) => {
+    try {
+      const poId = parseInt(req.params.poId);
+      const reason = String(req.body?.reason || '').trim();
+      if (reason.length < 10) return res.status(400).json({ error: 'A correction reason of at least 10 characters is required' });
+      const po = await assertP2LineItemCorrectionAllowed(poId);
+      const { pool } = await import('../../db');
+      const user = (req as any).user;
+      await pool.query('UPDATE p2_purchase_orders SET locked_at = NOW(), locked_by = $1, updated_at = NOW() WHERE id = $2', [user?.id || null, poId]);
+      await auditService.logEvent({
+        entityType: 'p2_order', entityId: String(poId), action: 'P2_PO_LINE_ITEM_CORRECTION_COMPLETED', reason,
+        actor: { id: user?.id, username: user?.username || user?.email, role: user?.role },
+        ipAddress: req.ip, userAgent: req.get('user-agent') || undefined,
+        meta: { poNumber: po.po_number },
+      });
+      res.json({ success: true, poId });
+    } catch (error) {
+      const status = Number((error as any).status) || 500;
+      res.status(status).json({ error: (error as Error).message || 'Failed to complete PO correction' });
+    }
+  });
+
   app.get('/api/p2/purchase-orders/:poId/items', async (req, res) => {
     try {
       const { poId } = req.params;
@@ -7666,6 +7731,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.post('/api/p2/purchase-orders/:poId/items', async (req, res) => {
     try {
       const { poId } = req.params;
+      const correctionReason = String(req.body?.correctionReason || '').trim();
+      if (correctionReason) {
+        if (correctionReason.length < 10) return res.status(400).json({ error: 'A valid correction reason is required' });
+        await assertP2LineItemCorrectionAllowed(parseInt(poId));
+      }
       const { storage } = await import('../../storage');
       const { insertP2PurchaseOrderItemSchema } = await import('../../schema');
       
@@ -7689,6 +7759,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       console.log('📦 P2 PO Item Create - Final data to storage:', createData);
       
       const item = await storage.createP2PurchaseOrderItem(createData);
+      if (correctionReason) {
+        const user = (req as any).user;
+        await auditService.logEvent({
+          entityType: 'p2_order', entityId: poId, action: 'P2_PO_LINE_ITEM_ADDED', reason: correctionReason,
+          actor: { id: user?.id, username: user?.username || user?.email, role: user?.role },
+          ipAddress: req.ip, userAgent: req.get('user-agent') || undefined,
+          fieldsChanged: { lineItem: { before: null, after: item } },
+        });
+      }
       
       console.log('📦 P2 PO Item Create - Created item:', item);
       
@@ -7724,6 +7803,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const itemIdNum = parseInt(itemId);
       const { storage } = await import('../../storage');
       const { insertP2PurchaseOrderItemSchema } = await import('../../schema');
+      const correctionReason = String(req.body?.correctionReason || '').trim();
+      if (correctionReason) {
+        if (correctionReason.length < 10) return res.status(400).json({ error: 'A valid correction reason is required' });
+        await assertP2LineItemCorrectionAllowed(poIdNum);
+      }
 
       const itemData = insertP2PurchaseOrderItemSchema
         .partial()
@@ -7746,6 +7830,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         itemData,
         actor,
       );
+
+      if (correctionReason) {
+        await auditService.logEvent({
+          entityType: 'p2_order', entityId: String(poIdNum), action: 'P2_PO_LINE_ITEM_UPDATED', reason: correctionReason,
+          actor, ipAddress: req.ip, userAgent: req.get('user-agent') || undefined,
+          meta: { itemId: itemIdNum, updatedItem: result.item, sync: result.sync },
+        });
+      }
 
       res.json({ ...result.item, sync: result.sync });
     } catch (error) {
@@ -7798,9 +7890,25 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   app.delete('/api/p2/purchase-orders/:poId/items/:itemId', async (req, res) => {
     try {
-      const { itemId } = req.params;
+      const { poId, itemId } = req.params;
+      const correctionReason = String(req.body?.correctionReason || '').trim();
+      if (correctionReason) {
+        if (correctionReason.length < 10) return res.status(400).json({ error: 'A valid correction reason is required' });
+        await assertP2LineItemCorrectionAllowed(parseInt(poId));
+      }
       const { storage } = await import('../../storage');
+      const existingItems = correctionReason ? await storage.getP2PurchaseOrderItems(parseInt(poId)) : [];
+      const deletedItem = existingItems.find((item: any) => Number(item.id) === parseInt(itemId));
       await storage.deleteP2PurchaseOrderItem(parseInt(itemId));
+      if (correctionReason) {
+        const user = (req as any).user;
+        await auditService.logEvent({
+          entityType: 'p2_order', entityId: poId, action: 'P2_PO_LINE_ITEM_DELETED', reason: correctionReason,
+          actor: { id: user?.id, username: user?.username || user?.email, role: user?.role },
+          ipAddress: req.ip, userAgent: req.get('user-agent') || undefined,
+          fieldsChanged: { lineItem: { before: deletedItem || { id: parseInt(itemId) }, after: null } },
+        });
+      }
       res.json({ success: true });
     } catch (error) {
       console.error('Delete P2 purchase order item error:', error);

@@ -2681,8 +2681,11 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
 
     const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
     const performedByEmail = (req as any).user?.email as string | undefined;
+    // audit_events.actor_id references employees.id, not users.id.  Passing the
+    // authenticated application-user id causes a foreign-key failure for users
+    // whose user and employee records do not share the same numeric id.
     const actor = {
-      id: (req as any).user?.id,
+      id: (req as any).user?.employeeId ?? undefined,
       username: (req as any).user?.username,
       role: (req as any).user?.role,
     };

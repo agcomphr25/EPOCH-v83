@@ -201,6 +201,7 @@ export default function P2ControlCenter() {
       apiRequest(`/api/p2/purchase-orders/${poId}/line-item-correction/start`, {
         method: 'POST',
         body: { reason },
+        timeout: 15000,
       }),
     onSuccess: () => {
       if (pendingLineItemCorrection) setLineItemCorrection(pendingLineItemCorrection);
@@ -1008,6 +1009,13 @@ export default function P2ControlCenter() {
               data-testid="input-line-item-correction-reason"
             />
             <p className="text-xs text-muted-foreground">At least 10 characters are required.</p>
+            {startLineItemCorrection.isError && (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+                {startLineItemCorrection.error instanceof Error
+                  ? startLineItemCorrection.error.message
+                  : 'The correction could not be opened. Please try again.'}
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingLineItemCorrection(null)}>Cancel</Button>

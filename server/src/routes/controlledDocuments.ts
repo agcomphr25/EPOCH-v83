@@ -21,7 +21,7 @@ import { writeAccessLog } from './vault';
 import { getUserPermissions } from '../services/permissionService';
 import { recordAuditEvent } from '../services/auditLedgerService';
 import { fileURLToPath } from 'url';
-import { PDFDocument, PDFFont, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, PDFFont, StandardFonts, rgb, degrees } from 'pdf-lib';
 import {
   getFileStorageProvider,
   getFileStorageProviderForObjectPath,
@@ -954,57 +954,191 @@ const addControlledDocumentFooter = async (
   for (const page of pages) {
     const { x: pageX, y: pageY, width, height } = page.getCropBox();
     const mediaBox = page.getMediaBox();
+    const rotAngle = page.getRotation().angle; // 0, 90, 180, 270
     const marginX = 36;
     const footerAreaHeight = 48;
     const bottomInset = 18;
     const footerHeight = 24;
     const fontSize = 8;
-    const footerAreaY = pageY - footerAreaHeight;
-    const mediaBottom = Math.min(mediaBox.y, footerAreaY);
-    const text = truncateTextToWidth(
-      footerText,
-      width - marginX * 2,
-      font,
-      fontSize
-    );
 
-    // Give the control footer its own printable strip below the original page
-    // instead of covering document content near the existing bottom edge.
-    page.setMediaBox(
-      mediaBox.x,
-      mediaBottom,
-      mediaBox.width,
-      mediaBox.y + mediaBox.height - mediaBottom
-    );
-    page.setCropBox(pageX, footerAreaY, width, height + footerAreaHeight);
+    if (rotAngle === 90 || rotAngle === 270) {
+      // Landscape pages stored as portrait with a 90° or 270° rotation applied.
+      // getCropBox() returns un-rotated (portrait) dimensions, so we must use
+      // the page height as the visual width (and vice-versa) and position the
+      // footer strip along the correct edge.
+      //
+      // Rotate=90 (90° CW display): visual bottom = original RIGHT edge.
+      //   Footer strip extends to the right of the original crop box.
+      //   Text must be rotated 90° CCW in original space so it reads normally
+      //   after the viewer applies the 90° CW rotation.
+      //
+      // Rotate=270 (270° CW = 90° CCW display): visual bottom = original LEFT edge.
+      //   Footer strip extends to the left of the original crop box.
+      //   Text must be rotated 270° CCW in original space.
 
-    page.drawRectangle({
-      x: pageX,
-      y: footerAreaY + bottomInset,
-      width,
-      height: footerHeight,
-      color: rgb(1, 1, 1),
-      opacity: 0.92,
-    });
-    page.drawLine({
-      start: {
+      // Visual width (= original height) is the dimension the text must fit in.
+      const visualWidth = height;
+
+      const text = truncateTextToWidth(
+        footerText,
+        visualWidth - marginX * 2,
+        font,
+        fontSize
+      );
+
+      if (rotAngle === 90) {
+        // Footer strip to the RIGHT of the original crop box.
+        const footerAreaX = pageX + width; // left edge of the strip in original coords
+        const mediaRight = Math.max(
+          mediaBox.x + mediaBox.width,
+          footerAreaX + footerAreaHeight
+        );
+
+        // Extend media box and crop box rightward.
+        page.setMediaBox(
+          mediaBox.x,
+          mediaBox.y,
+          mediaRight - mediaBox.x,
+          mediaBox.height
+        );
+        page.setCropBox(pageX, pageY, width + footerAreaHeight, height);
+
+        // White background rectangle (vertical strip in original = horizontal strip in visual).
+        page.drawRectangle({
+          x: footerAreaX + bottomInset,
+          y: pageY,
+          width: footerHeight,
+          height, // spans full original height = visual width
+          color: rgb(1, 1, 1),
+          opacity: 0.92,
+        });
+
+        // Separator line (vertical in original = horizontal separator in visual).
+        page.drawLine({
+          start: {
+            x: footerAreaX + bottomInset + footerHeight,
+            y: pageY + marginX,
+          },
+          end: {
+            x: footerAreaX + bottomInset + footerHeight,
+            y: pageY + height - marginX,
+          },
+          thickness: 0.5,
+          color: rgb(0.72, 0.72, 0.72),
+        });
+
+        // Text rotated 90° CCW in original coords.
+        // After the viewer applies 90° CW, net rotation is 0° (readable).
+        // x positions the baseline; y is the visual-left-margin start.
+        page.drawText(text, {
+          x: footerAreaX + bottomInset + 8,
+          y: pageY + marginX,
+          size: fontSize,
+          font,
+          color: rgb(0.2, 0.2, 0.2),
+          rotate: degrees(90),
+        });
+      } else {
+        // rotAngle === 270
+        // Footer strip to the LEFT of the original crop box.
+        const footerAreaX = pageX - footerAreaHeight; // left edge of the strip
+        const mediaLeft = Math.min(mediaBox.x, footerAreaX);
+
+        // Extend media box and crop box leftward.
+        page.setMediaBox(
+          mediaLeft,
+          mediaBox.y,
+          mediaBox.x + mediaBox.width - mediaLeft,
+          mediaBox.height
+        );
+        page.setCropBox(footerAreaX, pageY, width + footerAreaHeight, height);
+
+        // The inner edge of the strip (closest to original content = closest to pageX).
+        const innerEdgeX = pageX - bottomInset - footerHeight;
+
+        // White background rectangle.
+        page.drawRectangle({
+          x: innerEdgeX,
+          y: pageY,
+          width: footerHeight,
+          height,
+          color: rgb(1, 1, 1),
+          opacity: 0.92,
+        });
+
+        // Separator line.
+        page.drawLine({
+          start: { x: innerEdgeX, y: pageY + marginX },
+          end: { x: innerEdgeX, y: pageY + height - marginX },
+          thickness: 0.5,
+          color: rgb(0.72, 0.72, 0.72),
+        });
+
+        // Text rotated 270° CCW in original coords.
+        // After the viewer applies 270° CW, net rotation is 0° (readable).
+        // y starts at the visual-left-margin (= original top minus marginX).
+        page.drawText(text, {
+          x: pageX - bottomInset - 8,
+          y: pageY + height - marginX,
+          size: fontSize,
+          font,
+          color: rgb(0.2, 0.2, 0.2),
+          rotate: degrees(270),
+        });
+      }
+    } else {
+      // Portrait pages (Rotate=0 or Rotate=180).
+      // For Rotate=0: footer strip extends below the crop box (footerAreaY < pageY).
+      // Rotate=180 is uncommon but handled by the same downward extension — after
+      // the 180° rotation the strip still appears at the visual bottom.
+      const footerAreaY = pageY - footerAreaHeight;
+      const mediaBottom = Math.min(mediaBox.y, footerAreaY);
+
+      const text = truncateTextToWidth(
+        footerText,
+        width - marginX * 2,
+        font,
+        fontSize
+      );
+
+      // Give the control footer its own printable strip below the original page
+      // instead of covering document content near the existing bottom edge.
+      page.setMediaBox(
+        mediaBox.x,
+        mediaBottom,
+        mediaBox.width,
+        mediaBox.y + mediaBox.height - mediaBottom
+      );
+      page.setCropBox(pageX, footerAreaY, width, height + footerAreaHeight);
+
+      page.drawRectangle({
+        x: pageX,
+        y: footerAreaY + bottomInset,
+        width,
+        height: footerHeight,
+        color: rgb(1, 1, 1),
+        opacity: 0.92,
+      });
+      page.drawLine({
+        start: {
+          x: pageX + marginX,
+          y: footerAreaY + bottomInset + footerHeight,
+        },
+        end: {
+          x: pageX + width - marginX,
+          y: footerAreaY + bottomInset + footerHeight,
+        },
+        thickness: 0.5,
+        color: rgb(0.72, 0.72, 0.72),
+      });
+      page.drawText(text, {
         x: pageX + marginX,
-        y: footerAreaY + bottomInset + footerHeight,
-      },
-      end: {
-        x: pageX + width - marginX,
-        y: footerAreaY + bottomInset + footerHeight,
-      },
-      thickness: 0.5,
-      color: rgb(0.72, 0.72, 0.72),
-    });
-    page.drawText(text, {
-      x: pageX + marginX,
-      y: footerAreaY + bottomInset + 8,
-      size: fontSize,
-      font,
-      color: rgb(0.2, 0.2, 0.2),
-    });
+        y: footerAreaY + bottomInset + 8,
+        size: fontSize,
+        font,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+    }
   }
 
   return Buffer.from(await pdfDoc.save());

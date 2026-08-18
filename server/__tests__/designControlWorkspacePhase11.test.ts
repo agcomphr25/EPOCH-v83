@@ -76,9 +76,7 @@ describe('Phase 11 unified Design Control workspace', () => {
       'setActiveStep(phaseEntryStep(phase.stepKeys))'
     );
     expect(workspace).toContain('Record Details');
-    expect(workspace).toContain(
-      'aria-label="Controlled Design Control checkpoints"'
-    );
+    expect(workspace).not.toContain('Controlled Design Control checkpoints');
   });
 
   it('gives every phase the same guided, correctable layout', () => {
@@ -200,7 +198,7 @@ describe('Phase 11 unified Design Control workspace', () => {
 
   it('distinguishes Revision A and Revision B+', () => {
     expect(workspace).toContain('Revision A establishes the initial baseline');
-    expect(workspace).toContain('Revision B+');
+    expect(workspace).toMatch(/Revision\s+B\+/);
   });
 
   it('reuses controlled forms, copies, and DHF panels', () => {
@@ -237,14 +235,13 @@ describe('Phase 11 unified Design Control workspace', () => {
   });
 
   it('provides labeled and keyboard-accessible controls', () => {
-    expect(workspace).toContain('aria-label="Design Control steps"');
-    expect(workspace).toContain("aria-current={selected ? 'step'");
+    expect(workspace).toContain('aria-label="Six Design Control phases"');
     expect(workspace).toContain('focus-visible:ring-2');
     expect(qms).toContain('<Label>');
   });
 
   it('communicates status with text rather than color alone', () => {
-    expect(workspace).toContain('{displayStatus(step?.status)}');
+    expect(workspace).toContain('phaseStatus(phase.stepKeys)');
     expect(qms).toContain('{statusText(row.designControlStatus)}');
   });
 

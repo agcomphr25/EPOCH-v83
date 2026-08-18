@@ -64,7 +64,14 @@ describe('P2 material deposit CLIN, terms, and contact enhancement', () => {
     expect(migration).toContain('INSERT INTO p2_invoice_number_audit');
     expect(migration).toContain('INSERT INTO schema_change_log');
     expect(migration).toContain('AMBIGUOUS_STOP');
+    expect(migration).toContain("invoice.status = 'VOID'");
+    expect(migration).toContain('invoice.voided_at IS NOT NULL');
+    expect(migration).toContain("'VOIDED_NUMBER_RELEASE'");
+    expect(migration).toContain("'AST26-0001-VOID-' || left(voided_invoice.id::text, 8)");
+    expect(migration).toContain('not a confirmed voided Astrion invoice');
     expect(boot).toContain("'0291_renumber_astrion_material_deposit_invoice.sql'");
+    const criticalSection = boot.slice(boot.indexOf('export const criticalMigrationFiles'));
+    expect(criticalSection).not.toContain("'0291_renumber_astrion_material_deposit_invoice.sql'");
   });
 
   it('installs the audited PO00021498 line-number correction at boot', () => {

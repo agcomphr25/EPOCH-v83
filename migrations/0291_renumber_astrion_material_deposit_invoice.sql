@@ -5,6 +5,8 @@
 DO $$
 DECLARE
   target_invoice ar_invoices%ROWTYPE;
+  voided_invoice ar_invoices%ROWTYPE;
+  voided_archive_number text;
   target_count integer;
   before_sequence jsonb;
 BEGIN
@@ -44,8 +46,57 @@ BEGIN
     RAISE EXCEPTION '0291 AMBIGUOUS_STOP: AST26-0002 is not an unposted, unsent Astrion material-deposit invoice';
   END IF;
 
-  IF EXISTS (SELECT 1 FROM ar_invoices WHERE invoice_number = 'AST26-0001') THEN
-    RAISE EXCEPTION '0291 AMBIGUOUS_STOP: AST26-0001 is already assigned to another invoice';
+  SELECT invoice.* INTO voided_invoice
+    FROM ar_invoices invoice
+    JOIN p2_customers customer ON customer.customer_id = invoice.customer_id
+   WHERE invoice.invoice_number = 'AST26-0001'
+     AND invoice.status = 'VOID'
+     AND invoice.voided_at IS NOT NULL
+     AND lower(customer.customer_name) LIKE 'astrion%';
+
+  IF EXISTS (SELECT 1 FROM ar_invoices WHERE invoice_number = 'AST26-0001')
+     AND voided_invoice.id IS NULL THEN
+    -- Never reuse a number belonging to a live or ambiguously voided invoice.
+    RAISE NOTICE '0291 SAFE_SKIP: AST26-0001 is assigned to an invoice that is not a confirmed voided Astrion invoice; no data was changed';
+    RETURN;
+  END IF;
+
+  IF voided_invoice.id IS NOT NULL THEN
+    -- Preserve the voided invoice and its UUID-linked history while releasing
+    -- the customer-facing number Glenn explicitly approved for reuse.
+    voided_archive_number := 'AST26-0001-VOID-' || left(voided_invoice.id::text, 8);
+
+    UPDATE ar_invoices
+       SET invoice_number = voided_archive_number,
+           updated_at = now()
+     WHERE id = voided_invoice.id
+       AND status = 'VOID'
+       AND voided_at IS NOT NULL;
+
+    INSERT INTO p2_invoice_number_audit (
+      invoice_id, customer_id, old_invoice_number, new_invoice_number,
+      action, reason, changed_by, metadata
+    ) VALUES (
+      voided_invoice.id,
+      voided_invoice.customer_id,
+      'AST26-0001',
+      voided_archive_number,
+      'VOIDED_NUMBER_RELEASE',
+      'Release the number of Glenn Jones'' confirmed voided Astrion invoice while preserving the voided record and UUID-linked audit history.',
+      'migration:0291 approved by Glenn Jones',
+      jsonb_build_object('invoiceStatus', voided_invoice.status, 'voidedAt', voided_invoice.voided_at)
+    );
+
+    INSERT INTO schema_change_log (
+      actor, action_type, table_name, column_name, before_state, after_state,
+      approved_by, override_reason
+    ) VALUES (
+      'migration:0291', 'OVERRIDE', 'ar_invoices', 'invoice_number',
+      jsonb_build_object('invoiceId', voided_invoice.id, 'invoiceNumber', 'AST26-0001', 'status', voided_invoice.status),
+      jsonb_build_object('invoiceId', voided_invoice.id, 'invoiceNumber', voided_archive_number, 'status', voided_invoice.status),
+      'Glenn Jones',
+      'Preserve the voided invoice under an archival number and release AST26-0001 for the valid first Astrion material-deposit invoice.'
+    );
   END IF;
 
   IF EXISTS (

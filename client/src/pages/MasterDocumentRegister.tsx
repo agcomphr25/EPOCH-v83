@@ -1809,20 +1809,69 @@ export default function MasterDocumentRegister() {
                                 </Button>
                               </>
                             ) : (
-                              <Badge
-                                variant={
-                                  doc.currentReleasedRevisionId
-                                    ? 'destructive'
-                                    : 'outline'
-                                }
-                                title={
-                                  doc.currentReleasedRevisionId
-                                    ? 'The released revision is not verified and available for controlled use. Use Document File Recovery.'
-                                    : 'A document becomes available for controlled use only after approval and release.'
-                                }
-                              >
-                                {getReleasedFileTypeLabel(doc)}
-                              </Badge>
+                              <>
+                                <Badge
+                                  variant={
+                                    doc.currentReleasedRevisionId
+                                      ? 'destructive'
+                                      : 'outline'
+                                  }
+                                  title={
+                                    doc.currentReleasedRevisionId
+                                      ? 'The released revision is not verified and available for controlled use. Use Document File Recovery.'
+                                      : 'A document becomes available for controlled use only after approval and release.'
+                                  }
+                                >
+                                  {getReleasedFileTypeLabel(doc)}
+                                </Badge>
+                                {!doc.currentReleasedRevisionId &&
+                                  doc.currentRevisionId &&
+                                  doc.currentRevisionHasFile && (
+                                    <>
+                                      {doc.currentRevisionIsPdf && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-8 gap-1 border-amber-300 px-2 text-amber-800 hover:bg-amber-50"
+                                          title="Preview draft PDF — not released for controlled use"
+                                          disabled={openingDocumentId === doc.id}
+                                          onClick={() =>
+                                            openDocumentFile(
+                                              doc,
+                                              'view',
+                                              undefined,
+                                              `/api/controlled-documents/${doc.id}/revisions/${doc.currentRevisionId}/view`
+                                            )
+                                          }
+                                          data-testid={`button-preview-draft-${doc.id}`}
+                                        >
+                                          <Eye className="h-3.5 w-3.5" />
+                                          {openingDocumentId === doc.id
+                                            ? 'Opening'
+                                            : 'Draft PDF'}
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 w-8 p-0"
+                                        title="Download draft revision — not released for controlled use"
+                                        disabled={openingDocumentId === doc.id}
+                                        onClick={() =>
+                                          openDocumentFile(
+                                            doc,
+                                            'download',
+                                            null,
+                                            `/api/controlled-documents/${doc.id}/revisions/${doc.currentRevisionId}/download`
+                                          )
+                                        }
+                                        data-testid={`button-download-draft-${doc.id}`}
+                                      >
+                                        <Download className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                              </>
                             )}
                             <Button
                               size="sm"

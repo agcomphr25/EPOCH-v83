@@ -7,6 +7,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Link } from 'wouter';
 import { 
   FileText,
@@ -18,7 +25,9 @@ import {
   Factory,
   TrendingUp,
   FolderOpen,
-  PlayCircle
+  PlayCircle,
+  MoreHorizontal,
+  ExternalLink,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -377,47 +386,59 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, onManageItems,
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-2">
-                        {(po.shippedItems ?? 0) === 0 && po.scheduledItems === 0 && po.inProductionItems === 0 && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => onManageItems?.(po.id, po.poNumber)}
-                            data-testid={`button-manage-po-items-${po.id}`}
-                          >
-                            <Package className="h-4 w-4 mr-1" />
-                            Manage Line Items
-                          </Button>
-                        )}
-                        {po.projectId && (
-                          <Link href={`/pm-control-center?project=${po.projectId}`}>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full"
-                              data-testid={`button-pm-control-${po.id}`}
-                            >
-                              PM Control
-                            </Button>
-                          </Link>
-                        )}
-                        <Button 
-                          size="sm" 
-                          variant={po.hasBOMsNeeded ? "default" : "outline"}
+                      <div className="flex min-w-[190px] flex-col items-stretch gap-2 self-start">
+                        <Button
+                          size="sm"
+                          variant={po.hasBOMsNeeded ? 'default' : 'outline'}
                           onClick={() => onStartBOM(po.id)}
                           data-testid={`button-configure-bom-${po.id}`}
                         >
-                          <Layers className="h-4 w-4 mr-1" />
-                          {po.hasBOMsNeeded ? "Configure BOMs" : "View BOMs"}
+                          <Layers className="mr-2 h-4 w-4" />
+                          {po.hasBOMsNeeded ? 'Configure BOMs' : 'View BOMs'}
                         </Button>
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => onViewPO?.(po.id)}
-                          data-testid={`button-view-po-${po.id}`}
-                        >
-                          View PO <FileText className="h-4 w-4 ml-1" />
-                        </Button>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="justify-between"
+                              data-testid={`button-po-actions-${po.id}`}
+                            >
+                              More actions
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem onSelect={() => onViewPO?.(po.id)}>
+                              <FileText className="mr-2 h-4 w-4" />
+                              View PO details
+                            </DropdownMenuItem>
+                            {(po.shippedItems ?? 0) === 0 && po.scheduledItems === 0 && po.inProductionItems === 0 && (
+                              <DropdownMenuItem
+                                onSelect={() => onManageItems?.(po.id, po.poNumber)}
+                                data-testid={`button-manage-po-items-${po.id}`}
+                              >
+                                <Package className="mr-2 h-4 w-4" />
+                                Manage line items
+                              </DropdownMenuItem>
+                            )}
+                            {po.projectId && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                  <Link
+                                    href={`/pm-control-center?project=${po.projectId}`}
+                                    data-testid={`button-pm-control-${po.id}`}
+                                  >
+                                    <ExternalLink className="mr-2 h-4 w-4" />
+                                    Open PM Control
+                                  </Link>
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </CardContent>

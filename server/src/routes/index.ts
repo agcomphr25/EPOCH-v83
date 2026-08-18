@@ -7658,7 +7658,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               (SELECT COUNT(*)::int
                  FROM p2_serialized_items psi
                 WHERE psi.po_id = po.id
-                  AND COALESCE(UPPER(psi.status), 'PENDING') <> 'PENDING') AS active_serialized_count,
+                  AND (
+                    psi.finalized_at IS NOT NULL
+                    OR UPPER(TRIM(COALESCE(psi.current_department, ''))) IN ('LAYUP', 'SCHEDULED')
+                    OR (
+                      UPPER(TRIM(COALESCE(psi.current_department, ''))) NOT IN ('', 'PENDING LAYUP', 'INVENTORY', 'SHIPPED', 'SHIPPING', 'CLOSED')
+                      AND UPPER(TRIM(COALESCE(psi.status, ''))) NOT IN ('PENDING', 'SCHEDULED', 'COMPLETE', 'COMPLETED', 'CLOSED', 'SHIPPED', 'SCRAP', 'SCRAPPED', 'CANCELED', 'CANCELLED', 'VOID')
+                    )
+                  )) AS active_serialized_count,
               (SELECT COUNT(*)::int
                  FROM p2_production_orders ppo
                 WHERE ppo.p2_po_id = po.id

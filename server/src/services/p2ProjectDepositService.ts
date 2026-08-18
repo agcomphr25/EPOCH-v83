@@ -101,7 +101,10 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
          AND NULLIF(BTRIM(customer_po_line), '') IS NOT NULL
        GROUP BY NULLIF(BTRIM(customer_po_line), '')
     ), po_item_clins AS (
-      SELECT ROW_NUMBER() OVER (ORDER BY id)::text AS "clinNumber",
+      SELECT COALESCE(
+               NULLIF(BTRIM(customer_po_line), ''),
+               ROW_NUMBER() OVER (ORDER BY id)::text
+             ) AS "clinNumber",
              CONCAT(part_number, CASE WHEN NULLIF(BTRIM(part_name), '') IS NOT NULL THEN ' - ' || part_name ELSE '' END) AS description,
              COALESCE(total_price::numeric, quantity::numeric * unit_price::numeric, 0)::numeric AS "contractLineValue",
              2 AS source_priority

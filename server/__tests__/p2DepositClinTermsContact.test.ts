@@ -30,11 +30,24 @@ describe('P2 material deposit CLIN, terms, and contact enhancement', () => {
     expect(service).toContain('FROM p2_billing_allocations');
     expect(service).toContain('FROM p2_purchase_order_items');
     expect(service).toContain('quantity::numeric * unit_price::numeric');
+    expect(service).toContain("NULLIF(BTRIM(customer_po_line), '')");
     expect(service).toContain('onConflictDoUpdate');
     expect(service).toContain('clin.contractLineValue ?? allocation.contractLineValue');
     expect(component).toContain('updateAllocationClin');
     expect(component).toContain('Full PO line value');
     expect(component).toContain('Quantity × unit price from the selected PO line.');
+  });
+
+  it('installs the audited PO00021498 line-number correction at boot', () => {
+    const migration = read('migrations/0289_correct_po00021498_customer_line_numbers.sql');
+    const boot = read('server/scripts/migrations/runSafeBootMigrations.ts');
+    expect(() => runMigrationSafetyCheck(migration, '0289_correct_po00021498_customer_line_numbers.sql')).not.toThrow();
+    expect(migration).toContain("po.po_number = 'PO00021498'");
+    expect(migration).toContain("AG-PRIV-01%' THEN '1'");
+    expect(migration).toContain("AG-LAUN-01%' THEN '2'");
+    expect(migration).toContain('INSERT INTO schema_change_log');
+    expect(migration).toContain("'OVERRIDE'");
+    expect(boot).toContain("'0289_correct_po00021498_customer_line_numbers.sql'");
   });
 
   it('supports a PO linked from the PO side when projects.po_id is empty', () => {

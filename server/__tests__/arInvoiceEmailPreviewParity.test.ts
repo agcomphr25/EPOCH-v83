@@ -40,4 +40,10 @@ describe('AR invoice email preview parity', () => {
     expect(sendRoute).toContain('prepareInvoiceEmail(invoice, req.body || {})');
     expect(sendRoute).toContain('toSendGridInvoiceMessage(envelope)');
   });
+
+  it('does not allow the invoice list shortcut to bypass the reviewed send modal', () => {
+    const page = fs.readFileSync(path.join(process.cwd(), 'client/src/pages/InvoicesPage.tsx'), 'utf8');
+    expect(page).not.toContain("apiRequest(`/api/ar-invoices/${id}/send`");
+    expect(page).toContain('const handleSend = (id: string) => setLocation(`/finance/invoices/${id}`)');
+  });
 });

@@ -52,6 +52,21 @@ describe('P2 material deposit CLIN, terms, and contact enhancement', () => {
     expect(boot).toContain("'0290_p2_po_line_and_clin_distinction.sql'");
   });
 
+  it('safely renumbers the first Astrion material-deposit invoice and resets only its sequence', () => {
+    const migration = read('migrations/0291_renumber_astrion_material_deposit_invoice.sql');
+    const boot = read('server/scripts/migrations/runSafeBootMigrations.ts');
+    expect(() => runMigrationSafetyCheck(migration, '0291_renumber_astrion_material_deposit_invoice.sql')).not.toThrow();
+    expect(migration).toContain("invoice_number = 'AST26-0002'");
+    expect(migration).toContain("SET invoice_number = 'AST26-0001'");
+    expect(migration).toContain("invoice.invoice_type = 'MATERIAL_DEPOSIT'");
+    expect(migration).toContain("invoice.status IN ('DRAFT', 'REVIEW')");
+    expect(migration).toContain("last_number = 1");
+    expect(migration).toContain('INSERT INTO p2_invoice_number_audit');
+    expect(migration).toContain('INSERT INTO schema_change_log');
+    expect(migration).toContain('AMBIGUOUS_STOP');
+    expect(boot).toContain("'0291_renumber_astrion_material_deposit_invoice.sql'");
+  });
+
   it('installs the audited PO00021498 line-number correction at boot', () => {
     const migration = read('migrations/0289_correct_po00021498_customer_line_numbers.sql');
     const boot = read('server/scripts/migrations/runSafeBootMigrations.ts');

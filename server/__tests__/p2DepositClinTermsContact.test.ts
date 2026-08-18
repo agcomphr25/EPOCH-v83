@@ -59,7 +59,9 @@ describe('P2 material deposit CLIN, terms, and contact enhancement', () => {
 
   it('renders the point of contact and CLIN reference on the customer PDF', () => {
     const pdf = read('server/utils/pdf/arInvoicePdf.ts');
-    expect(pdf).toContain("'POINT OF CONTACT'");
+    const component = read('client/src/components/p2/P2ProjectDepositsCard.tsx');
+    expect(pdf).toContain("'ACCOUNTING POINT OF CONTACT'");
+    expect(component).toContain('Accounting Point of Contact');
     expect(pdf).toContain("isMaterialDeposit ? 'CLIN' : 'Part #'");
     expect(pdf).toContain('line.dimensionTags?.clinNumber');
     expect(pdf).toContain("line.dimensionTags?.clinNumber || ''");

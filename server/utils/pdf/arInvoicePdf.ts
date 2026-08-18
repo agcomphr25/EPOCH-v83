@@ -435,9 +435,10 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   const boxX = PAGE.WIDTH - PAGE.MARGIN - 200;
   const boxY = PAGE.HEIGHT - PAGE.MARGIN - 60;
   page.drawRectangle({ x: boxX, y: boxY, width: 200, height: 60, color: COLOR.ACCENT });
-  const documentTitle = isMaterialDeposit ? 'MATERIAL DEPOSIT' : 'INVOICE';
-  const titleWidth = bold.widthOfTextAtSize(documentTitle, FONT_SIZE.TITLE);
-  page.drawText(documentTitle, { x: boxX + (200 - titleWidth) / 2, y: boxY + 37, size: FONT_SIZE.TITLE, font: bold, color: COLOR.WHITE });
+  const documentTitle = isMaterialDeposit ? 'MATERIAL DEPOSIT INVOICE' : 'INVOICE';
+  const documentTitleSize = isMaterialDeposit ? 13 : FONT_SIZE.TITLE;
+  const titleWidth = bold.widthOfTextAtSize(documentTitle, documentTitleSize);
+  page.drawText(documentTitle, { x: boxX + (200 - titleWidth) / 2, y: boxY + 37, size: documentTitleSize, font: bold, color: COLOR.WHITE });
   page.drawText(invoice.invoiceNumber, { x: boxX + 28, y: boxY + 17, size: FONT_SIZE.NUMBER, font: bold, color: COLOR.WHITE });
 
   y = Math.min(y - 8, boxY - 18);
@@ -476,9 +477,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     ['Terms:', String(invoice.terms || 'N/A').replaceAll('_', ' ').replace(/^NET /, 'Net ')],
     ['Customer PO:', String(invoice.poOverride || invoice.poNumber || invoice.poId || 'N/A')],
   ];
-  if (isMaterialDeposit) {
-    detailRows.push(['Project:', String(invoice.projectCode || 'N/A')]);
-  } else {
+  if (!isMaterialDeposit) {
     detailRows.push(['Packing Slip:', String(invoice.packingSlipNumber || (isP1Invoice ? invoice.invoiceNumber : 'N/A'))]);
     detailRows.push(isP1Invoice
       ? ['Tracking #:', String(invoice.p1TrackingNumber || 'N/A')]
@@ -493,7 +492,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   y = Math.min(leftY, rightY) - 15;
   if (isMaterialDeposit && (invoice.pointOfContactName || invoice.pointOfContactPhone || invoice.pointOfContactEmail)) {
     ensureSpace(42);
-    page.drawText('POINT OF CONTACT', { x: PAGE.MARGIN, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });
+    page.drawText('ACCOUNTING POINT OF CONTACT', { x: PAGE.MARGIN, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });
     y -= 13;
     const contactParts = [invoice.pointOfContactName, invoice.pointOfContactPhone, invoice.pointOfContactEmail].filter(Boolean);
     page.drawText(contactParts.join(' | '), { x: PAGE.MARGIN, y, size: FONT_SIZE.BODY, font, color: COLOR.TEXT });

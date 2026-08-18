@@ -239,6 +239,47 @@ export function DesignControlStepEditor({
     [teamQuery.data?.assignments]
   );
 
+  useEffect(() => {
+    if (dirtyRef.current) return;
+    const suggestions: Record<string, string> = {};
+    for (const field of definition.fields) {
+      if (String(step?.formData?.[field.key] ?? '').trim()) continue;
+      const presentation = getDesignControlFieldPresentation(
+        definition.key,
+        field
+      );
+      if (presentation.kind === 'project' && projectId) {
+        suggestions[field.key] = projectId;
+        continue;
+      }
+      if (presentation.kind !== 'person') continue;
+      const wantedRole = field.label.toLowerCase();
+      const assignment = (teamQuery.data?.assignments ?? []).find(
+        (candidate) => {
+          if (candidate.status !== 'ACTIVE') return false;
+          const role = candidate.projectRole.replaceAll('_', ' ').toLowerCase();
+          return (
+            wantedRole.includes(role) ||
+            (wantedRole.includes('engineer') && role.includes('engineer')) ||
+            (wantedRole.includes('quality') && role.includes('quality')) ||
+            (wantedRole.includes('manufacturing') &&
+              role.includes('manufacturing')) ||
+            (wantedRole.includes('manager') && role.includes('manager'))
+          );
+        }
+      );
+      if (assignment) {
+        suggestions[field.key] =
+          [assignment.firstName, assignment.lastName]
+            .filter(Boolean)
+            .join(' ') || assignment.username;
+      }
+    }
+    if (Object.keys(suggestions).length === 0) return;
+    setFormData((current) => ({ ...suggestions, ...current }));
+    setDirty(true);
+  }, [definition, projectId, step?.formData, teamQuery.data?.assignments]);
+
   const approvalQuery = useQuery<ApprovalState>({
     queryKey: approvalQueryKey,
     queryFn: async () =>
@@ -827,6 +868,7 @@ export function DesignControlStepEditor({
               disabled={busy || !dirty}
               onClick={() => saveDraft()}
               type="button"
+              variant="outline"
             >
               Save Draft
             </Button>
@@ -834,7 +876,9 @@ export function DesignControlStepEditor({
               disabled={busy || !dirty}
               onClick={() => saveDraft(true)}
               type="button"
-              variant="secondary"
+              variant={
+                definition.approvals.length > 0 ? 'secondary' : 'default'
+              }
             >
               Save and Continue
             </Button>
@@ -904,9 +948,9 @@ export function DesignControlStepEditor({
             }
             onClick={submit}
             type="button"
-            variant="secondary"
+            variant="default"
           >
-            Submit current version
+            Submit for Approval
           </Button>
         )}
         {canSubmit && dirty && (

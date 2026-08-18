@@ -143,7 +143,7 @@ export async function getP2ProjectDepositWorkspace(projectId: string) {
       LEFT JOIN ar_invoice_lines ail ON ail.invoice_id = ai.id
      WHERE ai.customer_id = ${project.customerId}
        AND COALESCE(ai.invoice_type, 'STANDARD') = 'STANDARD'
-       AND ai.status NOT IN ('VOID', 'DRAFT')
+       AND ai.status IN ('POSTED', 'SENT')
        AND (
          ai.project_id = ${projectId}::uuid
          OR ail.project_id = ${projectId}
@@ -339,12 +339,12 @@ export async function applyP2ProjectDeposit(input: {
   amount: number;
   reason: string;
   appliedBy?: string | null;
-}) {
+}, existingTx?: any) {
   const amount = money(input.amount);
   if (amount <= 0) throw new Error('Application amount must be greater than zero');
   if (!input.reason?.trim()) throw new Error('An audit reason is required');
 
-  return db.transaction(async (tx) => {
+  const applyInTransaction = async (tx: any) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('p2-deposit-application'), hashtext(${input.depositInvoiceId}))`);
     const [deposit] = await tx.select().from(arInvoices).where(eq(arInvoices.id, input.depositInvoiceId));
     const [finalInvoice] = await tx.select().from(arInvoices).where(eq(arInvoices.id, input.finalInvoiceId));
@@ -353,7 +353,9 @@ export async function applyP2ProjectDeposit(input: {
     if (deposit.customerId !== finalInvoice.customerId) throw new Error('Deposit and final invoice must belong to the same customer');
     if (!deposit.projectId) throw new Error('Deposit invoice is not linked to a project');
     if (['VOID', 'DRAFT', 'REVIEW'].includes(deposit.status)) throw new Error('Deposit invoice must be posted and paid before it can be applied');
-    if (finalInvoice.status === 'VOID') throw new Error('Cannot apply a deposit to a voided invoice');
+    if (!['POSTED', 'SENT'].includes(finalInvoice.status)) {
+      throw new Error('The final shipment invoice must be posted before a deposit can be applied');
+    }
 
     const depositAmounts = await invoiceAmounts(tx, deposit.id);
     const finalAmounts = await invoiceAmounts(tx, finalInvoice.id);
@@ -398,5 +400,7 @@ export async function applyP2ProjectDeposit(input: {
       await tx.update(arInvoices).set({ status: 'PAID', updatedAt: new Date() }).where(eq(arInvoices.id, finalInvoice.id));
     }
     return { ...application, journalEntryId: posting.journalEntryId };
-  });
+  };
+
+  return existingTx ? applyInTransaction(existingTx) : db.transaction(applyInTransaction);
 }

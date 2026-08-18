@@ -874,6 +874,10 @@ router.get('/:id', async (req: Request, res: Response) => {
           (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
           0
         )`,
+        depositApplied: sql<string>`COALESCE(
+          (SELECT SUM(amount::numeric) FROM p2_deposit_applications WHERE final_invoice_id = ${arInvoices.id} AND status = 'POSTED'),
+          0
+        )`,
         balance: sql<string>`(
           ${arInvoices.totalAmount}::numeric - COALESCE(
             (
@@ -886,6 +890,9 @@ router.get('/:id', async (req: Request, res: Response) => {
             0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
+            0
+          ) - COALESCE(
+            (SELECT SUM(amount::numeric) FROM p2_deposit_applications WHERE final_invoice_id = ${arInvoices.id} AND status = 'POSTED'),
             0
           )
         )`,
@@ -1329,6 +1336,11 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
   try {
     const { id } = req.params;
     const user = (req as any).user?.username || null;
+    const depositApplication = z.object({
+      depositInvoiceId: z.string().uuid(),
+      amount: z.coerce.number().positive(),
+      reason: z.string().trim().min(3),
+    }).optional().parse(req.body?.depositApplication);
 
     const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
     if (!invoice) {
@@ -1384,11 +1396,38 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
         tx,
       });
 
+      const appliedDeposit = depositApplication
+        ? await applyP2ProjectDeposit({
+            depositInvoiceId: depositApplication.depositInvoiceId,
+            finalInvoiceId: id,
+            amount: depositApplication.amount,
+            reason: depositApplication.reason,
+            appliedBy: user,
+          }, tx)
+        : null;
+
       console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) posted by ${user}`);
       console.log(`[InvoiceService] Journal entry ${posting.journalEntryId} created for invoice ${invoice.invoiceNumber}`);
 
-      return updated;
+      return { ...updated, appliedDeposit };
     });
+
+    if (depositApplication && result.appliedDeposit) {
+      await recordAuditEvent({
+        eventType: 'P2_MATERIAL_DEPOSIT_APPLIED',
+        subjectType: 'ar_invoice',
+        subjectId: id,
+        sourceService: 'arInvoices.post',
+        actor: { username: user },
+        payload: {
+          applicationId: result.appliedDeposit.id,
+          depositInvoiceId: depositApplication.depositInvoiceId,
+          finalInvoiceId: id,
+          amount: depositApplication.amount,
+        },
+        reason: depositApplication.reason,
+      });
+    }
 
     res.json(result);
   } catch (error) {

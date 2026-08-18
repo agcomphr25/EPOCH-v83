@@ -258,6 +258,24 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
       retainagePercent: arInvoices.retainagePercent,
       retainageAmount: arInvoices.retainageAmount,
       totalAmount: arInvoices.totalAmount,
+      amountPaid: sql<string>`COALESCE((
+        SELECT SUM(apa.amount_applied::numeric)
+          FROM ar_payment_allocations apa
+          JOIN ar_payments ap ON ap.id = apa.payment_id
+         WHERE apa.invoice_id = ${arInvoices.id}
+           AND COALESCE(ap.status, 'posted') = 'posted'
+      ), 0) + COALESCE((
+        SELECT SUM(cm.amount::numeric)
+          FROM credit_memos cm
+         WHERE cm.ar_invoice_id = ${arInvoices.id}
+           AND cm.status != 'cancelled'
+      ), 0)`,
+      depositApplied: sql<string>`COALESCE((
+        SELECT SUM(pda.amount::numeric)
+          FROM p2_deposit_applications pda
+         WHERE pda.final_invoice_id = ${arInvoices.id}
+           AND pda.status = 'POSTED'
+      ), 0)`,
       customerVisibleNotes: arInvoices.customerVisibleNotes,
       status: arInvoices.status,
       billingAddress: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN NULL ELSE ${p2Customers.billingAddress} END`,
@@ -365,6 +383,16 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
 
   if (!invoice) throw new Error(`Invoice ${invoiceId} not found`);
 
+  const depositApplications = await db.execute(sql`
+    SELECT pda.amount::numeric AS amount,
+           deposit.invoice_number AS "depositInvoiceNumber"
+      FROM p2_deposit_applications pda
+      JOIN ar_invoices deposit ON deposit.id = pda.deposit_invoice_id
+     WHERE pda.final_invoice_id = ${invoiceId}::uuid
+       AND pda.status = 'POSTED'
+     ORDER BY pda.applied_at, deposit.invoice_number
+  `);
+
   const rawLines = await db
     .select()
     .from(arInvoiceLines)
@@ -447,13 +475,15 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     ['Due Date:', date(invoice.dueDate)],
     ['Terms:', String(invoice.terms || 'N/A').replaceAll('_', ' ').replace(/^NET /, 'Net ')],
     ['Customer PO:', String(invoice.poOverride || invoice.poNumber || invoice.poId || 'N/A')],
-    ...(isMaterialDeposit
-      ? [['Project:', String(invoice.projectCode || 'N/A')]]
-      : [
-          ['Packing Slip:', String(invoice.packingSlipNumber || (isP1Invoice ? invoice.invoiceNumber : 'N/A'))],
-          ...(isP1Invoice ? [['Tracking #:', String(invoice.p1TrackingNumber || 'N/A')]] : [['Lot:', String(invoice.lotNumber || 'N/A')]]),
-        ]),
   ];
+  if (isMaterialDeposit) {
+    detailRows.push(['Project:', String(invoice.projectCode || 'N/A')]);
+  } else {
+    detailRows.push(['Packing Slip:', String(invoice.packingSlipNumber || (isP1Invoice ? invoice.invoiceNumber : 'N/A'))]);
+    detailRows.push(isP1Invoice
+      ? ['Tracking #:', String(invoice.p1TrackingNumber || 'N/A')]
+      : ['Lot:', String(invoice.lotNumber || 'N/A')]);
+  }
   for (const [label, value] of detailRows) {
     page.drawText(label, { x: mid + 12, y: rightY, size: FONT_SIZE.BODY, font: bold, color: COLOR.MUTED });
     page.drawText(String(value), { x: mid + 92, y: rightY, size: FONT_SIZE.BODY, font, color: COLOR.TEXT });
@@ -496,7 +526,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   });
 
   y -= 8;
-  ensureSpace(TOTALS_BLOCK_HEIGHT);
+  ensureSpace(TOTALS_BLOCK_HEIGHT + depositApplications.rows.length * 14 + (Number(invoice.amountPaid || 0) > 0 ? 14 : 0));
   page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y }, thickness: 1, color: COLOR.LINE });
   y -= 18;
 
@@ -507,6 +537,11 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     ['Freight:', money(invoice.freightAmount)],
     ['Tax:', money(invoice.taxAmount)],
     ['Retainage:', Number(invoice.retainageAmount || 0) ? `-${money(invoice.retainageAmount)}` : money(0)],
+    ...depositApplications.rows.map((application: any) => [
+      `Deposit ${application.depositInvoiceNumber}:`,
+      `-${money(application.amount)}`,
+    ]),
+    ...(Number(invoice.amountPaid || 0) > 0 ? [['Payments / credits:', `-${money(invoice.amountPaid)}`]] : []),
   ];
   for (const [label, value] of totalRows) {
     page.drawText(String(label), { x: totalsX, y, size: FONT_SIZE.BODY, font, color: COLOR.MUTED });
@@ -515,8 +550,9 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   }
   y -= AMOUNT_DUE_BAR_GAP;
   page.drawRectangle({ x: totalsX - 5, y: y - AMOUNT_DUE_BAR_HEIGHT, width: 195, height: AMOUNT_DUE_BAR_HEIGHT, color: COLOR.ACCENT });
+  const amountDue = Math.max(0, Number(invoice.totalAmount || 0) - Number(invoice.depositApplied || 0) - Number(invoice.amountPaid || 0));
   page.drawText('AMOUNT DUE:', { x: totalsX, y: y - 14, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
-  page.drawText(money(invoice.totalAmount), { x: totalsX + 110, y: y - 14, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
+  page.drawText(money(amountDue), { x: totalsX + 110, y: y - 14, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
   y -= AMOUNT_DUE_BAR_HEIGHT + 14;
 
   if (invoice.customerVisibleNotes) {

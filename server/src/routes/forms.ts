@@ -234,6 +234,37 @@ router.post(
 );
 
 // Purchase Review Checklist
+router.get('/purchase-review-checklists/blank/pdf', async (_req: Request, res: Response) => {
+  try {
+    const { generatePurchaseReviewChecklistPdf } = await import('../services/purchaseReviewChecklistPdf');
+    const pdfBytes = await generatePurchaseReviewChecklistPdf();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="Blank_Purchase_Review_Checklist.pdf"');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(Buffer.from(pdfBytes));
+  } catch (error) {
+    console.error('Generate blank purchase review checklist PDF error:', error);
+    res.status(500).json({ error: 'Failed to generate blank purchase review checklist PDF' });
+  }
+});
+
+router.get('/purchase-review-checklists/:id/pdf', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const checklist = await storage.getPurchaseReviewChecklistById(id);
+    if (!checklist) return res.status(404).json({ error: 'Purchase review checklist not found' });
+    const { generatePurchaseReviewChecklistPdf } = await import('../services/purchaseReviewChecklistPdf');
+    const pdfBytes = await generatePurchaseReviewChecklistPdf((checklist.formData || {}) as Record<string, unknown>);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Purchase_Review_Checklist_${id}.pdf"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(Buffer.from(pdfBytes));
+  } catch (error) {
+    console.error('Generate purchase review checklist PDF error:', error);
+    res.status(500).json({ error: 'Failed to generate purchase review checklist PDF' });
+  }
+});
+
 router.get(
   '/purchase-review-checklists',
   async (req: Request, res: Response) => {

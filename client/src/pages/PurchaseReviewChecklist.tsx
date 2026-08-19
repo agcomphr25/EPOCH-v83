@@ -461,7 +461,10 @@ export default function PurchaseReviewChecklist() {
   };
 
   const handlePrint = () => {
-    window.print();
+    const pdfUrl = submissionId
+      ? `/api/forms/purchase-review-checklists/${submissionId}/pdf`
+      : '/api/forms/purchase-review-checklists/blank/pdf';
+    window.open(pdfUrl, '_blank', 'noopener,noreferrer');
   };
 
   // Handle form submission
@@ -530,9 +533,9 @@ export default function PurchaseReviewChecklist() {
               <Printer className="h-4 w-4" />
               Print
             </Button>
-            <Button variant="outline" className="flex items-center gap-2">
+            <Button onClick={handlePrint} variant="outline" className="flex items-center gap-2">
               <Download className="h-4 w-4" />
-              Export PDF
+              {submissionId ? 'Export PDF' : 'Export Blank PDF'}
             </Button>
           </div>
           {(savedDraftId || submissionId) && (

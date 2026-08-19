@@ -576,6 +576,20 @@ router.get('/rfq-assessments/:id/attachments/:fileName', async (req: Request, re
 });
 
 // RFQ Risk Assessment PDF Generation
+router.get('/rfq-assessments/blank/pdf', async (_req: Request, res: Response) => {
+  try {
+    const { generateBlankRfqRiskAssessmentPdf } = await import('../services/blankRfqRiskAssessmentPdf');
+    const pdfBytes = await generateBlankRfqRiskAssessmentPdf();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="Blank_RFQ_Risk_Assessment.pdf"');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(Buffer.from(pdfBytes));
+  } catch (error) {
+    console.error('Generate blank RFQ PDF error:', error);
+    res.status(500).json({ error: 'Failed to generate blank RFQ assessment PDF' });
+  }
+});
+
 router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);

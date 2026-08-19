@@ -856,24 +856,17 @@ export default function RFQRiskAssessment() {
       return;
     }
 
-    if (!validateForm()) return;
-
-    window.print();
+    const pdfUrl = editingAssessmentId
+      ? `/api/customers/rfq-assessments/${editingAssessmentId}/pdf`
+      : '/api/customers/rfq-assessments/blank/pdf';
+    window.open(pdfUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handleViewPdf = () => {
-    if (!editingAssessmentId) {
-      toast({
-        title: 'Save Required',
-        description: 'Please save the assessment before viewing the PDF.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Open PDF in new tab
-    const pdfUrl = `/api/customers/rfq-assessments/${editingAssessmentId}/pdf`;
-    window.open(pdfUrl, '_blank');
+    const pdfUrl = editingAssessmentId
+      ? `/api/customers/rfq-assessments/${editingAssessmentId}/pdf`
+      : '/api/customers/rfq-assessments/blank/pdf';
+    window.open(pdfUrl, '_blank', 'noopener,noreferrer');
   };
 
   // Helper function to get risk badge color
@@ -1240,12 +1233,13 @@ export default function RFQRiskAssessment() {
                 View PDF
               </Button>
               <Button 
+                onClick={handleViewPdf}
                 variant="outline" 
                 className="flex items-center gap-2"
                 data-testid="button-export-pdf"
               >
                 <Download className="h-4 w-4" />
-                Export PDF
+                {editingAssessmentId ? 'Export PDF' : 'Export Blank PDF'}
               </Button>
             </div>
 

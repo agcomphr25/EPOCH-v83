@@ -594,6 +594,29 @@ router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     const assessment = await storage.getRFQRiskAssessmentById(id);
+
+    if (!assessment) {
+      return res.status(404).json({ error: 'RFQ Risk Assessment not found' });
+    }
+
+    const { generateRfqRiskAssessmentPdf } = await import('../services/blankRfqRiskAssessmentPdf');
+    const pdfBytes = await generateRfqRiskAssessmentPdf(assessment as any);
+    const safeRfqNumber = String(assessment.rfqNumber || 'Assessment').replace(/[^a-zA-Z0-9_-]/g, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="RFQ_${safeRfqNumber}_Risk_Assessment.pdf"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(Buffer.from(pdfBytes));
+  } catch (error) {
+    console.error('Generate RFQ PDF error:', error);
+    res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+
+// Retained temporarily for direct comparison while the unified FO Form 11 renderer is adopted.
+router.get('/rfq-assessments/:id/pdf-legacy', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const assessment = await storage.getRFQRiskAssessmentById(id);
     
     if (!assessment) {
       return res.status(404).json({ error: 'RFQ Risk Assessment not found' });

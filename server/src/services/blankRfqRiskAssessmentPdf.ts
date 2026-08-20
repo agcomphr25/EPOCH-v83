@@ -12,19 +12,22 @@ type AssessmentInput = {
 };
 
 const BLACK = rgb(0, 0, 0);
-const riskKeys = [
-  'trainedStaff',
-  'equipmentRequirements',
-  'manufacturingSpace',
-  'regulatoryRequirements',
-  'conflictingPriorities',
-  'customerConcentration',
-  'climateEnvironmental',
-  'supplyChainDisruptions',
-  'supplierVariability',
-  'contractProvisions',
-  'timelines',
-  'qualityExpectations',
+const internalRisks = [
+  ['trainedStaff', 'a.', 'Trained/Qualified Staff'],
+  ['equipmentRequirements', 'b.', 'Equipment Requirements'],
+  ['manufacturingSpace', 'c.', 'Manufacturing Space'],
+  ['regulatoryRequirements', 'd.', 'Regulatory Requirements'],
+  ['conflictingPriorities', 'e.', 'Conflicting Priorities of Work'],
+  ['customerConcentration', 'f.', 'Customer Concentration'],
+  ['climateEnvironmental', 'g.', 'Climate/Environmental Impact'],
+] as const;
+
+const externalRisks = [
+  ['supplyChainDisruptions', 'a.', 'Supply Chain Disruptions'],
+  ['supplierVariability', 'b.', 'Supplier Source Variability'],
+  ['contractProvisions', 'c.', 'Contract Mandatory Provisions'],
+  ['timelines', 'd.', 'Timelines'],
+  ['qualityExpectations', 'e.', 'Reasonable Quality Expectations'],
 ] as const;
 
 function findOriginalFormPath(): string {
@@ -55,19 +58,40 @@ function drawCheck(page: PDFPage, x: number, y: number) {
   page.drawLine({ start: { x: x + 2.2, y }, end: { x: x + 6.2, y: y + 6.4 }, thickness: 1, color: BLACK });
 }
 
-function drawRiskSelections(page: PDFPage, formData: Record<string, any>) {
-  const standardColumns: Record<string, number> = { extreme: 254, high: 326, medium: 398, low: 507 };
-  const compressedColumns: Record<string, number> = { extreme: 254, high: 326, medium: 360, low: 469 };
+function drawChoice(page: PDFPage, x: number, y: number, label: string, checked: boolean, font: PDFFont) {
+  page.drawRectangle({ x, y: y + 1, width: 7, height: 7, borderColor: BLACK, borderWidth: 0.55 });
+  if (checked) drawCheck(page, x + 0.4, y + 1.3);
+  drawText(page, label, x + 11, y, 9.2, font);
+}
+
+function redrawRiskRows(page: PDFPage, formData: Record<string, any>, font: PDFFont) {
+  const columns = [
+    ['extreme', 'Extreme', 270],
+    ['high', 'High', 345],
+    ['medium', 'Medium', 415],
+    ['low', 'Low', 505],
+  ] as const;
   const internalRows = [576, 559, 542, 525, 508, 491, 474];
   const externalRows = [413, 396, 379, 362, 345];
-  riskKeys.forEach((key, index) => {
-    const risk = normalized(formData[key]);
-    const columns = index >= 3 && index <= 6 ? compressedColumns : standardColumns;
-    const x = columns[risk];
-    if (!x) return;
-    const y = index < internalRows.length ? internalRows[index] : externalRows[index - internalRows.length];
-    drawCheck(page, x, y);
+
+  // The original Google Docs export contains inconsistent checkbox positions.
+  // Clear each complete risk block, then redraw every row on one shared grid.
+  page.drawRectangle({ x: 106, y: 466, width: 470, height: 124, color: rgb(1, 1, 1) });
+  page.drawRectangle({ x: 106, y: 337, width: 470, height: 89, color: rgb(1, 1, 1) });
+
+  const drawRows = (
+    rows: ReadonlyArray<readonly [string, string, string]>,
+    yPositions: number[],
+  ) => rows.forEach(([key, letter, label], index) => {
+    const y = yPositions[index];
+    drawText(page, letter, 109, y, 9.2, font);
+    drawText(page, label, 121, y, 9.2, font);
+    const selected = normalized(formData[key]);
+    columns.forEach(([risk, choiceLabel, x]) => drawChoice(page, x, y, choiceLabel, selected === risk, font));
   });
+
+  drawRows(internalRisks, internalRows);
+  drawRows(externalRisks, externalRows);
 }
 
 async function drawSignature(page: PDFPage, document: PDFDocument, signature: unknown) {
@@ -81,21 +105,15 @@ async function drawSignature(page: PDFPage, document: PDFDocument, signature: un
   }
 }
 
-function hasAssessmentData(input: AssessmentInput): boolean {
-  return Boolean(input.rfqNumber || input.formData || input.totalOverallPoints !== undefined);
-}
-
 export async function generateRfqRiskAssessmentPdf(input: AssessmentInput = {}): Promise<Uint8Array> {
   const originalBytes = fs.readFileSync(findOriginalFormPath());
-  if (!hasAssessmentData(input)) return new Uint8Array(originalBytes);
-
   const document = await PDFDocument.load(originalBytes);
   const page = document.getPage(0);
   const regular = await document.embedFont(StandardFonts.TimesRoman);
   const formData = input.formData || {};
 
+  redrawRiskRows(page, formData, regular);
   drawText(page, input.rfqNumber, 307, 624, 11, regular);
-  drawRiskSelections(page, formData);
   drawText(page, formData.internalSubtotal, 196, 454, 9.5, regular);
   drawText(page, formData.externalSubtotal, 196, 343, 9.5, regular);
 

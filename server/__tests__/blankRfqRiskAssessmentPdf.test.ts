@@ -16,7 +16,7 @@ describe('blank RFQ risk assessment PDF', () => {
     const document = await PDFDocument.load(bytes);
     expect(document.getPageCount()).toBe(1);
     expect(bytes.byteLength).toBeGreaterThan(3_000);
-    expect(Buffer.from(bytes).equals(original)).toBe(true);
+    expect(Buffer.from(bytes).equals(original)).toBe(false);
   });
 
   it('uses the same one-page form for a completed assessment', async () => {

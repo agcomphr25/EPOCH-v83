@@ -10,9 +10,13 @@ import {
 describe('blank RFQ risk assessment PDF', () => {
   it('produces the original compact one-page printable form', async () => {
     const bytes = await generateBlankRfqRiskAssessmentPdf();
+    const original = fs.readFileSync(
+      path.resolve(process.cwd(), 'attached_assets/RFQ Risk Assessment (1)_1753459211571.pdf')
+    );
     const document = await PDFDocument.load(bytes);
     expect(document.getPageCount()).toBe(1);
     expect(bytes.byteLength).toBeGreaterThan(3_000);
+    expect(Buffer.from(bytes).equals(original)).toBe(true);
   });
 
   it('uses the same one-page form for a completed assessment', async () => {

@@ -233,6 +233,7 @@ const vendorFormSchema = insertVendorSchema.extend({
   paymentTerms: z.string().optional(),
   shippingInstructions: z.string().optional(),
   defaultOrderMethod: z.enum(['PO', 'WEBSITE', 'EMAIL']).optional().nullable(),
+  isActive: z.boolean().default(true),
 });
 
 const vendorContactFormSchema = insertVendorContactSchema
@@ -329,6 +330,7 @@ export default function VendorManagement() {
       paymentTerms: '',
       shippingInstructions: '',
       defaultOrderMethod: 'PO',
+      isActive: true,
     },
   });
 
@@ -724,6 +726,7 @@ export default function VendorManagement() {
         paymentTerms: vendor.paymentTerms || '',
         shippingInstructions: vendor.shippingInstructions || '',
         defaultOrderMethod: (vendor.defaultOrderMethod as 'PO' | 'WEBSITE' | 'EMAIL' | null) || 'PO',
+        isActive: vendor.isActive !== false,
       });
       setVendorAddress({
         street: vendor.street || '',
@@ -1568,6 +1571,31 @@ export default function VendorManagement() {
                               <SelectItem value="PO">Purchase Order</SelectItem>
                               <SelectItem value="WEBSITE">Website</SelectItem>
                               <SelectItem value="EMAIL">Email</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="isActive"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Vendor Status</FormLabel>
+                          <Select
+                            value={field.value === false ? 'inactive' : 'active'}
+                            onValueChange={(value) => field.onChange(value === 'active')}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-vendor-status">
+                                <SelectValue placeholder="Select vendor status" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="active">Active</SelectItem>
+                              <SelectItem value="inactive">Inactive</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -2546,6 +2574,12 @@ export default function VendorManagement() {
                   </div>
                 </th>
                 <th
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                  data-testid="header-vendor-status"
+                >
+                  Status
+                </th>
+                <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                   onClick={() => toggleSort('evaluated')}
                   data-testid="header-evaluated"
@@ -2566,7 +2600,7 @@ export default function VendorManagement() {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     Loading vendors...
@@ -2575,7 +2609,7 @@ export default function VendorManagement() {
               ) : vendorsData?.data.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     No vendors found
@@ -2664,6 +2698,19 @@ export default function VendorManagement() {
                           <span className="text-xs">No</span>
                         </div>
                       )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span
+                        className={cn(
+                          'inline-flex rounded-full px-2 py-1 text-xs font-medium',
+                          vendor.isActive !== false
+                            ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200'
+                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                        )}
+                        data-testid={`text-vendor-status-${vendor.id}`}
+                      >
+                        {vendor.isActive !== false ? 'Active' : 'Inactive'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {vendor.evaluated ? (

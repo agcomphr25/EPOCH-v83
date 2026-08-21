@@ -4735,6 +4735,12 @@ export const vendorPOs = pgTable('vendor_pos', {
   issuedWithoutEmail: boolean('issued_without_email').default(false),
   issuedWithoutEmailReason: text('issued_without_email_reason'),
   issuedWithoutEmailAt: timestamp('issued_without_email_at'),
+  issueDpasRated: boolean('issue_dpas_rated'),
+  issueDpasRating: text('issue_dpas_rating'),
+  issueFlowdownsRequired: boolean('issue_flowdowns_required'),
+  issueComplianceConfirmedByUserId: integer('issue_compliance_confirmed_by_user_id'),
+  issueComplianceConfirmedByName: text('issue_compliance_confirmed_by_name'),
+  issueComplianceConfirmedAt: timestamp('issue_compliance_confirmed_at'),
   rfqOutcomeNotes: text('rfq_outcome_notes'),
   vendorConfirmedAt: timestamp('vendor_confirmed_at'),
   vendorConfirmedAction: text('vendor_confirmed_action'), // 'confirm' | 'reject' | 'acknowledge'

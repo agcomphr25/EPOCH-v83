@@ -9,6 +9,8 @@ import {
   partsRequestStatusHistory,
   procurementComplianceEffectiveDates,
   auditEvents,
+  vendorPoFlowdownAssessments,
+  vendorPoFarFlowdowns,
 } from '@shared/schema';
 import { z } from 'zod';
 import { storage } from '../../storage';
@@ -39,6 +41,12 @@ const DEFAULT_VENDOR_PO_ISSUE_MESSAGE =
 
 const DEFAULT_VENDOR_PO_RESEND_MESSAGE =
   'AG Composites is resending this Purchase Order. Please see the attached purchase order PDF for details.';
+
+const issueComplianceConfirmationSchema = z.object({
+  dpasRated: z.boolean(),
+  dpasRating: z.string().trim().max(100).nullable().optional(),
+  flowdownsRequired: z.boolean(),
+});
 
 function escapeHtml(value: string): string {
   return value
@@ -2662,8 +2670,30 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
 
-    const { skipEmail, reason, recipients: additionalRecipients, message: emailMessage } = req.body ?? {};
+    const {
+      skipEmail,
+      reason,
+      recipients: additionalRecipients,
+      message: emailMessage,
+      complianceConfirmation: rawComplianceConfirmation,
+    } = req.body ?? {};
     const skip = Boolean(skipEmail);
+
+    const confirmationResult = issueComplianceConfirmationSchema.safeParse(rawComplianceConfirmation);
+    if (!confirmationResult.success) {
+      return res.status(422).json({
+        error: 'Final compliance confirmation required',
+        message: 'Answer both the DPAS and FAR/DFARS/customer flowdown questions before issuing this PO.',
+        details: confirmationResult.error.flatten(),
+      });
+    }
+    const confirmation = confirmationResult.data;
+    if (confirmation.dpasRated && !confirmation.dpasRating?.trim()) {
+      return res.status(422).json({
+        error: 'DPAS rating required',
+        message: 'Enter the DPAS rating before issuing this DPAS-rated PO.',
+      });
+    }
 
     // Get the PO first for vendor lookup and pre-flight checks
     const vendorPO = await storage.getVendorPO(id);
@@ -2680,8 +2710,44 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       });
     }
 
+    if (confirmation.flowdownsRequired) {
+      const [flowdownAssessment] = await db
+        .select({ reviewStatus: vendorPoFlowdownAssessments.reviewStatus })
+        .from(vendorPoFlowdownAssessments)
+        .where(eq(vendorPoFlowdownAssessments.vendorPoId, id))
+        .limit(1);
+      if (flowdownAssessment?.reviewStatus !== 'APPROVED') {
+        return res.status(422).json({
+          error: 'Flowdown review required',
+          message: 'Complete and approve the guided Government Flowdown Review before issuing a PO that requires FAR, DFARS, or customer flowdowns.',
+        });
+      }
+      const [includedFlowdown] = await db
+        .select({ id: vendorPoFarFlowdowns.id })
+        .from(vendorPoFarFlowdowns)
+        .where(and(
+          eq(vendorPoFarFlowdowns.vendorPoId, id),
+          eq(vendorPoFarFlowdowns.decision, 'INCLUDE')
+        ))
+        .limit(1);
+      if (!includedFlowdown) {
+        return res.status(422).json({
+          error: 'Included flowdown required',
+          message: 'The approved Government Flowdown Review must include at least one clause before this PO can be issued.',
+        });
+      }
+    }
+
     const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
     const performedByEmail = (req as any).user?.email as string | undefined;
+    const complianceConfirmation = {
+      dpasRated: confirmation.dpasRated,
+      dpasRating: confirmation.dpasRated ? confirmation.dpasRating?.trim() || null : null,
+      flowdownsRequired: confirmation.flowdownsRequired,
+      confirmedByUserId: Number.isInteger((req as any).user?.id) ? (req as any).user.id : null,
+      confirmedByName: performedBy,
+      confirmedAt: new Date(),
+    };
     // audit_events.actor_id references employees.id, not users.id.  Passing the
     // authenticated application-user id causes a foreign-key failure for users
     // whose user and employee records do not share the same numeric id.
@@ -2903,6 +2969,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         issuedWithoutEmailAt: nowAt,
         performedBy,
         performedByEmail,
+        complianceConfirmation,
       });
       await markLinkedPartsRequestsOrdered(id, performedBy);
 
@@ -2913,14 +2980,14 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         entityId: id,
         actor,
         reason: trimmedReason,
-        meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true },
+        meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true, complianceConfirmation },
       });
       await recordVendorPoAudit(req, id, 'VENDOR_PO_ISSUED_WITHOUT_EMAIL', {
         before: vendorPO,
         after: issuedPO,
         reason: trimmedReason,
-        fieldsChanged: buildFieldChanges(vendorPO, issuedPO, ['status', 'poNumber', 'issuedWithoutEmail', 'issuedWithoutEmailReason']),
-        meta: { poNumber, issuedWithoutEmail: true },
+        fieldsChanged: buildFieldChanges(vendorPO, issuedPO, ['status', 'poNumber', 'issuedWithoutEmail', 'issuedWithoutEmailReason', 'issueDpasRated', 'issueDpasRating', 'issueFlowdownsRequired', 'issueComplianceConfirmedByUserId', 'issueComplianceConfirmedByName', 'issueComplianceConfirmedAt']),
+        meta: { poNumber, issuedWithoutEmail: true, complianceConfirmation },
       });
 
       // Task #83: NOW (post-issuance success) record po_issuance debarment evidence
@@ -2982,6 +3049,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         issuedWithoutEmailAt: nowAt,
         performedBy,
         performedByEmail,
+        complianceConfirmation,
       });
       await markLinkedPartsRequestsOrdered(id, performedBy);
 
@@ -2990,14 +3058,14 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         entityId: id,
         actor,
         reason: fallbackReason,
-        meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true, vendorEmailMissing: true },
+        meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true, vendorEmailMissing: true, complianceConfirmation },
       });
       await recordVendorPoAudit(req, id, 'VENDOR_PO_ISSUED_WITHOUT_EMAIL', {
         before: vendorPO,
         after: issuedPO,
         reason: fallbackReason,
-        fieldsChanged: buildFieldChanges(vendorPO, issuedPO, ['status', 'poNumber', 'issuedWithoutEmail', 'issuedWithoutEmailReason']),
-        meta: { poNumber, issuedWithoutEmail: true, vendorEmailMissing: true },
+        fieldsChanged: buildFieldChanges(vendorPO, issuedPO, ['status', 'poNumber', 'issuedWithoutEmail', 'issuedWithoutEmailReason', 'issueDpasRated', 'issueDpasRating', 'issueFlowdownsRequired', 'issueComplianceConfirmedByUserId', 'issueComplianceConfirmedByName', 'issueComplianceConfirmedAt']),
+        meta: { poNumber, issuedWithoutEmail: true, vendorEmailMissing: true, complianceConfirmation },
       });
 
       if (vendorPO.requisitionId) {
@@ -3026,7 +3094,9 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
 
     // Atomic transactional issuance: lock row, generate number, update status
     issueStage = 'database issuance';
-    const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id);
+    const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id, {
+      complianceConfirmation,
+    });
     await markLinkedPartsRequestsOrdered(id, performedBy);
 
     issueStage = 'issuance audit';
@@ -3034,13 +3104,13 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       action: 'VENDOR_PO_ISSUED',
       entityId: id,
       actor,
-      meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: false },
+      meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: false, complianceConfirmation },
     });
     await recordVendorPoAudit(req, id, 'VENDOR_PO_ISSUED', {
       before: vendorPO,
       after: issuedPO,
-      fieldsChanged: buildFieldChanges(vendorPO, issuedPO, ['status', 'poNumber', 'issuedWithoutEmail']),
-      meta: { poNumber, issuedWithoutEmail: false },
+      fieldsChanged: buildFieldChanges(vendorPO, issuedPO, ['status', 'poNumber', 'issuedWithoutEmail', 'issueDpasRated', 'issueDpasRating', 'issueFlowdownsRequired', 'issueComplianceConfirmedByUserId', 'issueComplianceConfirmedByName', 'issueComplianceConfirmedAt']),
+      meta: { poNumber, issuedWithoutEmail: false, complianceConfirmation },
     });
 
     // Build standard email routing from Vendor PO settings plus the issuing user's email.

@@ -2537,6 +2537,9 @@ export default function VendorPOManager({
   const [noEmailMode, setNoEmailMode] = useState(false);
   const [noEmailReason, setNoEmailReason] = useState('');
   const [noEmailConfirmed, setNoEmailConfirmed] = useState(false);
+  const [issueDpasDecision, setIssueDpasDecision] = useState<'yes' | 'no' | ''>('');
+  const [issueDpasRating, setIssueDpasRating] = useState('');
+  const [issueFlowdownDecision, setIssueFlowdownDecision] = useState<'yes' | 'no' | ''>('');
   const [showRfqOutcomeDialog, setShowRfqOutcomeDialog] = useState(false);
   const [pendingRfqStatus, setPendingRfqStatus] = useState<'Declined' | 'Expired' | null>(null);
   const [rfqOutcomeNote, setRfqOutcomeNote] = useState('');
@@ -2809,10 +2812,10 @@ export default function VendorPOManager({
 
   // Issue PO mutation - sends PO email to vendor
   const issuePOMutation = useMutation({
-    mutationFn: ({ id, skipEmail = false, reason, recipients, message }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[]; message?: string }) =>
+    mutationFn: ({ id, skipEmail = false, reason, recipients, message, complianceConfirmation }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[]; message?: string; complianceConfirmation: { dpasRated: boolean; dpasRating: string | null; flowdownsRequired: boolean } }) =>
       apiRequest(`/api/vendor-pos/${id}/issue`, {
         method: 'POST',
-        body: JSON.stringify({ skipEmail, reason, recipients, message }),
+        body: JSON.stringify({ skipEmail, reason, recipients, message, complianceConfirmation }),
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
@@ -2837,6 +2840,9 @@ export default function VendorPOManager({
       setNoEmailMode(false);
       setNoEmailReason('');
       setNoEmailConfirmed(false);
+      setIssueDpasDecision('');
+      setIssueDpasRating('');
+      setIssueFlowdownDecision('');
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to issue PO', { duration: 12000 });
@@ -3122,6 +3128,9 @@ export default function VendorPOManager({
       setNoEmailMode(false);
       setNoEmailReason('');
       setNoEmailConfirmed(false);
+      setIssueDpasDecision('');
+      setIssueDpasRating('');
+      setIssueFlowdownDecision('');
       setEmailMessage(DEFAULT_ISSUE_EMAIL_MESSAGE);
       setPendingStatus('Sent');
       setShowStatusChangeDialog(true);
@@ -3141,6 +3150,11 @@ export default function VendorPOManager({
           reason: skipEmail ? noEmailReason.trim() : undefined,
           recipients: skipEmail ? undefined : selectedRecipients,
           message: skipEmail ? undefined : (emailMessage.trim() || DEFAULT_ISSUE_EMAIL_MESSAGE),
+          complianceConfirmation: {
+            dpasRated: issueDpasDecision === 'yes',
+            dpasRating: issueDpasDecision === 'yes' ? issueDpasRating.trim() : null,
+            flowdownsRequired: issueFlowdownDecision === 'yes',
+          },
         });
         setShowStatusChangeDialog(false);
         setPendingStatus('');
@@ -3610,10 +3624,13 @@ export default function VendorPOManager({
               setNoEmailMode(false);
               setNoEmailReason('');
               setNoEmailConfirmed(false);
+              setIssueDpasDecision('');
+              setIssueDpasRating('');
+              setIssueFlowdownDecision('');
             }
           }}
         >
-          <AlertDialogContent className="sm:max-w-lg">
+          <AlertDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
             {pendingStatus === 'Sent' ? (
               <>
                 <AlertDialogHeader>
@@ -3624,6 +3641,65 @@ export default function VendorPOManager({
                       : 'Choose how to issue this purchase order.'}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+
+                <div className="space-y-4 rounded-md border border-blue-200 bg-blue-50/60 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-blue-950">Final Compliance Confirmation</p>
+                    <p className="mt-1 text-xs text-blue-900">
+                      Both questions require an explicit answer for every vendor PO. These safeguards remain active while the broader purchasing gates are deactivated.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Is this PO DPAS rated? *</Label>
+                    <Select
+                      value={issueDpasDecision}
+                      onValueChange={(value: 'yes' | 'no') => {
+                        setIssueDpasDecision(value);
+                        if (value === 'no') setIssueDpasRating('');
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-issue-dpas-rated">
+                        <SelectValue placeholder="Select Yes or No" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {issueDpasDecision === 'yes' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="issue-dpas-rating">DPAS Rating *</Label>
+                      <Input
+                        id="issue-dpas-rating"
+                        value={issueDpasRating}
+                        onChange={(event) => setIssueDpasRating(event.target.value)}
+                        placeholder="Enter the rating shown on the customer requirement"
+                        data-testid="input-issue-dpas-rating"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label>Are FAR, DFARS, or customer flowdowns required? *</Label>
+                    <Select
+                      value={issueFlowdownDecision}
+                      onValueChange={(value: 'yes' | 'no') => setIssueFlowdownDecision(value)}
+                    >
+                      <SelectTrigger data-testid="select-issue-flowdowns-required">
+                        <SelectValue placeholder="Select Yes or No" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {issueFlowdownDecision === 'yes' && (
+                      <p className="text-xs text-amber-800">
+                        The guided Government Flowdown Review must be approved before this PO can be issued.
+                      </p>
+                    )}
+                  </div>
+                </div>
 
                 {!noEmailMode && (
                   <div className="space-y-4">
@@ -3699,7 +3775,13 @@ export default function VendorPOManager({
                       </Button>
                       <Button
                         onClick={() => confirmStatusChange(true)}
-                        disabled={issuePOMutation.isPending}
+                        disabled={
+                          issuePOMutation.isPending ||
+                          !issueDpasDecision ||
+                          !issueFlowdownDecision ||
+                          (issueDpasDecision === 'yes' && !issueDpasRating.trim()) ||
+                          !noEmailConfirmed
+                        }
                         className="bg-amber-600 hover:bg-amber-700 text-white"
                         data-testid="button-confirm-internal-issue"
                       >
@@ -3719,7 +3801,13 @@ export default function VendorPOManager({
                       </Button>
                       <AlertDialogAction
                         onClick={() => confirmStatusChange(false)}
-                        disabled={issuePOMutation.isPending || selectedRecipients.length === 0}
+                        disabled={
+                          issuePOMutation.isPending ||
+                          selectedRecipients.length === 0 ||
+                          !issueDpasDecision ||
+                          !issueFlowdownDecision ||
+                          (issueDpasDecision === 'yes' && !issueDpasRating.trim())
+                        }
                         data-testid="button-confirm-status-change"
                         className="whitespace-nowrap"
                       >

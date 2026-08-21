@@ -351,6 +351,7 @@ export const safeMigrationFiles = [
   '0289_correct_po00021498_customer_line_numbers.sql',
   '0290_p2_po_line_and_clin_distinction.sql',
   '0291_renumber_astrion_material_deposit_invoice.sql',
+  '0292_vendor_po_final_compliance_confirmation.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -444,6 +445,7 @@ export const criticalMigrationFiles = new Set([
   '0287_p2_deposit_invoice_clin_contact.sql',
   '0289_correct_po00021498_customer_line_numbers.sql',
   '0290_p2_po_line_and_clin_distinction.sql',
+  '0292_vendor_po_final_compliance_confirmation.sql',
 ]);
 
 export async function runSafeBootMigrations() {

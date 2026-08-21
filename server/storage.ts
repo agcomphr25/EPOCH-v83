@@ -10031,7 +10031,21 @@ export class DatabaseStorage implements IStorage {
 
   async issueVendorPO(
     id: number,
-    opts?: { issuedWithoutEmail?: boolean; reason?: string; issuedWithoutEmailAt?: Date; performedBy?: string; performedByEmail?: string }
+    opts?: {
+      issuedWithoutEmail?: boolean;
+      reason?: string;
+      issuedWithoutEmailAt?: Date;
+      performedBy?: string;
+      performedByEmail?: string;
+      complianceConfirmation: {
+        dpasRated: boolean;
+        dpasRating: string | null;
+        flowdownsRequired: boolean;
+        confirmedByUserId: number | null;
+        confirmedByName: string;
+        confirmedAt: Date;
+      };
+    }
   ): Promise<{ vendorPO: any; poNumber: string }> {
     const MAX_RETRIES = 3;
     let lastError: any;
@@ -10050,7 +10064,21 @@ export class DatabaseStorage implements IStorage {
 
   private async _issueVendorPOTransaction(
     id: number,
-    opts?: { issuedWithoutEmail?: boolean; reason?: string; issuedWithoutEmailAt?: Date; performedBy?: string; performedByEmail?: string }
+    opts?: {
+      issuedWithoutEmail?: boolean;
+      reason?: string;
+      issuedWithoutEmailAt?: Date;
+      performedBy?: string;
+      performedByEmail?: string;
+      complianceConfirmation: {
+        dpasRated: boolean;
+        dpasRating: string | null;
+        flowdownsRequired: boolean;
+        confirmedByUserId: number | null;
+        confirmedByName: string;
+        confirmedAt: Date;
+      };
+    }
   ): Promise<{ vendorPO: any; poNumber: string }> {
     const result = await db.transaction(async (tx) => {
       const [lockedPO] = await tx
@@ -10090,13 +10118,30 @@ export class DatabaseStorage implements IStorage {
         poNumber = `${prefix}${String(maxNumber + 1).padStart(3, '0')}`;
       }
 
-      const extraFields = opts?.issuedWithoutEmail
-        ? {
-            issuedWithoutEmail: true,
-            issuedWithoutEmailReason: opts.reason ?? null,
-            issuedWithoutEmailAt: opts.issuedWithoutEmailAt ?? new Date(),
-          }
-        : {};
+      if (!opts?.complianceConfirmation) {
+        throw new Error('DPAS and flowdown compliance confirmation is required before issuing a vendor PO');
+      }
+      if (opts.complianceConfirmation.dpasRated && !opts.complianceConfirmation.dpasRating?.trim()) {
+        throw new Error('A DPAS rating is required for a DPAS-rated vendor PO');
+      }
+
+      const extraFields = {
+        issueDpasRated: opts.complianceConfirmation.dpasRated,
+        issueDpasRating: opts.complianceConfirmation.dpasRated
+          ? opts.complianceConfirmation.dpasRating?.trim() || null
+          : null,
+        issueFlowdownsRequired: opts.complianceConfirmation.flowdownsRequired,
+        issueComplianceConfirmedByUserId: opts.complianceConfirmation.confirmedByUserId,
+        issueComplianceConfirmedByName: opts.complianceConfirmation.confirmedByName,
+        issueComplianceConfirmedAt: opts.complianceConfirmation.confirmedAt,
+        ...(opts.issuedWithoutEmail
+          ? {
+              issuedWithoutEmail: true,
+              issuedWithoutEmailReason: opts.reason ?? null,
+              issuedWithoutEmailAt: opts.issuedWithoutEmailAt ?? new Date(),
+            }
+          : {}),
+      };
 
       const [updatedPO] = await tx
         .update(vendorPOs)

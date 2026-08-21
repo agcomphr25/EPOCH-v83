@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, ExternalLink, FileCheck2, LockKeyhole, Scale, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ExternalLink, FileCheck2, Loader2, LockKeyhole, RefreshCw, Scale, ShieldCheck } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +38,13 @@ export default function VendorFlowdownReview({ vendorPoId }: { vendorPoId: numbe
   const workspace = useQuery<any>({
     queryKey: ['/api/far-flowdown-clauses/po', vendorPoId, 'workspace'],
     queryFn: () => apiRequest(`/api/far-flowdown-clauses/po/${vendorPoId}/workspace`),
+    retry: false,
   });
+
+  const openReview = () => {
+    setOpen(true);
+    if (workspace.isError) workspace.refetch();
+  };
 
   useEffect(() => {
     if (!workspace.data) return;
@@ -95,7 +101,7 @@ export default function VendorFlowdownReview({ vendorPoId }: { vendorPoId: numbe
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2"><Scale className="h-5 w-5" /> Government Flowdown Applicability</CardTitle>
-            <CardDescription>Classify this purchase, review clause recommendations, and generate a tailored supplier exhibit.</CardDescription>
+            <CardDescription>Classify this purchase, answer the guided questions, review clause recommendations, and generate a tailored supplier exhibit.</CardDescription>
           </div>
           <Badge className={statusStyle}>{status.replaceAll('_', ' ')}</Badge>
         </CardHeader>
@@ -106,7 +112,7 @@ export default function VendorFlowdownReview({ vendorPoId }: { vendorPoId: numbe
             <div className="rounded-md border bg-slate-50 p-3"><p className="text-xs text-muted-foreground">Unknown answers</p><p className="text-xl font-semibold">{unknownAnswers}</p></div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => setOpen(true)}><ShieldCheck className="mr-2 h-4 w-4" /> {status === 'APPROVED' ? 'Review / Revise' : 'Start Guided Review'}</Button>
+            <Button onClick={openReview}><ShieldCheck className="mr-2 h-4 w-4" /> {status === 'APPROVED' ? 'Review / Revise' : 'Start Guided Review'}</Button>
             {status === 'APPROVED' && <Button variant="outline" onClick={() => window.open(`/api/far-flowdown-clauses/po/${vendorPoId}/exhibit.pdf`, '_blank', 'noopener,noreferrer')}><FileCheck2 className="mr-2 h-4 w-4" /> View Exhibit R{assessment?.exhibitRevision}</Button>}
           </div>
           <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" /><span>The customer contract reference is retained internally and is not printed on the supplier exhibit.</span></div>
@@ -115,8 +121,36 @@ export default function VendorFlowdownReview({ vendorPoId }: { vendorPoId: numbe
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto">
-          <DialogHeader><DialogTitle>Guided Government Flowdown Review</DialogTitle></DialogHeader>
-          {!assessment ? <p>Loading review…</p> : <Tabs defaultValue="source" className="space-y-4">
+          <DialogHeader>
+            <DialogTitle>Guided Government Flowdown Review</DialogTitle>
+            <p className="text-sm text-muted-foreground">Supporting documents are optional for starting the review. If Government flowdowns apply, identify the customer source before final approval.</p>
+          </DialogHeader>
+          <div className="grid gap-2 text-xs sm:grid-cols-4">
+            {['1. Supporting documents', '2. Survey', '3. Clause review', '4. Approve exhibit'].map((step, index) => (
+              <div key={step} className={`rounded-md border px-3 py-2 ${index === 0 ? 'border-blue-200 bg-blue-50 text-blue-900' : 'bg-slate-50 text-muted-foreground'}`}>{step}</div>
+            ))}
+          </div>
+          {workspace.isError ? (
+            <div className="space-y-3 rounded-md border border-red-200 bg-red-50 p-4 text-red-900" role="alert">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-semibold">The flowdown review could not be loaded</p>
+                  <p className="mt-1 text-sm">{(workspace.error as Error)?.message || 'The server did not return the guided review.'}</p>
+                  <p className="mt-1 text-xs">You do not need to upload a document to make this screen load. Retry after the system setup issue is corrected.</p>
+                </div>
+              </div>
+              <Button variant="outline" onClick={() => workspace.refetch()} disabled={workspace.isFetching}>
+                {workspace.isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Retry review
+              </Button>
+            </div>
+          ) : !assessment ? (
+            <div className="flex items-center gap-3 rounded-md border bg-slate-50 p-4" role="status">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <div><p className="font-medium">Loading the guided review…</p><p className="text-sm text-muted-foreground">This normally takes only a few seconds.</p></div>
+            </div>
+          ) : <Tabs defaultValue="source" className="space-y-4">
             <TabsList className="grid w-full grid-cols-3"><TabsTrigger value="source">1. Source & Classification</TabsTrigger><TabsTrigger value="questions">2. Purchase Questions</TabsTrigger><TabsTrigger value="clauses">3. Clause Decisions</TabsTrigger></TabsList>
             <TabsContent value="source" className="space-y-4">
               <div><Label>Does this purchase support a U.S. Government contract?</Label><Select value={assessment.governmentSupported ? 'yes' : 'no'} onValueChange={(value) => setAssessment({ ...assessment, governmentSupported: value === 'yes' })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent></Select></div>
@@ -143,7 +177,7 @@ export default function VendorFlowdownReview({ vendorPoId }: { vendorPoId: numbe
             </TabsContent>
           </Tabs>}
           {assessment && <div className="space-y-2 border-t pt-4"><Label>Reviewer notes *</Label><Textarea value={assessment.reviewNotes || ''} onChange={(e) => setAssessment({ ...assessment, reviewNotes: e.target.value })} placeholder="Summarize the source, assumptions, exceptions, and specialist reviews" /></div>}
-          <DialogFooter><Button variant="outline" onClick={() => save.mutate('DRAFT')} disabled={save.isPending}>Save Draft</Button><Button onClick={() => save.mutate('APPROVED')} disabled={!canApprove || save.isPending}><CheckCircle2 className="mr-2 h-4 w-4" /> Approve & Generate Exhibit</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => save.mutate('DRAFT')} disabled={!assessment || workspace.isLoading || workspace.isError || save.isPending}>Save Draft</Button><Button onClick={() => save.mutate('APPROVED')} disabled={!assessment || workspace.isLoading || workspace.isError || !canApprove || save.isPending}><CheckCircle2 className="mr-2 h-4 w-4" /> Approve & Generate Exhibit</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </>

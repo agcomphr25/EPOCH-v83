@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
 import { runMigrationSafetyCheck } from '../utils/migrationSafetyCheck';
 import { generateVendorFlowdownExhibitPdf } from '../utils/pdf/vendorFlowdownExhibitPdf';
+import { criticalMigrationFiles, safeMigrationFiles } from '../scripts/migrations/runSafeBootMigrations';
 
 const read = (relative: string) => fs.readFileSync(path.resolve(process.cwd(), relative), 'utf8');
 
@@ -17,6 +18,15 @@ describe('guided vendor PO flowdown applicability', () => {
     expect(migration).toMatch(/CREATE TABLE IF NOT EXISTS vendor_po_flowdown_assessments/i);
     expect(migration).toContain("'252.244-7000'");
     expect(migration).toContain("'252.204-7012'");
+    expect(safeMigrationFiles).toContain('0286_vendor_po_flowdown_applicability.sql');
+    expect(criticalMigrationFiles).toContain('0286_vendor_po_flowdown_applicability.sql');
+  });
+
+  it('shows a retryable error instead of an endless loading state', () => {
+    expect(client).toContain('workspace.isError');
+    expect(client).toContain('Retry review');
+    expect(client).toContain('This normally takes only a few seconds.');
+    expect(client).toContain('Supporting documents are optional');
   });
 
   it('preserves human decisions and suppresses vendor disclosure of the internal contract reference', () => {

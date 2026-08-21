@@ -3916,9 +3916,9 @@ export default function VendorPOManager({
 
             <Card>
               <CardHeader>
-                <CardTitle>Attachments</CardTitle>
+                <CardTitle>Optional supporting documents</CardTitle>
                 <CardDescription>
-                  Upload reference documents, emails, or other files related to this PO
+                  Optionally upload the customer PO, flowdown document, email, or other source material. An upload is not required to start the guided review.
                 </CardDescription>
               </CardHeader>
               <CardContent>

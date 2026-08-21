@@ -115,9 +115,33 @@ export async function sendCommunication(
   let attachmentsMeta: AttachmentMeta[] = [];
 
   if (!opts.attachments) {
-    const built = await buildAttachments(opts.templateKey, opts.context, template, opts.orderId);
-    attachments = built.attachments;
-    attachmentsMeta = built.meta;
+    try {
+      const built = await buildAttachments(opts.templateKey, opts.context, template, opts.orderId);
+      attachments = built.attachments;
+      attachmentsMeta = built.meta;
+    } catch (error: any) {
+      const message = error?.message || 'Required email attachments could not be generated';
+      await logCommunication({
+        templateKey: template.key,
+        templateVersion: template.version,
+        triggeredBy: opts.triggeredBy,
+        to: normalizeList(opts.to),
+        cc: opts.cc ? normalizeList(opts.cc) : undefined,
+        subject: rendered.subject,
+        bodyHtml: rendered.html,
+        status: 'failed',
+        error: message,
+        orderId: opts.orderId,
+        customerId: opts.customerId,
+        context: opts.emailContext,
+      });
+      return {
+        success: false,
+        error: message,
+        templateKey: template.key,
+        templateVersion: template.version,
+      };
+    }
   } else {
     attachmentsMeta = opts.attachments.map((a) => {
       const buf = Buffer.from(a.content, 'base64');

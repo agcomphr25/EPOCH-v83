@@ -48,6 +48,50 @@ export async function buildAttachments(
     }
   }
 
+  if (['vendor_po_issue', 'vendor_po_resend'].includes(templateKey) && orderId) {
+    const poId = parseInt(orderId, 10);
+    if (!isNaN(poId)) {
+      const { storage } = await import('../storage');
+      const po = await storage.getVendorPO(poId);
+      if (po?.issueFlowdownsRequired) {
+        try {
+          const [{ getVendorPoFlowdownWorkspace }, { generateVendorFlowdownExhibitPdf }] =
+            await Promise.all([
+              import('../src/services/flowdownApplicabilityService'),
+              import('../utils/pdf/vendorFlowdownExhibitPdf'),
+            ]);
+          const workspace = await getVendorPoFlowdownWorkspace(poId);
+          const included = workspace.clauses.filter(
+            (clause: any) => clause.savedDecision === 'INCLUDE'
+          );
+          if (workspace.assessment.reviewStatus !== 'APPROVED' || included.length === 0) {
+            throw new Error(
+              'The controlled flowdown exhibit is not approved or has no included clauses'
+            );
+          }
+          const buffer = await generateVendorFlowdownExhibitPdf(workspace);
+          const poNumber = context.po_number || po.poNumber || `PO-${poId}`;
+          const revision = Number(workspace.assessment.exhibitRevision) || 0;
+          const result = attachmentFromBuffer(
+            buffer,
+            `Controlled_Flowdown_Exhibit_${poNumber}_R${revision}.pdf`,
+            'application/pdf'
+          );
+          attachments.push(result.attachment);
+          meta.push(result.meta);
+        } catch (error: any) {
+          console.error(
+            `[buildAttachments] Failed to generate required flowdown exhibit for orderId=${orderId}:`,
+            error?.message || error
+          );
+          throw new Error(
+            `Required controlled flowdown exhibit could not be attached: ${error?.message || 'generation failed'}`
+          );
+        }
+      }
+    }
+  }
+
   return { attachments, meta };
 }
 

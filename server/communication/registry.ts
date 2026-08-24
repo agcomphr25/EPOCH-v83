@@ -438,7 +438,7 @@ export const VENDOR_PO_ISSUE_TEMPLATE = {
     'vendor_message_html',
     'vendor_message_text',
   ],
-  attachmentRules: { attachVendorPOPDF: true, systemNotice: true },
+  attachmentRules: { attachVendorPOPDF: true, systemNotice: false },
   bodyHtml: `<!DOCTYPE html>
 <html>
 <head>
@@ -643,7 +643,7 @@ export const VENDOR_PO_RESEND_TEMPLATE = {
     'vendor_message_html',
     'vendor_message_text',
   ],
-  attachmentRules: { attachVendorPOPDF: true, systemNotice: true },
+  attachmentRules: { attachVendorPOPDF: true, systemNotice: false },
   bodyHtml: `<!DOCTYPE html>
 <html>
 <head>

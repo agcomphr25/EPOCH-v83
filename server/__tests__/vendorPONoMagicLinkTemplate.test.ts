@@ -29,6 +29,11 @@ function expectNoVendorConfirmationLanguage(body: string) {
 }
 
 describe('vendor PO email templates', () => {
+  it('does not add the EPOCH system-generated banner to issue or resend emails', () => {
+    expect(VENDOR_PO_ISSUE_TEMPLATE.attachmentRules.systemNotice).toBe(false);
+    expect(VENDOR_PO_RESEND_TEMPLATE.attachmentRules.systemNotice).toBe(false);
+  });
+
   it('issue email asks vendors to use the attached PDF without a magic link', () => {
     const rendered = renderFromObject(VENDOR_PO_ISSUE_TEMPLATE as any, context);
 

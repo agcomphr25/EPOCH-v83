@@ -64,6 +64,33 @@ jobs:
         shell: bash
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE SCHEMA clean_case;
+          SET search_path TO clean_case;
+          CREATE TABLE inventory_departments (
+            id serial PRIMARY KEY, name text NOT NULL, is_active boolean DEFAULT true,
+            sort_order integer DEFAULT 0
+          );
+          CREATE TABLE inventory_items (
+            id serial PRIMARY KEY, ag_part_number text NOT NULL
+          );
+          CREATE TABLE part_routings (
+            id uuid PRIMARY KEY, inventory_item_id text NOT NULL
+          );
+          CREATE TABLE routing_operations (
+            id serial PRIMARY KEY, part_routing_id uuid NOT NULL,
+            step_number integer NOT NULL, department_name text NOT NULL
+          );
+          \i migrations/0294_shared_department_routing_authority_phase1.sql
+          \i migrations/0294_shared_department_routing_authority_phase1.sql
+          DO $$ BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'clean_case'
+                AND table_name = 'part_routings'
+                AND column_name = 'inventory_item_fk'
+            ) THEN RAISE EXCEPTION 'Clean-schema migration failed'; END IF;
+          END $$;
+          SET search_path TO public;
           CREATE TABLE inventory_departments (
             id serial PRIMARY KEY, name text NOT NULL, is_active boolean DEFAULT true,
             sort_order integer DEFAULT 0
@@ -93,8 +120,17 @@ jobs:
               md5((SELECT string_agg(id::text || ':' || name, ',' ORDER BY id) FROM inventory_departments)) AS department_digest,
               md5((SELECT string_agg(id::text || ':' || inventory_item_id, ',' ORDER BY id) FROM part_routings)) AS routing_digest,
               md5((SELECT string_agg(id::text || ':' || department_name, ',' ORDER BY id) FROM routing_operations)) AS operation_digest;
+          TABLE before_state;
           \i migrations/0294_shared_department_routing_authority_phase1.sql
           \i migrations/0294_shared_department_routing_authority_phase1.sql
+          SELECT
+            (SELECT count(*) FROM inventory_departments) AS department_count,
+            (SELECT count(*) FROM inventory_items) AS item_count,
+            (SELECT count(*) FROM part_routings) AS routing_count,
+            (SELECT count(*) FROM routing_operations) AS operation_count,
+            md5((SELECT string_agg(id::text || ':' || name, ',' ORDER BY id) FROM inventory_departments)) AS department_digest,
+            md5((SELECT string_agg(id::text || ':' || inventory_item_id, ',' ORDER BY id) FROM part_routings)) AS routing_digest,
+            md5((SELECT string_agg(id::text || ':' || department_name, ',' ORDER BY id) FROM routing_operations)) AS operation_digest;
           DO $$
           DECLARE changed boolean;
           BEGIN

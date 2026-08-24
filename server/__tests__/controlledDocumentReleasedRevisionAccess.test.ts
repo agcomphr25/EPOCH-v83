@@ -93,6 +93,19 @@ describe('Master Document Register released-revision access', () => {
     expect(client).toContain('Preview Exact Revision Before Approval');
   });
 
+  it('exposes the stored working draft PDF from the register without treating it as released', () => {
+    expect(client).toContain('button-preview-draft-${doc.id}');
+    expect(client).toContain('button-download-draft-${doc.id}');
+    expect(client).toContain(
+      '/api/controlled-documents/${doc.id}/revisions/${doc.currentRevisionId}/view'
+    );
+    expect(client).toContain('Draft PDF');
+    expect(client).toContain('not released for controlled use');
+    expect(client).toMatch(
+      /!doc\.currentReleasedRevisionId\s*&&\s*doc\.currentRevisionId\s*&&\s*doc\.currentRevisionHasFile/
+    );
+  });
+
   it('does not expose draft revision metadata through general document history', () => {
     expect(route).toContain('authorizedRevisionHistory');
     expect(route).toMatch(

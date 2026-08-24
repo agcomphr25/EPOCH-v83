@@ -306,7 +306,10 @@ function drawDocumentHeader(state: DrawState, data: VendorPOData, settings: any,
   const metaWidth = 260;
   const titleX = PAGE.WIDTH - PAGE.MARGIN - metaWidth;
   const titleY = PAGE.HEIGHT - PAGE.MARGIN;
-  const titleHeight = isRFQ ? 124 : 108;
+  const showDpasRating = !isRFQ && data.po.issueDpasRated;
+  const titleHeight = isRFQ
+    ? 124
+    : 108 + (data.po.externalPoNumber ? 15 : 0) + (showDpasRating ? 15 : 0);
 
   if (isRFQ) {
     page.drawText('REQUEST FOR QUOTE', {
@@ -342,6 +345,10 @@ function drawDocumentHeader(state: DrawState, data: VendorPOData, settings: any,
   } else {
     drawMetaRow(page, 'PO Number', displayPoNumber, titleX + 16, titleX + metaWidth - 16, metaY, fonts);
     metaY -= 15;
+    if (showDpasRating) {
+      drawMetaRow(page, 'DPAS Rating', data.po.issueDpasRating || 'Rating required', titleX + 16, titleX + metaWidth - 16, metaY, fonts);
+      metaY -= 15;
+    }
   }
 
   if (data.po.externalPoNumber) {
@@ -537,21 +544,12 @@ function drawBlock(state: DrawState, y: number, title: string, body: unknown): n
 function drawTermsAndNotes(state: DrawState, data: VendorPOData, settings: any, y: number): number {
   y = drawBlock(state, y, 'Notes', data.po.notes);
 
-  const hasComplianceRequirements = data.po.issueDpasRated;
   const hasTerms = settings.paymentTerms || settings.shippingInstructions || settings.termsAndConditions || data.optionalSettings.length > 0;
-  if (!hasTerms && !hasComplianceRequirements) return y;
+  if (!hasTerms) return y;
 
-  y = ensureSpace(state, y, hasComplianceRequirements ? 130 : 50);
+  y = ensureSpace(state, y, 50);
   state.page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y }, thickness: 1, color: COLOR.BORDER });
   y -= 18;
-
-  if (hasComplianceRequirements) {
-    drawText(state.page, 'Compliance Requirements', PAGE.MARGIN, y, state.fonts.bold, FONT_SIZE.SECTION_LABEL, COLOR.PRIMARY_TEXT);
-    y -= 16;
-    if (data.po.issueDpasRated) {
-      y = drawBlock(state, y, 'DPAS Rating', data.po.issueDpasRating || 'Rating required');
-    }
-  }
 
   y = drawBlock(state, y, 'Payment Terms', settings.paymentTerms);
   y = drawBlock(state, y, 'Shipping Instructions', settings.shippingInstructions);

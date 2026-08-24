@@ -97,10 +97,10 @@ jobs:
         run: |
           npm run maintenance:safe-migrations
           pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
-            sed '/^\(un\)\?restrict /d' > /tmp/traveler-schema-first.sql
+            sed '/^\\\(un\)\?restrict /d' > /tmp/traveler-schema-first.sql
           npm run maintenance:safe-migrations
           pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
-            sed '/^\(un\)\?restrict /d' > /tmp/traveler-schema-second.sql
+            sed '/^\\\(un\)\?restrict /d' > /tmp/traveler-schema-second.sql
           diff --unified /tmp/traveler-schema-first.sql /tmp/traveler-schema-second.sql
 
       - name: Seed and certify existing P2 V2 lifecycle fixtures

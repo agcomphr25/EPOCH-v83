@@ -2,6 +2,9 @@ name: P2 traveler authority PostgreSQL certification
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/p2-production-plan-traveler-authority
   pull_request:
     paths:
       - '.github/workflows/p2-traveler-authority-postgres-certification.yml'

@@ -36,7 +36,6 @@ interface VendorPOData {
   companySettings: any;
   poSettings: any;
   optionalSettings: any[];
-  flowdownExhibitRevision: number | null;
 }
 
 interface Fonts {
@@ -66,14 +65,6 @@ async function fetchVendorPOData(poId: number): Promise<VendorPOData> {
   ]);
 
   if (!vendor) throw new Error(`Vendor #${po.vendorId} not found for PO #${poId}`);
-  let flowdownExhibitRevision: number | null = null;
-  if (po.issueFlowdownsRequired) {
-    const { getVendorPoFlowdownWorkspace } = await import('../../src/services/flowdownApplicabilityService');
-    const workspace = await getVendorPoFlowdownWorkspace(poId);
-    if (workspace.assessment.reviewStatus === 'APPROVED') {
-      flowdownExhibitRevision = Number(workspace.assessment.exhibitRevision) || 0;
-    }
-  }
   return {
     po,
     vendor,
@@ -81,7 +72,6 @@ async function fetchVendorPOData(poId: number): Promise<VendorPOData> {
     companySettings,
     poSettings,
     optionalSettings: optionalSettings ?? [],
-    flowdownExhibitRevision,
   };
 }
 
@@ -547,8 +537,7 @@ function drawBlock(state: DrawState, y: number, title: string, body: unknown): n
 function drawTermsAndNotes(state: DrawState, data: VendorPOData, settings: any, y: number): number {
   y = drawBlock(state, y, 'Notes', data.po.notes);
 
-  const hasComplianceRequirements =
-    data.po.issueDpasRated || data.po.issueFlowdownsRequired;
+  const hasComplianceRequirements = data.po.issueDpasRated;
   const hasTerms = settings.paymentTerms || settings.shippingInstructions || settings.termsAndConditions || data.optionalSettings.length > 0;
   if (!hasTerms && !hasComplianceRequirements) return y;
 
@@ -561,17 +550,6 @@ function drawTermsAndNotes(state: DrawState, data: VendorPOData, settings: any, 
     y -= 16;
     if (data.po.issueDpasRated) {
       y = drawBlock(state, y, 'DPAS Rating', data.po.issueDpasRating || 'Rating required');
-    }
-    if (data.po.issueFlowdownsRequired) {
-      const revision = data.flowdownExhibitRevision == null
-        ? 'approved revision'
-        : `Revision R${data.flowdownExhibitRevision}`;
-      y = drawBlock(
-        state,
-        y,
-        'Contractual Flowdowns',
-        `Applicable FAR, DFARS, and/or customer flowdowns are incorporated through the attached Controlled Vendor Flowdown Exhibit, ${revision}.`
-      );
     }
   }
 

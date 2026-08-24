@@ -52,42 +52,27 @@ export async function buildAttachments(
     const poId = parseInt(orderId, 10);
     if (!isNaN(poId)) {
       const { storage } = await import('../storage');
-      const po = await storage.getVendorPO(poId);
-      if (po?.issueFlowdownsRequired) {
-        try {
-          const [{ getVendorPoFlowdownWorkspace }, { generateVendorFlowdownExhibitPdf }] =
-            await Promise.all([
-              import('../src/services/flowdownApplicabilityService'),
-              import('../utils/pdf/vendorFlowdownExhibitPdf'),
-            ]);
-          const workspace = await getVendorPoFlowdownWorkspace(poId);
-          const included = workspace.clauses.filter(
-            (clause: any) => clause.savedDecision === 'INCLUDE'
-          );
-          if (workspace.assessment.reviewStatus !== 'APPROVED' || included.length === 0) {
-            throw new Error(
-              'The controlled flowdown exhibit is not approved or has no included clauses'
-            );
-          }
-          const buffer = await generateVendorFlowdownExhibitPdf(workspace);
-          const poNumber = context.po_number || po.poNumber || `PO-${poId}`;
-          const revision = Number(workspace.assessment.exhibitRevision) || 0;
-          const result = attachmentFromBuffer(
-            buffer,
-            `Controlled_Flowdown_Exhibit_${poNumber}_R${revision}.pdf`,
-            'application/pdf'
-          );
-          attachments.push(result.attachment);
-          meta.push(result.meta);
-        } catch (error: any) {
-          console.error(
-            `[buildAttachments] Failed to generate required flowdown exhibit for orderId=${orderId}:`,
-            error?.message || error
-          );
-          throw new Error(
-            `Required controlled flowdown exhibit could not be attached: ${error?.message || 'generation failed'}`
-          );
+      const requestedIds = Array.isArray(context?.email_attachment_ids)
+        ? [...new Set(context.email_attachment_ids.map(Number).filter(Number.isInteger))]
+        : [];
+      for (const attachmentId of requestedIds) {
+        const stored = await storage.getVendorPoAttachment(attachmentId);
+        if (!stored || stored.vendorPoId !== poId) {
+          throw new Error(`Selected attachment #${attachmentId} does not belong to this vendor PO`);
         }
+        if (stored.mimeType !== 'application/pdf' || !stored.originalFileName.toLowerCase().endsWith('.pdf')) {
+          throw new Error(`Selected attachment "${stored.originalFileName}" is not a PDF`);
+        }
+        if (!fs.existsSync(stored.filePath)) {
+          throw new Error(`Selected attachment "${stored.originalFileName}" is unavailable`);
+        }
+        const result = attachmentFromFilePath(
+          stored.filePath,
+          stored.originalFileName,
+          stored.mimeType
+        );
+        attachments.push(result.attachment);
+        meta.push(result.meta);
       }
     }
   }

@@ -123,6 +123,15 @@ router.post(
       if (!files || files.length === 0) {
         return res.status(400).json({ error: 'No files uploaded' });
       }
+      const invalidFile = files.find(
+        file => file.mimetype !== 'application/pdf' || path.extname(file.originalname).toLowerCase() !== '.pdf'
+      );
+      if (invalidFile) {
+        for (const file of files) {
+          if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        }
+        return res.status(415).json({ error: 'Only PDF attachments are supported for vendor POs' });
+      }
 
       const attachments: VendorPoAttachment[] = [];
 

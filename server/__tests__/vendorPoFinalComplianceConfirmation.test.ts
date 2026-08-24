@@ -45,10 +45,11 @@ describe('vendor PO final compliance confirmation', () => {
     expect(routeSource).toContain("error: 'DPAS rating required'");
   });
 
-  it('requires an approved review with an included clause when flowdowns apply', () => {
-    expect(routeSource).toContain("flowdownAssessment?.reviewStatus !== 'APPROVED'");
-    expect(routeSource).toContain("eq(vendorPoFarFlowdowns.decision, 'INCLUDE')");
-    expect(routeSource).toContain("error: 'Included flowdown required'");
+  it('records the flowdown answer without forcing the long-term review workflow', () => {
+    expect(routeSource).not.toContain("flowdownAssessment?.reviewStatus !== 'APPROVED'");
+    expect(routeSource).not.toContain("error: 'Included flowdown required'");
+    expect(routeSource).toContain('email_attachment_ids: attachmentIds');
+    expect(uiSource).toContain('Upload and select any applicable FAR, DFARS, or customer schedule');
   });
 
   it('persists confirmation evidence atomically with issuance', () => {

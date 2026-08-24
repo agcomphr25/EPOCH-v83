@@ -1,0 +1,140 @@
+name: P2 traveler authority PostgreSQL certification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/p2-traveler-authority-postgres-certification.yml'
+      - 'migrations/0294_p2_traveler_authority_foundation.sql'
+      - 'server/scripts/migrations/runSafeBootMigrations.ts'
+      - 'server/src/lib/featureFlags.ts'
+      - 'server/src/services/productionDemandGraph.ts'
+      - 'server/src/services/productionLaunchPersistenceService.ts'
+      - 'server/src/services/travelerAuthorityCompatibilityService.ts'
+      - 'server/__tests__/p2TravelerAuthority*.test.ts'
+      - 'server/__tests__/p2V2LegacyPreservationPostgres.test.ts'
+      - 'server/__tests__/p2V2LegacyContinuationPostgres.test.ts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p2-traveler-authority-postgres-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: traveler_cert
+          POSTGRES_PASSWORD: traveler_cert_disposable_password
+          POSTGRES_DB: epoch_p2_v2_certification
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U traveler_cert -d epoch_p2_v2_certification"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql://traveler_cert:traveler_cert_disposable_password@127.0.0.1:5432/epoch_p2_v2_certification
+      NODE_ENV: test
+      SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install committed dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Prove disposable isolation boundary
+        shell: bash
+        run: |
+          node <<'NODE'
+          const url = new URL(process.env.DATABASE_URL);
+          if (url.hostname !== '127.0.0.1') throw new Error('Database must be workflow-local');
+          if (url.pathname !== '/epoch_p2_v2_certification') {
+            throw new Error('Unexpected disposable database name');
+          }
+          for (const key of Object.keys(process.env)) {
+            if (/PRODUCTION.*DATABASE|DATABASE.*PRODUCTION/i.test(key)) {
+              throw new Error(`Production database environment variable is forbidden: ${key}`);
+            }
+          }
+          NODE
+
+      - name: Validate certification harness contract
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          server/__tests__/p2TravelerAuthorityCertificationHarness.test.ts
+          --reporter=verbose
+
+      - name: Create schema-push prerequisite
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
+
+      - name: Create current application schema
+        run: npx drizzle-kit push --force --config drizzle.app.config.ts
+
+      - name: Restore migration-only schema baseline
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql
+
+      - name: Run safe migrations twice and prove schema idempotency
+        shell: bash
+        run: |
+          npm run maintenance:safe-migrations
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
+            sed '/^\(un\)\?restrict /d' > /tmp/traveler-schema-first.sql
+          npm run maintenance:safe-migrations
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges |
+            sed '/^\(un\)\?restrict /d' > /tmp/traveler-schema-second.sql
+          diff --unified /tmp/traveler-schema-first.sql /tmp/traveler-schema-second.sql
+
+      - name: Seed and certify existing P2 V2 lifecycle fixtures
+        env:
+          P2_V2_PRODUCTION_LAUNCH_ENABLED: 'true'
+          P2_V2_PILOT_ENVIRONMENT: isolated_test
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          --no-file-parallelism
+          server/__tests__/p2V2PostgresCertification.test.ts
+          server/__tests__/p2V2PilotPostgresCertification.test.ts
+          --reporter=verbose
+
+      - name: Certify exhaustive historical row and checksum preservation
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          --no-file-parallelism
+          server/__tests__/p2V2LegacyPreservationPostgres.test.ts
+          server/__tests__/p2V2LegacyContinuationPostgres.test.ts
+          --reporter=verbose
+
+      - name: Certify traveler-authority migration and compatibility
+        if: ${{ hashFiles('migrations/0294_p2_traveler_authority_foundation.sql') != '' }}
+        env:
+          P2_TRAVELER_AUTHORITY_POSTGRES_CERTIFICATION: isolated_test
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          --no-file-parallelism
+          server/__tests__/p2TravelerAuthorityPostgresCertification.test.ts
+          --reporter=verbose
+
+      - name: Prove new runtime paths remain disabled
+        shell: bash
+        run: |
+          test -z "${P2_V2_TRAVELER_AUTHORITY_FOUNDATION_ENABLED:-}"
+          test -z "${P2_V2_TRAVELER_COVERAGE_ENABLED:-}"
+          test -z "${P2_V2_FROZEN_ROUTING_TRAVELERS_ENABLED:-}"

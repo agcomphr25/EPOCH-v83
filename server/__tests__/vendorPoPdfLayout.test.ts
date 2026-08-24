@@ -123,6 +123,46 @@ describe('vendor PO/RFQ PDF generator', () => {
     }
   });
 
+  it('keeps an issued PO DPAS rating in the first-page metadata panel', async () => {
+    vi.mocked(storage.getVendorPO).mockResolvedValue({
+      id: 42,
+      vendorId: 7,
+      poNumber: 'VPO-26093',
+      orderDate: '2026-08-24',
+      createdAt: '2026-08-24',
+      expectedDeliveryDate: '2026-09-14',
+      shipVia: 'UPS',
+      status: 'Sent',
+      issueDpasRated: true,
+      issueDpasRating: 'DO-A7',
+      totalCost: 9468,
+      shippingCost: 0,
+    } as any);
+    vi.mocked(storage.getVendorPOItems).mockResolvedValue(
+      Array.from({ length: 28 }, (_, index) => ({
+        lineNumber: index + 1,
+        supplierPartNumber: `PART-${index + 1}`,
+        description: `Production material line ${index + 1}`,
+        quantity: '1',
+        unitPrice: '338.14',
+        vendorUnit: 'EA',
+      })) as any
+    );
+
+    const pdfBuffer = await generateVendorPoPdf(42);
+    const pdf = await PDFDocument.load(pdfBuffer);
+    expect(pdf.getPageCount()).toBeGreaterThan(1);
+
+    const parser = new PDFParse({ data: pdfBuffer });
+    try {
+      const firstPage = await parser.getText({ partial: [1] });
+      expect(firstPage.text).toContain('DPAS Rating');
+      expect(firstPage.text).toContain('DO-A7');
+    } finally {
+      await parser.destroy();
+    }
+  });
+
   it('keeps the complete sample metal dimension on one line in the widened description column', async () => {
     const pdf = await PDFDocument.create();
     const font = await pdf.embedFont(StandardFonts.Helvetica);

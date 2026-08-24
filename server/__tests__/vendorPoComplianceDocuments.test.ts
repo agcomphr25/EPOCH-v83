@@ -29,7 +29,7 @@ describe('vendor PO compliance documents', () => {
   });
 
   it('prints the DPAS rating on the PO PDF without forcing flowdown text', () => {
-    expect(pdfSource).toContain("y = drawBlock(state, y, 'DPAS Rating'");
+    expect(pdfSource).toContain("drawMetaRow(page, 'DPAS Rating'");
     expect(pdfSource).not.toContain("'Contractual Flowdowns'");
   });
 

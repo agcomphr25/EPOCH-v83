@@ -569,6 +569,10 @@ type VendorPO = {
   directPoExceptionApprovedAt?: string | null;
   issueDpasRated?: boolean | null;
   issueDpasRating?: string | null;
+  issueFlowdownsRequired?: boolean | null;
+  issueComplianceConfirmedByUserId?: number | null;
+  issueComplianceConfirmedByName?: string | null;
+  issueComplianceConfirmedAt?: string | null;
 };
 
 type VendorPOTransaction = {
@@ -3658,6 +3662,45 @@ export default function VendorPOManager({
               {selectedVendorPO.issuedWithoutEmailReason && (
                 <>. Reason: <span className="italic">{selectedVendorPO.issuedWithoutEmailReason}</span></>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Persisted issuance decisions remain visible after the send modal closes. */}
+        {selectedVendorPO.issueDpasRated !== null && selectedVendorPO.issueDpasRated !== undefined && (
+          <div
+            className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950"
+            data-testid="issued-compliance-summary"
+          >
+            <div className="font-semibold">Issued PO compliance decisions</div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <span className="text-blue-700">DPAS:</span>{' '}
+                <span className="font-medium">
+                  {selectedVendorPO.issueDpasRated
+                    ? selectedVendorPO.issueDpasRating || 'Rated (rating not recorded)'
+                    : 'Not DPAS rated'}
+                </span>
+              </div>
+              <div>
+                <span className="text-blue-700">FAR/DFARS flowdowns:</span>{' '}
+                <span className="font-medium">
+                  {selectedVendorPO.issueFlowdownsRequired === true
+                    ? 'Required'
+                    : selectedVendorPO.issueFlowdownsRequired === false
+                      ? 'Not required'
+                      : 'Not recorded'}
+                </span>
+              </div>
+              <div>
+                <span className="text-blue-700">Confirmed:</span>{' '}
+                <span className="font-medium">
+                  {selectedVendorPO.issueComplianceConfirmedByName || 'User not recorded'}
+                  {selectedVendorPO.issueComplianceConfirmedAt
+                    ? ` on ${new Date(selectedVendorPO.issueComplianceConfirmedAt).toLocaleString()}`
+                    : ''}
+                </span>
+              </div>
             </div>
           </div>
         )}

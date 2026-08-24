@@ -81,4 +81,14 @@ describe('vendor PO final compliance confirmation', () => {
     expect(uiSource).toContain("setIssueDpasDecision(selectedVendorPO.issueDpasRated === true ? 'yes'");
     expect(uiSource).toContain("setIssueDpasRating(selectedVendorPO.issueDpasRating || '')");
   });
+
+  it('returns saved issuance decisions to the PDF and detail views', () => {
+    expect(storageSource.match(/issueDpasRated: vendorPOs\.issueDpasRated/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(storageSource.match(/issueDpasRating: vendorPOs\.issueDpasRating/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(storageSource.match(/issueFlowdownsRequired: vendorPOs\.issueFlowdownsRequired/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(storageSource.match(/issueComplianceConfirmedAt: vendorPOs\.issueComplianceConfirmedAt/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(uiSource).toContain('data-testid="issued-compliance-summary"');
+    expect(uiSource).toContain('Issued PO compliance decisions');
+    expect(uiSource).toContain("selectedVendorPO.issueDpasRating || 'Rated (rating not recorded)'");
+  });
 });

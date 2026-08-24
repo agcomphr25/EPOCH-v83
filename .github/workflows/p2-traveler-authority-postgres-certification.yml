@@ -115,6 +115,18 @@ jobs:
           server/__tests__/p2V2PilotPostgresCertification.test.ts
           --reporter=verbose
 
+      - name: Reset disposable schema before historical preservation
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DROP SCHEMA public CASCADE;
+          CREATE SCHEMA public;
+          CREATE SEQUENCE rts_item_number_seq;
+          SQL
+          npx drizzle-kit push --force --config drizzle.app.config.ts
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql
+          npm run maintenance:safe-migrations
+
       - name: Certify exhaustive historical row and checksum preservation
         run: >-
           npx vitest run

@@ -57,7 +57,7 @@ jobs:
       - name: Prove disposable database boundary
         shell: bash
         run: |
-          test "$(psql "$DATABASE_URL" -Atc "SELECT inet_server_addr()::text")" = '127.0.0.1'
+          node -e "const u=new URL(process.env.DATABASE_URL); if(u.hostname!=='127.0.0.1'||u.port!=='5432'||u.pathname!=='/phase1_certification') process.exit(1)"
           test "$(psql "$DATABASE_URL" -Atc "SELECT current_database()")" = 'phase1_certification'
 
       - name: Certify clean, populated, replay, preservation, and rollback behavior

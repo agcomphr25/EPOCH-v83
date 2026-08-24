@@ -74,4 +74,11 @@ describe('vendor PO final compliance confirmation', () => {
     expect(uiSource.match(/!issueDpasDecision/g)?.length).toBeGreaterThanOrEqual(2);
     expect(uiSource.match(/!issueFlowdownDecision/g)?.length).toBeGreaterThanOrEqual(2);
   });
+
+  it('allows a draft PO to save DPAS details and carries them into issuance', () => {
+    expect(uiSource).toContain('data-testid="select-edit-dpas-rated"');
+    expect(uiSource).toContain('data-testid="input-edit-dpas-rating"');
+    expect(uiSource).toContain("setIssueDpasDecision(selectedVendorPO.issueDpasRated === true ? 'yes'");
+    expect(uiSource).toContain("setIssueDpasRating(selectedVendorPO.issueDpasRating || '')");
+  });
 });

@@ -567,6 +567,8 @@ type VendorPO = {
   directPoExceptionApprovedByName?: string | null;
   directPoExceptionReason?: string | null;
   directPoExceptionApprovedAt?: string | null;
+  issueDpasRated?: boolean | null;
+  issueDpasRating?: string | null;
 };
 
 type VendorPOTransaction = {
@@ -636,6 +638,8 @@ type CreateVendorPOData = {
   shipVia?: string;
   notes?: string;
   externalPoNumber?: string;
+  issueDpasRated?: boolean | null;
+  issueDpasRating?: string | null;
 };
 
 const DRAFT_BOM_VENDOR_PO_HANDOFF_KEY = 'epoch:draft-bom-vendor-po-handoff';
@@ -1351,6 +1355,8 @@ function VendorPOForm({
     shipVia: vendorPo?.shipVia || '',
     notes: vendorPo?.notes || '',
     externalPoNumber: vendorPo?.externalPoNumber || '',
+    issueDpasRated: vendorPo?.issueDpasRated ?? null,
+    issueDpasRating: vendorPo?.issueDpasRating || '',
   });
 
   const [orderDate, setOrderDate] = useState<Date | undefined>(
@@ -1426,6 +1432,10 @@ function VendorPOForm({
 
     if (!formData.productionLine) {
       toast.error('Please select the production line for this purchase');
+      return;
+    }
+    if (formData.issueDpasRated === true && !formData.issueDpasRating?.trim()) {
+      toast.error('Enter the DPAS rating for this PO');
       return;
     }
 
@@ -1583,6 +1593,41 @@ function VendorPOForm({
             />
           </PopoverContent>
         </Popover>
+      </div>
+
+      <div className="space-y-3 rounded-md border border-blue-200 bg-blue-50/50 p-4">
+        <div>
+          <Label>DPAS Rated</Label>
+          <Select
+            value={formData.issueDpasRated === true ? 'yes' : formData.issueDpasRated === false ? 'no' : ''}
+            onValueChange={(value: 'yes' | 'no') => setFormData({
+              ...formData,
+              issueDpasRated: value === 'yes',
+              issueDpasRating: value === 'yes' ? formData.issueDpasRating : '',
+            })}
+          >
+            <SelectTrigger data-testid="select-edit-dpas-rated">
+              <SelectValue placeholder="Select Yes or No" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="yes">Yes</SelectItem>
+              <SelectItem value="no">No</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {formData.issueDpasRated === true && (
+          <div>
+            <Label htmlFor="edit-dpas-rating">DPAS Rating *</Label>
+            <Input
+              id="edit-dpas-rating"
+              value={formData.issueDpasRating || ''}
+              onChange={(event) => setFormData({ ...formData, issueDpasRating: event.target.value })}
+              placeholder="Example: DO-A1"
+              data-testid="input-edit-dpas-rating"
+            />
+          </div>
+        )}
+        <p className="text-xs text-blue-900">If rated, this value will be carried into the Issue step and printed on the PO PDF.</p>
       </div>
 
       <div>
@@ -2722,10 +2767,14 @@ export default function VendorPOManager({
         setNoEmailMode(false);
         setNoEmailReason('');
         setNoEmailConfirmed(false);
+        setIssueDpasDecision(match.issueDpasRated === true ? 'yes' : match.issueDpasRated === false ? 'no' : '');
+        setIssueDpasRating(match.issueDpasRating || '');
+        setIssueFlowdownDecision('');
         setEmailMessage(DEFAULT_ISSUE_EMAIL_MESSAGE);
         setPendingStatus('Sent');
         setShowStatusChangeDialog(true);
         loadRecipientsForPO(match.id);
+        loadAttachmentsForPO(match.id);
       }
       setPreSelectApplied(true);
     }
@@ -3158,6 +3207,8 @@ export default function VendorPOManager({
     const poFromList = (vendorPOs as VendorPO[] | undefined)?.find((p) => p.id === id);
     if (poFromList) {
       setSelectedVendorPO(poFromList);
+      setIssueDpasDecision(poFromList.issueDpasRated === true ? 'yes' : poFromList.issueDpasRated === false ? 'no' : '');
+      setIssueDpasRating(poFromList.issueDpasRating || '');
     }
     // Navigate into detail view so we have full PO context
     setShowDetailView(true);
@@ -3168,6 +3219,7 @@ export default function VendorPOManager({
     setPendingStatus('Sent');
     setShowStatusChangeDialog(true);
     loadRecipientsForPO(id);
+    loadAttachmentsForPO(id);
   };
 
   const handleViewItems = (vendorPo: VendorPO) => {
@@ -3204,8 +3256,8 @@ export default function VendorPOManager({
       setNoEmailMode(false);
       setNoEmailReason('');
       setNoEmailConfirmed(false);
-      setIssueDpasDecision('');
-      setIssueDpasRating('');
+      setIssueDpasDecision(selectedVendorPO.issueDpasRated === true ? 'yes' : selectedVendorPO.issueDpasRated === false ? 'no' : '');
+      setIssueDpasRating(selectedVendorPO.issueDpasRating || '');
       setIssueFlowdownDecision('');
       setEmailMessage(DEFAULT_ISSUE_EMAIL_MESSAGE);
       setPendingStatus('Sent');

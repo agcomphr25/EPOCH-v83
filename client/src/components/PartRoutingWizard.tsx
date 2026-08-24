@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -342,6 +343,12 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     import.meta.env.VITE_SHARED_INVENTORY_DEPARTMENT_READS_ENABLED === 'true';
   const operationDepartmentIdsEnabled =
     import.meta.env.VITE_ROUTING_OPERATION_DEPARTMENT_IDS_ENABLED === 'true';
+  const sharedDepartmentWritesEnabled =
+    import.meta.env.VITE_SHARED_INVENTORY_DEPARTMENT_WRITES_ENABLED === 'true';
+  const { can } = usePermissions();
+  const canManageDepartments =
+    !sharedDepartmentsEnabled ||
+    (sharedDepartmentWritesEnabled && can('inventory.departments.manage'));
   const [step, setStep] = useState(1);
   const [selectedItemId, setSelectedItemId] = useState<string>(editRouting?.inventoryItemId || '');
   const [selectedProjectId, setSelectedProjectId] = useState<string>(editRouting?.projectId || '');
@@ -1973,7 +1980,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                             <ChevronRight className="mr-2 h-4 w-4" />
                             {deptRecord?.departmentCode ? `${deptRecord.departmentCode} — ` : ''}{dept}
                           </Button>
-                          {deptRecord && (
+                          {deptRecord && canManageDepartments && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1986,7 +1993,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                         </div>
                       );
                     })}
-                    {editingDeptId && (
+                    {canManageDepartments && editingDeptId && (
                       <div className="flex gap-2 p-2 border rounded bg-blue-50 dark:bg-blue-950">
                         <Input
                           className="text-sm flex-1"
@@ -2060,6 +2067,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                         </Button>
                       </div>
                     )}
+                    {canManageDepartments ? <>
                     <Separator className="my-2" />
                     <div className="flex gap-2">
                       <Input
@@ -2105,6 +2113,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                         {deptSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Add
                       </Button>
                     </div>
+                    </> : sharedDepartmentsEnabled ? (
+                      <p className="text-xs text-muted-foreground" data-testid="routing-department-management-forbidden">
+                        You can select existing departments, but Department management permission is required to add or edit them.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 

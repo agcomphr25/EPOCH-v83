@@ -13,7 +13,9 @@ import {
 } from '../lib/featureFlags';
 import {
   createSharedDepartment,
+  deactivateUnreferencedDepartment,
   listSharedDepartments,
+  updateSharedDepartment,
 } from '../services/sharedDepartmentService';
 import { requirePermission } from '../../middleware/requirePermission';
 import OpenAI from 'openai';
@@ -490,7 +492,7 @@ router.get('/departments/list', async (_req: Request, res: Response) => {
 router.post('/departments', async (req: Request, res: Response) => {
   try {
     if (areSharedInventoryDepartmentWritesEnabled()) {
-      return requirePermission('inventory.adjust')(req, res, async () => {
+      return requirePermission('inventory.departments.manage')(req, res, async () => {
         try {
           const name = String(req.body?.name || '').trim();
           const departmentCode = String(req.body?.departmentCode || '').trim();
@@ -529,6 +531,28 @@ router.post('/departments', async (req: Request, res: Response) => {
 
 router.patch('/departments/:id', async (req: Request, res: Response) => {
   try {
+    if (areSharedInventoryDepartmentWritesEnabled()) {
+      return requirePermission('inventory.departments.manage')(req, res, async () => {
+        try {
+          const user = req.user as any;
+          return res.json(await updateSharedDepartment(
+            z.coerce.number().int().positive().parse(req.params.id),
+            z.object({
+              name: z.string().trim().min(1).max(120).optional(),
+              departmentCode: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9_-]+$/).optional(),
+              routingEnabled: z.boolean().optional(),
+              productionEnabled: z.boolean().optional(),
+              schedulingEnabled: z.boolean().optional(),
+              sortOrder: z.number().int().optional(),
+              isActive: z.boolean().optional(),
+            }).parse(req.body),
+            { id: Number(user?.id) || null, username: user?.username, role: user?.role }
+          ));
+        } catch (error: any) {
+          return res.status(error.status || 400).json({ error: error.code || error.message });
+        }
+      });
+    }
     const deptId = req.params.id;
     const { name } = req.body;
 
@@ -556,6 +580,19 @@ router.patch('/departments/:id', async (req: Request, res: Response) => {
 
 router.delete('/departments/:id', async (req: Request, res: Response) => {
   try {
+    if (areSharedInventoryDepartmentWritesEnabled()) {
+      return requirePermission('inventory.departments.manage')(req, res, async () => {
+        try {
+          const user = req.user as any;
+          return res.json(await deactivateUnreferencedDepartment(
+            z.coerce.number().int().positive().parse(req.params.id),
+            { id: Number(user?.id) || null, username: user?.username, role: user?.role }
+          ));
+        } catch (error: any) {
+          return res.status(error.status || 400).json({ error: error.code || error.message });
+        }
+      });
+    }
     const rows = await pool.query(
       `UPDATE p2_routing_departments SET is_active = false, updated_at = NOW()
        WHERE id = $1

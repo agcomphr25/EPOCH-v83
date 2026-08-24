@@ -56,19 +56,19 @@ router.get('/', async (req, res) => {
   } catch (error) { failure(res, error); }
 });
 
-router.post('/', requirePermission('inventory.adjust'), async (req, res) => {
+router.post('/', requirePermission('inventory.departments.manage'), async (req, res) => {
   if (!enabled(res, 'write')) return;
   try { res.status(201).json(await createSharedDepartment(writeSchema.parse(req.body), actor(req))); }
   catch (error) { failure(res, error); }
 });
 
-router.patch('/:id', requirePermission('inventory.adjust'), async (req, res) => {
+router.patch('/:id', requirePermission('inventory.departments.manage'), async (req, res) => {
   if (!enabled(res, 'write')) return;
   try { res.json(await updateSharedDepartment(z.coerce.number().int().positive().parse(req.params.id), updateSchema.parse(req.body), actor(req))); }
   catch (error) { failure(res, error); }
 });
 
-router.delete('/:id', requirePermission('inventory.adjust'), async (req, res) => {
+router.delete('/:id', requirePermission('inventory.departments.manage'), async (req, res) => {
   if (!enabled(res, 'write')) return;
   try { res.json(await deactivateUnreferencedDepartment(z.coerce.number().int().positive().parse(req.params.id), actor(req))); }
   catch (error) { failure(res, error); }

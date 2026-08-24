@@ -3813,27 +3813,31 @@ router.get('/departments', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/departments', requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
+router.post('/departments', async (req: Request, res: Response) => {
   try {
     if (areSharedInventoryDepartmentWritesEnabled()) {
-      const user = req.user as any;
-      return res.status(201).json(await createSharedDepartment(
-        {
-          name: String(req.body?.name || ''),
-          departmentCode: String(req.body?.departmentCode || ''),
-          routingEnabled: req.body?.routingEnabled,
-          productionEnabled: req.body?.productionEnabled,
-          schedulingEnabled: req.body?.schedulingEnabled,
-          sortOrder: req.body?.sortOrder,
-        },
-        { id: Number(user?.id) || null, username: user?.username, role: user?.role }
-      ));
+      return requirePermission('inventory.departments.manage')(req, res, async () => {
+        const user = req.user as any;
+        return res.status(201).json(await createSharedDepartment(
+          {
+            name: String(req.body?.name || ''),
+            departmentCode: String(req.body?.departmentCode || ''),
+            routingEnabled: req.body?.routingEnabled,
+            productionEnabled: req.body?.productionEnabled,
+            schedulingEnabled: req.body?.schedulingEnabled,
+            sortOrder: req.body?.sortOrder,
+          },
+          { id: Number(user?.id) || null, username: user?.username, role: user?.role }
+        ));
+      });
     }
-    const { inventoryDepartments, insertInventoryDepartmentSchema } = await import('../../schema');
-    const { db } = await import('../../db');
-    const departmentData = insertInventoryDepartmentSchema.parse(req.body);
-    const [newDepartment] = await db.insert(inventoryDepartments).values(departmentData).returning();
-    res.status(201).json(newDepartment);
+    return requireRole('ADMIN', 'OWNER')(req, res, async () => {
+      const { inventoryDepartments, insertInventoryDepartmentSchema } = await import('../../schema');
+      const { db } = await import('../../db');
+      const departmentData = insertInventoryDepartmentSchema.parse(req.body);
+      const [newDepartment] = await db.insert(inventoryDepartments).values(departmentData).returning();
+      return res.status(201).json(newDepartment);
+    });
   } catch (error) {
     console.error('Create department error:', error);
     if (error instanceof Error) {
@@ -3843,28 +3847,32 @@ router.post('/departments', requireRole('ADMIN', 'OWNER'), async (req: Request, 
   }
 });
 
-router.put('/departments/:id', requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
+router.put('/departments/:id', async (req: Request, res: Response) => {
   try {
     const departmentId = parseInt(req.params.id);
     if (areSharedInventoryDepartmentWritesEnabled()) {
-      const user = req.user as any;
-      return res.json(await updateSharedDepartment(
-        departmentId,
-        req.body,
-        { id: Number(user?.id) || null, username: user?.username, role: user?.role }
-      ));
+      return requirePermission('inventory.departments.manage')(req, res, async () => {
+        const user = req.user as any;
+        return res.json(await updateSharedDepartment(
+          departmentId,
+          req.body,
+          { id: Number(user?.id) || null, username: user?.username, role: user?.role }
+        ));
+      });
     }
-    const { inventoryDepartments, insertInventoryDepartmentSchema } = await import('../../schema');
-    const { eq } = await import('drizzle-orm');
-    const { db } = await import('../../db');
-    const updates = insertInventoryDepartmentSchema.partial().parse(req.body);
-    const [updatedDepartment] = await db
-      .update(inventoryDepartments)
-      .set(updates)
-      .where(eq(inventoryDepartments.id, departmentId))
-      .returning();
-    if (!updatedDepartment) return res.status(404).json({ error: 'Department not found' });
-    res.json(updatedDepartment);
+    return requireRole('ADMIN', 'OWNER')(req, res, async () => {
+      const { inventoryDepartments, insertInventoryDepartmentSchema } = await import('../../schema');
+      const { eq } = await import('drizzle-orm');
+      const { db } = await import('../../db');
+      const updates = insertInventoryDepartmentSchema.partial().parse(req.body);
+      const [updatedDepartment] = await db
+        .update(inventoryDepartments)
+        .set(updates)
+        .where(eq(inventoryDepartments.id, departmentId))
+        .returning();
+      if (!updatedDepartment) return res.status(404).json({ error: 'Department not found' });
+      return res.json(updatedDepartment);
+    });
   } catch (error) {
     console.error('Update department error:', error);
     if (error instanceof Error) {
@@ -3874,18 +3882,22 @@ router.put('/departments/:id', requireRole('ADMIN', 'OWNER'), async (req: Reques
   }
 });
 
-router.delete('/departments/:id', requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
+router.delete('/departments/:id', async (req: Request, res: Response) => {
   try {
     const departmentId = parseInt(req.params.id);
     if (areSharedInventoryDepartmentWritesEnabled()) {
-      const user = req.user as any;
-      return res.json(await deactivateUnreferencedDepartment(
-        departmentId,
-        { id: Number(user?.id) || null, username: user?.username, role: user?.role }
-      ));
+      return requirePermission('inventory.departments.manage')(req, res, async () => {
+        const user = req.user as any;
+        return res.json(await deactivateUnreferencedDepartment(
+          departmentId,
+          { id: Number(user?.id) || null, username: user?.username, role: user?.role }
+        ));
+      });
     }
-    await storage.deleteDepartment(departmentId);
-    res.status(204).end();
+    return requireRole('ADMIN', 'OWNER')(req, res, async () => {
+      await storage.deleteDepartment(departmentId);
+      return res.status(204).end();
+    });
   } catch (error) {
     console.error('Delete department error:', error);
     res.status(500).json({ error: 'Failed to delete department' });

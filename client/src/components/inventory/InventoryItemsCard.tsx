@@ -78,6 +78,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLocation } from 'wouter';
 import { calculateCOGS } from '@/lib/unitConversion';
 import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type TraceabilityVisibility = 'required' | 'optional' | 'hidden';
 type TraceabilityFieldConfig = Record<string, TraceabilityVisibility>;
@@ -465,6 +466,9 @@ const InventoryForm = ({
 }) => {
   const sharedDepartmentPhase1 =
     import.meta.env.VITE_SHARED_INVENTORY_DEPARTMENT_WRITES_ENABLED === 'true';
+  const { can } = usePermissions();
+  const canManageDepartments =
+    !sharedDepartmentPhase1 || can('inventory.departments.manage');
   const queryClient = useQueryClient();
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
@@ -547,6 +551,10 @@ const InventoryForm = ({
   });
 
   const handleAddDepartment = () => {
+    if (!canManageDepartments) {
+      toast.error('Department management permission is required.');
+      return;
+    }
     const departmentName = newDepartmentName.trim();
     if (!departmentName) {
       toast.error('Enter a department name');
@@ -1375,7 +1383,7 @@ const InventoryForm = ({
               </div>
             ))}
           </div>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          {canManageDepartments ? <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <Input
               value={newDepartmentName}
               onChange={(event) => setNewDepartmentName(event.target.value)}
@@ -1398,7 +1406,11 @@ const InventoryForm = ({
               <Plus className="h-4 w-4 mr-2" />
               {createDepartmentMutation.isPending ? 'Adding...' : 'Add Department'}
             </Button>
-          </div>
+          </div> : sharedDepartmentPhase1 ? (
+            <p className="text-xs text-muted-foreground mt-3" data-testid="department-management-forbidden">
+              You can select existing departments, but Department management permission is required to add one.
+            </p>
+          ) : null}
           {formData.assignedDepartments.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {formData.assignedDepartments.map((dept) => (

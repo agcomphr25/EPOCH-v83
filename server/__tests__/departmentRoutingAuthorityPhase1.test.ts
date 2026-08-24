@@ -61,7 +61,7 @@ describe('department routing authority Phase 1 foundation', () => {
   });
 
   it('protects department mutations with permission checks and audit events', () => {
-    expect(sharedRoute.match(/requirePermission\('inventory\.adjust'\)/g)?.length).toBe(3);
+    expect(sharedRoute.match(/requirePermission\('inventory\.departments\.manage'\)/g)?.length).toBe(3);
     const service = read('server/src/services/sharedDepartmentService.ts');
     expect(service).toContain('SHARED_DEPARTMENT_CREATED');
     expect(service).toContain('SHARED_DEPARTMENT_UPDATED');

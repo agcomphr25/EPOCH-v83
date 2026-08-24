@@ -11,6 +11,7 @@ describe('department routing authority Phase 1 foundation', () => {
   const flags = read('server/src/lib/featureFlags.ts');
   const sharedRoute = read('server/src/routes/sharedDepartments.ts');
   const routingRoute = read('server/src/routes/partRoutings.ts');
+  const safeBootRunner = read('server/scripts/migrations/runSafeBootMigrations.ts');
 
   it('is additive and performs no historical data mutation', () => {
     expect(migration).not.toMatch(/\bUPDATE\b|\bDELETE\s+FROM\b|\bTRUNCATE\b|\bDROP\b/i);
@@ -35,6 +36,17 @@ describe('department routing authority Phase 1 foundation', () => {
     expect(migration).not.toMatch(/ADD COLUMN IF NOT EXISTS default_department_id\s+INTEGER\s+NOT NULL/i);
     expect(migration).not.toMatch(/ADD COLUMN IF NOT EXISTS inventory_item_fk\s+INTEGER\s+NOT NULL/i);
     expect(migration).not.toMatch(/ADD COLUMN IF NOT EXISTS department_id\s+INTEGER\s+NOT NULL/i);
+  });
+
+  it('applies the schema before routes become ready and treats failure as fatal', () => {
+    const migrationName = '0294_shared_department_routing_authority_phase1.sql';
+    expect(safeBootRunner.match(new RegExp(migrationName, 'g'))).toHaveLength(2);
+    expect(safeBootRunner).toMatch(
+      /safeMigrationFiles\s*=\s*\[[\s\S]*0294_shared_department_routing_authority_phase1\.sql/
+    );
+    expect(safeBootRunner).toMatch(
+      /criticalMigrationFiles\s*=\s*new Set\(\[[\s\S]*0294_shared_department_routing_authority_phase1\.sql/
+    );
   });
 
   it('keeps all Phase 1 flags disabled by default', () => {

@@ -73,4 +73,10 @@ describe('department routing authority Phase 1 foundation', () => {
     expect(routingRoute).toContain('ROUTING_OPERATION_SEQUENCE_INVALID');
     expect(routingRoute).toContain('departmentNameSnapshot');
   });
+
+  it('reads PostgreSQL query results through the pg rows collection', () => {
+    expect(routingRoute).toContain('const item = result.rows[0]');
+    expect(routingRoute).toContain('const department = result.rows[0]');
+    expect(routingRoute).not.toMatch(/const item = rows\[0\]|if \(!rows\[0\]\)/);
+  });
 });

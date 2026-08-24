@@ -39,13 +39,13 @@ async function controlledRoutingIdentity(body: any) {
     error.code = 'ROUTING_INVENTORY_ITEM_FK_REQUIRED';
     throw error;
   }
-  const rows = await pool.query(
+  const result = await pool.query(
     `SELECT id,ag_part_number,name,item_type::text AS item_type,type,
             part_configuration_revision
        FROM inventory_items WHERE id=$1 AND is_active IS DISTINCT FROM false`,
     [inventoryItemFk]
   );
-  const item = rows[0];
+  const item = result.rows[0];
   const manufactured = item &&
     (String(item.item_type || '').toUpperCase() === 'MANUFACTURED' ||
       String(item.type || '').toUpperCase() === 'MANUFACTURED');
@@ -80,12 +80,13 @@ async function controlledOperation(raw: any) {
     error.code = 'ROUTING_OPERATION_DEPARTMENT_ID_REQUIRED';
     throw error;
   }
-  const rows = await pool.query(
+  const result = await pool.query(
     `SELECT id,name FROM inventory_departments
       WHERE id=$1 AND is_active=true AND routing_enabled=true`,
     [departmentId]
   );
-  if (!rows[0]) {
+  const department = result.rows[0];
+  if (!department) {
     const error: any = new Error('Routing department is unavailable.');
     error.status = 409;
     error.code = 'ROUTING_OPERATION_DEPARTMENT_UNAVAILABLE';
@@ -94,8 +95,8 @@ async function controlledOperation(raw: any) {
   return {
     ...raw,
     departmentId,
-    departmentName: rows[0].name,
-    departmentNameSnapshot: rows[0].name,
+    departmentName: department.name,
+    departmentNameSnapshot: department.name,
   };
 }
 

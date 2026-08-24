@@ -1,0 +1,128 @@
+name: P2 department routing PostgreSQL certification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/p2-department-routing-postgres-certification.yml'
+      - 'migrations/0294_shared_department_routing_authority_phase1.sql'
+      - 'server/__tests__/departmentRoutingAuthorityPhase1.test.ts'
+      - 'server/src/routes/partRoutings.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase1_cert
+          POSTGRES_PASSWORD: phase1_disposable_password
+          POSTGRES_DB: phase1_certification
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U phase1_cert -d phase1_certification"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql://phase1_cert:phase1_disposable_password@127.0.0.1:5432/phase1_certification
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install committed dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run focused Phase 1 contract tests
+        run: >-
+          npx vitest run --config vitest.config.server.ts
+          server/__tests__/departmentRoutingAuthorityPhase1.test.ts
+          --reporter=verbose
+
+      - name: Prove disposable database boundary
+        shell: bash
+        run: |
+          test "$(psql "$DATABASE_URL" -Atc "SELECT inet_server_addr()::text")" = '127.0.0.1'
+          test "$(psql "$DATABASE_URL" -Atc "SELECT current_database()")" = 'phase1_certification'
+
+      - name: Certify clean, populated, replay, preservation, and rollback behavior
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE inventory_departments (
+            id serial PRIMARY KEY, name text NOT NULL, is_active boolean DEFAULT true,
+            sort_order integer DEFAULT 0
+          );
+          CREATE TABLE inventory_items (
+            id serial PRIMARY KEY, ag_part_number text NOT NULL
+          );
+          CREATE TABLE part_routings (
+            id uuid PRIMARY KEY, inventory_item_id text NOT NULL
+          );
+          CREATE TABLE routing_operations (
+            id serial PRIMARY KEY, part_routing_id uuid NOT NULL,
+            step_number integer NOT NULL, department_name text NOT NULL
+          );
+          INSERT INTO inventory_departments(name) VALUES ('Legacy Layup');
+          INSERT INTO inventory_items(ag_part_number) VALUES ('AG-LEGACY-1');
+          INSERT INTO part_routings(id, inventory_item_id)
+            VALUES ('00000000-0000-0000-0000-000000000001', 'legacy-text-id');
+          INSERT INTO routing_operations(part_routing_id, step_number, department_name)
+            VALUES ('00000000-0000-0000-0000-000000000001', 1, 'Legacy Layup');
+          CREATE TEMP TABLE before_state AS
+            SELECT
+              (SELECT count(*) FROM inventory_departments) AS department_count,
+              (SELECT count(*) FROM inventory_items) AS item_count,
+              (SELECT count(*) FROM part_routings) AS routing_count,
+              (SELECT count(*) FROM routing_operations) AS operation_count,
+              md5((SELECT string_agg(id::text || ':' || name, ',' ORDER BY id) FROM inventory_departments)) AS department_digest,
+              md5((SELECT string_agg(id::text || ':' || inventory_item_id, ',' ORDER BY id) FROM part_routings)) AS routing_digest,
+              md5((SELECT string_agg(id::text || ':' || department_name, ',' ORDER BY id) FROM routing_operations)) AS operation_digest;
+          \i migrations/0294_shared_department_routing_authority_phase1.sql
+          \i migrations/0294_shared_department_routing_authority_phase1.sql
+          DO $$
+          DECLARE changed boolean;
+          BEGIN
+            SELECT before_state IS DISTINCT FROM after_state INTO changed
+            FROM before_state,
+            LATERAL (
+              SELECT
+                (SELECT count(*) FROM inventory_departments) AS department_count,
+                (SELECT count(*) FROM inventory_items) AS item_count,
+                (SELECT count(*) FROM part_routings) AS routing_count,
+                (SELECT count(*) FROM routing_operations) AS operation_count,
+                md5((SELECT string_agg(id::text || ':' || name, ',' ORDER BY id) FROM inventory_departments)) AS department_digest,
+                md5((SELECT string_agg(id::text || ':' || inventory_item_id, ',' ORDER BY id) FROM part_routings)) AS routing_digest,
+                md5((SELECT string_agg(id::text || ':' || department_name, ',' ORDER BY id) FROM routing_operations)) AS operation_digest
+            ) after_state;
+            IF changed THEN RAISE EXCEPTION 'Historical rows changed'; END IF;
+          END $$;
+          BEGIN;
+          INSERT INTO inventory_departments(name, department_code) VALUES ('Rollback Department', 'ROLLBACK');
+          ROLLBACK;
+          DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM inventory_departments WHERE department_code = 'ROLLBACK') THEN
+              RAISE EXCEPTION 'Transaction rollback failed';
+            END IF;
+          END $$;
+          SQL
+
+      - name: Prove Phase 1 runtime flags remain disabled
+        shell: bash
+        run: |
+          test -z "${SHARED_INVENTORY_DEPARTMENT_READS_ENABLED:-}"
+          test -z "${SHARED_INVENTORY_DEPARTMENT_WRITES_ENABLED:-}"
+          test -z "${STABLE_ROUTING_INVENTORY_ITEM_FK_ENABLED:-}"
+          test -z "${ROUTING_OPERATION_DEPARTMENT_IDS_ENABLED:-}"

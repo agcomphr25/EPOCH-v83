@@ -80,7 +80,7 @@ const draftBuilderInventoryItemSchema = z.object({
   department: z.string().optional().nullable(),
   isManufactured: z.boolean().default(false),
   manufacturedCategory: z
-    .enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT'])
+    .enum(['PACKET', 'FOAM_CUTTING', 'THREE_D_PRINTING_CUTTING', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT'])
     .optional()
     .nullable(),
   project: z.string().optional().nullable(),

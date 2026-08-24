@@ -721,6 +721,8 @@ export const inventoryManufacturedCategoryEnum = pgEnum(
   'inventory_manufactured_category',
   [
     'PACKET',
+    'FOAM_CUTTING',
+    'THREE_D_PRINTING_CUTTING',
     'KIT',
     'MACHINED_PART',
     'CORE',
@@ -3003,6 +3005,8 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     manufacturedCategory: z
       .enum([
         'PACKET',
+        'FOAM_CUTTING',
+        'THREE_D_PRINTING_CUTTING',
         'KIT',
         'MACHINED_PART',
         'CORE',

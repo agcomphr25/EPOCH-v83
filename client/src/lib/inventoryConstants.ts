@@ -2,6 +2,8 @@ import type { ManufacturedCategory, SupplySourceDashboard } from '@shared/schema
 
 export const MANUFACTURED_CATEGORY_ORDER: ManufacturedCategory[] = [
   'PACKET',
+  'FOAM_CUTTING',
+  'THREE_D_PRINTING_CUTTING',
   'KIT',
   'MACHINED_PART',
   'CORE',
@@ -14,6 +16,8 @@ export const MANUFACTURED_CATEGORY_ORDER: ManufacturedCategory[] = [
 
 export const CATEGORY_DISPLAY_NAMES: Record<ManufacturedCategory, string> = {
   PACKET: 'Packet',
+  FOAM_CUTTING: 'Foam Cutting',
+  THREE_D_PRINTING_CUTTING: '3d Printing/Cutting',
   KIT: 'Kitting',
   MACHINED_PART: 'Machined Part',
   CORE: 'Core',

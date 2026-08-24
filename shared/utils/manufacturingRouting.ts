@@ -1,5 +1,7 @@
 export type ManufacturedCategory =
   | 'PACKET'
+  | 'FOAM_CUTTING'
+  | 'THREE_D_PRINTING_CUTTING'
   | 'KIT'
   | 'MACHINED_PART'
   | 'CORE'
@@ -54,6 +56,26 @@ export const MANUFACTURING_ROUTE_DEFINITIONS: Record<ManufacturedCategory, Manuf
   PACKET: {
     category: 'PACKET',
     displayName: 'Packet',
+    dashboard: 'CUTTING_TABLE',
+    queueType: 'CUTTING_TABLE',
+    swimlane: 'CUTTING_TABLE_DEMAND',
+    department: 'Cutting Table',
+    canRelease: true,
+    includeInBomExplosion: true,
+  },
+  FOAM_CUTTING: {
+    category: 'FOAM_CUTTING',
+    displayName: 'Foam Cutting',
+    dashboard: 'CUTTING_TABLE',
+    queueType: 'CUTTING_TABLE',
+    swimlane: 'CUTTING_TABLE_DEMAND',
+    department: 'Cutting Table',
+    canRelease: true,
+    includeInBomExplosion: true,
+  },
+  THREE_D_PRINTING_CUTTING: {
+    category: 'THREE_D_PRINTING_CUTTING',
+    displayName: '3d Printing/Cutting',
     dashboard: 'CUTTING_TABLE',
     queueType: 'CUTTING_TABLE',
     swimlane: 'CUTTING_TABLE_DEMAND',

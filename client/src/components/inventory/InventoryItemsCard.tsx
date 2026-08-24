@@ -720,6 +720,8 @@ const InventoryForm = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="PACKET">Packet</SelectItem>
+                  <SelectItem value="FOAM_CUTTING">Foam Cutting</SelectItem>
+                  <SelectItem value="THREE_D_PRINTING_CUTTING">3d Printing/Cutting</SelectItem>
                   <SelectItem value="KIT">Kitting</SelectItem>
                   <SelectItem value="MACHINED_PART">Machined Part</SelectItem>
                   <SelectItem value="CORE">Core</SelectItem>
@@ -1698,7 +1700,7 @@ const inventoryFormSchema = z.object({
   agPartNumber: z.string().min(1, 'AG Part# is required'),
   name: z.string().min(1, 'Name is required'),
   itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
-  manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
+  manufacturedCategory: z.enum(['PACKET', 'FOAM_CUTTING', 'THREE_D_PRINTING_CUTTING', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
 }).refine(
   (data) => {
     if (data.itemType === 'MANUFACTURED') return !!data.manufacturedCategory;
@@ -2731,7 +2733,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         type: formData.type || 'Purchased',
         itemType: (formData.itemType || (formData.type === 'Manufactured' ? 'MANUFACTURED' : 'PURCHASED')) as 'PURCHASED' | 'MANUFACTURED',
         manufacturedCategory: (formData.itemType === 'MANUFACTURED' || formData.type === 'Manufactured') && formData.manufacturedCategory
-          ? formData.manufacturedCategory as 'PACKET' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY' | 'FINAL_ASSEMBLY' | 'COMPOSITE' | 'COMPONENT'
+          ? formData.manufacturedCategory as 'PACKET' | 'FOAM_CUTTING' | 'THREE_D_PRINTING_CUTTING' | 'KIT' | 'MACHINED_PART' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY' | 'FINAL_ASSEMBLY' | 'COMPOSITE' | 'COMPONENT'
           : null,
         manufacturingLevel: (formData.itemType === 'MANUFACTURED' || formData.type === 'Manufactured') && formData.manufacturingLevel
           ? formData.manufacturingLevel as 'COMPONENT' | 'INTERMEDIATE' | 'FINAL'

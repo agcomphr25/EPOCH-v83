@@ -2,6 +2,9 @@ name: P2 department routing PostgreSQL certification
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'codex/p2-department-routing-authority'
   pull_request:
     paths:
       - '.github/workflows/p2-department-routing-postgres-certification.yml'

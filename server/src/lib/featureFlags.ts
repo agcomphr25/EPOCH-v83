@@ -93,6 +93,23 @@ export function isP2V2ComponentTravelerProvisioningEnabled(): boolean {
   return process.env.P2_V2_COMPONENT_TRAVELER_PROVISIONING_ENABLED === 'true';
 }
 
+/** Phase 1 department/routing foundation flags. All are disabled by default. */
+export function areSharedInventoryDepartmentReadsEnabled(): boolean {
+  return envBool('SHARED_INVENTORY_DEPARTMENT_READS_ENABLED', false);
+}
+
+export function areSharedInventoryDepartmentWritesEnabled(): boolean {
+  return envBool('SHARED_INVENTORY_DEPARTMENT_WRITES_ENABLED', false);
+}
+
+export function isStableRoutingInventoryItemFkEnabled(): boolean {
+  return envBool('STABLE_ROUTING_INVENTORY_ITEM_FK_ENABLED', false);
+}
+
+export function areRoutingOperationDepartmentIdsEnabled(): boolean {
+  return envBool('ROUTING_OPERATION_DEPARTMENT_IDS_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

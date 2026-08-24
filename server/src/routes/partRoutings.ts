@@ -1,9 +1,21 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
-import { insertPartRoutingSchema, insertRoutingOperationSchema, insertRoutingCncOperationSchema, insertRoutingDependencySchema, updateRoutingDependencySchema } from '../../schema';
-import { pool } from '../../db';
+import { insertPartRoutingSchema, insertRoutingOperationSchema, insertRoutingCncOperationSchema, insertRoutingDependencySchema, updateRoutingDependencySchema, partRoutings, routingOperations } from '../../schema';
+import { db, pool } from '../../db';
+import { eq } from 'drizzle-orm';
 import { evaluateDocumentationRequirements } from '../lib/documentationRequirementsEngine';
+import {
+  areRoutingOperationDepartmentIdsEnabled,
+  areSharedInventoryDepartmentReadsEnabled,
+  areSharedInventoryDepartmentWritesEnabled,
+  isStableRoutingInventoryItemFkEnabled,
+} from '../lib/featureFlags';
+import {
+  createSharedDepartment,
+  listSharedDepartments,
+} from '../services/sharedDepartmentService';
+import { requirePermission } from '../../middleware/requirePermission';
 import OpenAI from 'openai';
 
 let openaiClient: OpenAI | null = null;
@@ -17,6 +29,76 @@ function getOpenAI(): OpenAI {
 }
 
 const router = Router();
+
+async function controlledRoutingIdentity(body: any) {
+  if (!isStableRoutingInventoryItemFkEnabled()) return body;
+  const inventoryItemFk = Number(body?.inventoryItemFk);
+  if (!Number.isSafeInteger(inventoryItemFk) || inventoryItemFk <= 0) {
+    const error: any = new Error('A real manufactured inventory item is required.');
+    error.status = 400;
+    error.code = 'ROUTING_INVENTORY_ITEM_FK_REQUIRED';
+    throw error;
+  }
+  const result = await pool.query(
+    `SELECT id,ag_part_number,name,item_type::text AS item_type,type,
+            part_configuration_revision
+       FROM inventory_items WHERE id=$1 AND is_active IS DISTINCT FROM false`,
+    [inventoryItemFk]
+  );
+  const item = result.rows[0];
+  const manufactured = item &&
+    (String(item.item_type || '').toUpperCase() === 'MANUFACTURED' ||
+      String(item.type || '').toUpperCase() === 'MANUFACTURED');
+  if (!manufactured) {
+    const error: any = new Error('Routing inventory item must be an active manufactured item.');
+    error.status = 409;
+    error.code = 'ROUTING_INVENTORY_ITEM_NOT_MANUFACTURED';
+    throw error;
+  }
+  if (body.partNumber && String(body.partNumber).trim() !== String(item.ag_part_number).trim()) {
+    const error: any = new Error('Routing part snapshot does not match the selected inventory item.');
+    error.status = 409;
+    error.code = 'ROUTING_INVENTORY_IDENTITY_MISMATCH';
+    throw error;
+  }
+  return {
+    ...body,
+    inventoryItemFk,
+    inventoryItemId: String(item.id),
+    partNumber: String(item.ag_part_number),
+    partName: String(item.name),
+    partRevisionSnapshot: String(item.part_configuration_revision || '').trim() || null,
+  };
+}
+
+async function controlledOperation(raw: any) {
+  if (!areRoutingOperationDepartmentIdsEnabled()) return raw;
+  const departmentId = Number(raw?.departmentId);
+  if (!Number.isSafeInteger(departmentId) || departmentId <= 0) {
+    const error: any = new Error('Every new routing operation requires a shared department ID.');
+    error.status = 400;
+    error.code = 'ROUTING_OPERATION_DEPARTMENT_ID_REQUIRED';
+    throw error;
+  }
+  const result = await pool.query(
+    `SELECT id,name FROM inventory_departments
+      WHERE id=$1 AND is_active=true AND routing_enabled=true`,
+    [departmentId]
+  );
+  const department = result.rows[0];
+  if (!department) {
+    const error: any = new Error('Routing department is unavailable.');
+    error.status = 409;
+    error.code = 'ROUTING_OPERATION_DEPARTMENT_UNAVAILABLE';
+    throw error;
+  }
+  return {
+    ...raw,
+    departmentId,
+    departmentName: department.name,
+    departmentNameSnapshot: department.name,
+  };
+}
 
 async function ensureTablesExist() {
   try {
@@ -274,7 +356,7 @@ router.post('/', async (req: Request, res: Response) => {
     console.log('[PartRouting POST] Full body:', JSON.stringify(req.body, null, 2));
     console.log('[PartRouting POST] =====================================');
     
-    const validatedData = insertPartRoutingSchema.parse(req.body);
+    const validatedData = insertPartRoutingSchema.parse(await controlledRoutingIdentity(req.body));
     console.log('[PartRouting POST] Validation passed, creating routing...');
     const routing = await storage.createPartRouting(validatedData);
     res.status(201).json(routing);
@@ -306,7 +388,8 @@ router.post('/', async (req: Request, res: Response) => {
     console.error('[PartRouting POST] Non-Zod error:', error);
     console.error('[PartRouting POST] ===========================');
     
-    res.status(500).json({ 
+    res.status(error.status || 500).json({
+      code: error.code,
       error: 'Failed to create part routing',
       message: error.message 
     });
@@ -323,7 +406,14 @@ router.patch('/:id', async (req: Request, res: Response) => {
     console.log('[PartRouting PATCH] =====================================');
     
     const { id } = req.params;
-    const validatedData = insertPartRoutingSchema.partial().parse(req.body);
+    const existing = await storage.getPartRouting(id);
+    if (!existing) return res.status(404).json({ error: 'Part routing not found' });
+    if (areRoutingOperationDepartmentIdsEnabled() && existing.inventoryItemFk && req.body?.departmentSequence)
+      return res.status(409).json({ error: 'ROUTING_OPERATION_SEQUENCE_AUTHORITY', message: 'The compatibility sequence is derived from ordered routing operations.' });
+    const candidate = isStableRoutingInventoryItemFkEnabled() && existing.inventoryItemFk
+      ? await controlledRoutingIdentity({ ...existing, ...req.body })
+      : req.body;
+    const validatedData = insertPartRoutingSchema.partial().parse(candidate);
     const routing = await storage.updatePartRouting(id, validatedData);
     res.json(routing);
   } catch (error: any) {
@@ -380,6 +470,9 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
 router.get('/departments/list', async (_req: Request, res: Response) => {
   try {
+    if (areSharedInventoryDepartmentReadsEnabled()) {
+      return res.json(await listSharedDepartments({ routingOnly: true }));
+    }
     const rows = await pool.query(
       `SELECT id::text, name, display_order AS "displayOrder", is_active AS "isActive",
               created_at AS "createdAt", updated_at AS "updatedAt"
@@ -396,6 +489,23 @@ router.get('/departments/list', async (_req: Request, res: Response) => {
 
 router.post('/departments', async (req: Request, res: Response) => {
   try {
+    if (areSharedInventoryDepartmentWritesEnabled()) {
+      return requirePermission('inventory.adjust')(req, res, async () => {
+        try {
+          const name = String(req.body?.name || '').trim();
+          const departmentCode = String(req.body?.departmentCode || '').trim();
+          if (!name || !departmentCode)
+            return res.status(400).json({ error: 'name and departmentCode are required' });
+          const user = req.user as any;
+          return res.status(201).json(await createSharedDepartment(
+            { name, departmentCode },
+            { id: Number(user?.id) || null, username: user?.username, role: user?.role }
+          ));
+        } catch (error: any) {
+          return res.status(error.status || 500).json({ error: error.code || error.message });
+        }
+      });
+    }
     console.log('[PartRoutings] POST /departments body:', JSON.stringify(req.body));
     const { name } = req.body || {};
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -700,23 +810,43 @@ router.get('/:id/operations', async (req: Request, res: Response) => {
 // POST /api/part-routings/:id/operations
 router.post('/:id/operations', async (req: Request, res: Response) => {
   try {
-    const data = insertRoutingOperationSchema.parse({ ...req.body, partRoutingId: req.params.id });
+    const data = insertRoutingOperationSchema.parse(await controlledOperation({ ...req.body, partRoutingId: req.params.id }));
     const op = await storage.createRoutingOperation(data);
     res.status(201).json(op);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Validation error', issues: error.issues });
     }
-    res.status(500).json({ error: 'Failed to create routing operation', message: error.message });
+    res.status(error.status || 500).json({ error: error.code || 'Failed to create routing operation', message: error.message });
   }
 });
 
 // PUT /api/part-routings/:id/operations/replace
 router.put('/:id/operations/replace', async (req: Request, res: Response) => {
   try {
-    const rawOps = z.array(insertRoutingOperationSchema.partial().required({ stepNumber: true, departmentName: true, operationName: true, operationType: true })).parse(req.body);
+    const prepared = await Promise.all((Array.isArray(req.body) ? req.body : []).map(controlledOperation));
+    const rawOps = z.array(insertRoutingOperationSchema.partial().required({ stepNumber: true, departmentName: true, operationName: true, operationType: true })).parse(prepared);
+    if (areRoutingOperationDepartmentIdsEnabled()) {
+      const steps = rawOps.map((op: any) => op.stepNumber);
+      if (new Set(steps).size !== steps.length || steps.some((step, index) => step !== index + 1))
+        return res.status(409).json({ error: 'ROUTING_OPERATION_SEQUENCE_INVALID', message: 'Operation steps must be unique and contiguous starting at 1.' });
+    }
     const ops = rawOps.map((op: any) => ({ ...op, partRoutingId: req.params.id }));
-    const result = await storage.replaceRoutingOperations(req.params.id, ops as any);
+    const result = areRoutingOperationDepartmentIdsEnabled()
+      ? await db.transaction(async (tx) => {
+          await tx.delete(routingOperations).where(eq(routingOperations.partRoutingId, req.params.id));
+          const inserted = ops.length
+            ? await tx.insert(routingOperations).values(ops as any).returning()
+            : [];
+          await tx.update(partRoutings)
+            .set({
+              departmentSequence: inserted.map((op) => op.departmentNameSnapshot),
+              updatedAt: new Date(),
+            })
+            .where(eq(partRoutings.id, req.params.id));
+          return inserted;
+        })
+      : await storage.replaceRoutingOperations(req.params.id, ops as any);
     res.json(result);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -731,7 +861,7 @@ router.put('/:id/operations/:operationId', async (req: Request, res: Response) =
   try {
     const operationId = parseInt(req.params.operationId, 10);
     if (isNaN(operationId)) return res.status(400).json({ error: 'Invalid operation id' });
-    const data = insertRoutingOperationSchema.partial().parse(req.body);
+    const data = insertRoutingOperationSchema.partial().parse(await controlledOperation(req.body));
     const op = await storage.updateRoutingOperation(operationId, data);
     res.json(op);
   } catch (error: any) {

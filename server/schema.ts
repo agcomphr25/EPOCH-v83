@@ -46,11 +46,23 @@ import { getManufacturingRouteDefinition as resolveManufacturingRouteDefinition 
 export const inventoryDepartments = pgTable('inventory_departments', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
+  departmentCode: text('department_code'),
   isActive: boolean('is_active').default(true),
+  routingEnabled: boolean('routing_enabled').notNull().default(true),
+  productionEnabled: boolean('production_enabled').notNull().default(true),
+  schedulingEnabled: boolean('scheduling_enabled').notNull().default(true),
   sortOrder: integer('sort_order').default(0),
   defaultReceivingLocation: text('default_receiving_location'),
   defaultReceivingFreezer: integer('default_receiving_freezer'),
-});
+  createdBy: text('created_by'),
+  updatedBy: text('updated_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  departmentCodeUnique: uniqueIndex('inventory_departments_department_code_uidx')
+    .on(sql`lower(${table.departmentCode})`)
+    .where(sql`${table.departmentCode} IS NOT NULL`),
+}));
 
 export const insertInventoryDepartmentSchema = createInsertSchema(
   inventoryDepartments
@@ -769,6 +781,10 @@ export const inventoryItems = pgTable('inventory_items', {
   assignedDepartments: jsonb('assigned_departments')
     .$type<string[]>()
     .default(sql`'[]'::jsonb`), // Departments that can request/use this part
+  defaultDepartmentId: integer('default_department_id').references(
+    () => inventoryDepartments.id,
+    { onDelete: 'restrict' }
+  ), // Prospective owning/default department; released routing remains execution authority
   secondarySource: text('secondary_source'), // Secondary Source
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
@@ -865,7 +881,11 @@ export const inventoryItems = pgTable('inventory_items', {
   outTimeEnforcementRequired: boolean('out_time_enforcement_required')
     .notNull()
     .default(false),
-});
+}, (table) => ({
+  defaultDepartmentIdx: index('inventory_items_default_department_id_idx').on(
+    table.defaultDepartmentId
+  ),
+}));
 
 // Inventory Item Cost History - Tracks price changes over time
 export const inventoryItemCostHistory = pgTable('inventory_item_cost_history', {
@@ -6707,6 +6727,10 @@ export const partRoutings = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     inventoryItemId: text('inventory_item_id').notNull(), // Reference to inventory item
+    inventoryItemFk: integer('inventory_item_fk').references(
+      () => inventoryItems.id,
+      { onDelete: 'restrict' }
+    ), // Prospective stable inventory identity; legacy text remains unchanged
     projectId: uuid('project_id').references(() => projects.id, {
       onDelete: 'set null',
     }), // Nullable for legacy routings
@@ -6714,6 +6738,7 @@ export const partRoutings = pgTable(
     partName: text('part_name').notNull(), // Denormalized for display
     routingName: text('routing_name').default('Default').notNull(), // AS9100 routing name for revision control
     routingRevision: integer('routing_revision').default(1).notNull(), // AS9100 controlled revision number
+    partRevisionSnapshot: text('part_revision_snapshot'),
     departmentSequence: jsonb('department_sequence').notNull(), // Array of department names in order: ["Layup", "CNC", "Finish"]
     traceabilityConfig: jsonb('traceability_config').notNull(), // Requirements per department: { "Layup": ["lot_number", "batch_number", "expiration"], "CNC": ["custom_1"] }
     departmentConfig: jsonb('department_config'), // Full department configuration: { "Layup": { materials: [{partId, partNumber, partName, requiredFields, entryMethod}], technicianRequired: bool, qcStandards: [{standard, tolerance, requirement}] } }
@@ -6736,6 +6761,9 @@ export const partRoutings = pgTable(
     inventoryItemIdx: index('part_routings_inventory_item_idx').on(
       table.inventoryItemId
     ),
+    inventoryItemFkIdx: index('part_routings_inventory_item_fk_idx').on(
+      table.inventoryItemFk
+    ),
     projectIdx: index('part_routings_project_idx').on(table.projectId),
   })
 );
@@ -6750,6 +6778,11 @@ export const routingOperations = pgTable('routing_operations', {
 
   stepNumber: integer('step_number').notNull(),
   departmentName: text('department_name').notNull(),
+  departmentId: integer('department_id').references(
+    () => inventoryDepartments.id,
+    { onDelete: 'restrict' }
+  ),
+  departmentNameSnapshot: text('department_name_snapshot'),
 
   operationName: text('operation_name').notNull(),
 
@@ -6784,7 +6817,14 @@ export const routingOperations = pgTable('routing_operations', {
   instructionPack: jsonb('instruction_pack').default('{}'),
 
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  departmentIdx: index('routing_operations_department_id_idx').on(
+    table.departmentId
+  ),
+  routingStepUnique: uniqueIndex('routing_operations_routing_step_uidx')
+    .on(table.partRoutingId, table.stepNumber)
+    .where(sql`${table.departmentId} IS NOT NULL`),
+}));
 
 // CNC Extension for Routing Operations - links CNC-specific data to a routing operation
 export const routingCncOperations = pgTable('routing_cnc_operations', {

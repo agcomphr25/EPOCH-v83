@@ -376,6 +376,7 @@ interface InventoryFormData {
   orderDate: string;
   department: string;
   assignedDepartments: string[];
+  defaultDepartmentId: string;
   leadTimeDays: string;
   secondarySource: string;
   notes: string;
@@ -449,7 +450,7 @@ const InventoryForm = ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vendors: any[];
   assets: { id: string; assetTag: string; name: string; status: string }[];
-  departments: { id: number; name: string }[];
+  departments: { id: number; name: string; departmentCode?: string | null }[];
   sdsFile: File | null;
   currentSdsFileName: string | null;
   tdsFile: File | null;
@@ -462,6 +463,8 @@ const InventoryForm = ({
   onSaveTraceabilityFields: (fields: string[]) => void;
   onTraceabilityConfigChange: (config: TraceabilityFieldConfig) => void;
 }) => {
+  const sharedDepartmentPhase1 =
+    import.meta.env.VITE_SHARED_INVENTORY_DEPARTMENT_WRITES_ENABLED === 'true';
   const queryClient = useQueryClient();
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
@@ -511,17 +514,24 @@ const InventoryForm = ({
   );
   const createDepartmentMutation = useMutation({
     mutationFn: (name: string) =>
-      apiRequest('/api/inventory/departments', {
+      apiRequest(sharedDepartmentPhase1 ? '/api/shared-departments' : '/api/inventory/departments', {
         method: 'POST',
         body: {
           name,
+          ...(sharedDepartmentPhase1
+            ? { departmentCode: name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_') }
+            : {}),
           isActive: true,
           sortOrder: sortedDepartments.length + 1,
         },
       }),
-    onSuccess: async (department: { name?: string }) => {
+    onSuccess: async (department: { id?: number; name?: string }) => {
       const departmentName = department?.name || newDepartmentName.trim();
       await queryClient.invalidateQueries({ queryKey: ['/api/inventory/departments'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/shared-departments'] });
+      if (sharedDepartmentPhase1 && department.id) {
+        onSelectChange('defaultDepartmentId', String(department.id));
+      }
       if (departmentName && !formData.assignedDepartments.includes(departmentName)) {
         onMultiSelectChange('assignedDepartments', [
           ...formData.assignedDepartments,
@@ -1309,6 +1319,30 @@ const InventoryForm = ({
         Additional Information
       </h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {sharedDepartmentPhase1 && formData.itemType === 'MANUFACTURED' && (
+          <div className="md:col-span-2">
+            <Label htmlFor="defaultDepartmentId">Default Manufacturing Department</Label>
+            <Select
+              value={formData.defaultDepartmentId || 'none'}
+              onValueChange={(value) => onSelectChange('defaultDepartmentId', value === 'none' ? '' : value)}
+            >
+              <SelectTrigger id="defaultDepartmentId" data-testid="select-default-manufacturing-department">
+                <SelectValue placeholder="Select the owning department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No default department</SelectItem>
+                {sortedDepartments.map((dept) => (
+                  <SelectItem key={dept.id} value={String(dept.id)}>
+                    {dept.departmentCode ? `${dept.departmentCode} — ` : ''}{dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              The released routing determines where production work begins.
+            </p>
+          </div>
+        )}
         <div className="md:col-span-2">
           <Label htmlFor="assignedDepartments">Assigned Departments *</Label>
           <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
@@ -1837,6 +1871,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     orderDate: '',
     department: '',
     assignedDepartments: [],
+    defaultDepartmentId: '',
     leadTimeDays: '',
     secondarySource: '',
     notes: '',
@@ -1980,8 +2015,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   });
 
   // Fetch departments
-  const { data: departments = [] } = useQuery<{ id: number; name: string }[]>({
-    queryKey: ['/api/inventory/departments'],
+  const sharedDepartmentPhase1 =
+    import.meta.env.VITE_SHARED_INVENTORY_DEPARTMENT_READS_ENABLED === 'true';
+  const { data: departments = [] } = useQuery<{ id: number; name: string; departmentCode?: string | null }[]>({
+    queryKey: [sharedDepartmentPhase1 ? '/api/shared-departments' : '/api/inventory/departments'],
   });
 
   // Fetch all item groups
@@ -2526,6 +2563,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       orderDate: '',
       department: '',
       assignedDepartments: [],
+      defaultDepartmentId: '',
       leadTimeDays: '',
       secondarySource: '',
       notes: '',
@@ -2679,6 +2717,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       orderDate: item.orderDate ? new Date(item.orderDate).toISOString().split('T')[0] : '',
       department: item.department || '',
       assignedDepartments: (item as any).assignedDepartments || [],
+      defaultDepartmentId: (item as any).defaultDepartmentId?.toString() || '',
       leadTimeDays: item.leadTimeDays ? item.leadTimeDays.toString() : '',
       secondarySource: item.secondarySource || '',
       notes: item.notes || '',
@@ -2768,6 +2807,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         orderDate: formData.orderDate || null,
         department: formData.assignedDepartments.length > 0 ? formData.assignedDepartments[0] : null,
         assignedDepartments: formData.assignedDepartments,
+        defaultDepartmentId: formData.defaultDepartmentId ? parseInt(formData.defaultDepartmentId) : null,
         leadTimeDays: parseLeadTimeToDays(formData.leadTimeDays),
         secondarySource: formData.secondarySource || null,
         notes: formData.notes || null,

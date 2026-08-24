@@ -78,8 +78,9 @@ const DEFAULT_P2_DEPARTMENTS = [
 ];
 
 interface RoutingDepartment {
-  id: string;
+  id: string | number;
   name: string;
+  departmentCode?: string | null;
   displayOrder: number;
   isActive: boolean;
 }
@@ -100,6 +101,9 @@ interface InventoryItem {
   agPartNumber: string;
   name: string;
   description?: string;
+  itemType?: string | null;
+  manufacturedCategory?: string | null;
+  defaultDepartmentId?: number | null;
 }
 
 interface ProjectOption {
@@ -332,6 +336,12 @@ interface PartRoutingWizardProps {
 }
 
 export default function PartRoutingWizard({ open, onOpenChange, editRouting, poId }: PartRoutingWizardProps) {
+  const stableInventoryLinkEnabled =
+    import.meta.env.VITE_STABLE_ROUTING_INVENTORY_ITEM_FK_ENABLED === 'true';
+  const sharedDepartmentsEnabled =
+    import.meta.env.VITE_SHARED_INVENTORY_DEPARTMENT_READS_ENABLED === 'true';
+  const operationDepartmentIdsEnabled =
+    import.meta.env.VITE_ROUTING_OPERATION_DEPARTMENT_IDS_ENABLED === 'true';
   const [step, setStep] = useState(1);
   const [selectedItemId, setSelectedItemId] = useState<string>(editRouting?.inventoryItemId || '');
   const [selectedProjectId, setSelectedProjectId] = useState<string>(editRouting?.projectId || '');
@@ -527,7 +537,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   });
 
   const { data: routingDepartments = [], isLoading: deptLoading } = useQuery<RoutingDepartment[]>({
-    queryKey: ['/api/part-routings/departments/list'],
+    queryKey: [sharedDepartmentsEnabled ? '/api/shared-departments?routingOnly=true' : '/api/part-routings/departments/list'],
     enabled: open,
   });
 
@@ -548,7 +558,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
     : DEFAULT_P2_DEPARTMENTS;
 
   const [newDeptName, setNewDeptName] = useState('');
-  const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
+  const [editingDeptId, setEditingDeptId] = useState<string | number | null>(null);
   const [editingDeptName, setEditingDeptName] = useState('');
   const [deptSaving, setDeptSaving] = useState(false);
 
@@ -671,17 +681,36 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   // Create/Update mutation
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
+      let routing: any;
       if (editRouting) {
-        return apiRequest(`/api/part-routings/${editRouting.id}`, {
+        routing = await apiRequest(`/api/part-routings/${editRouting.id}`, {
           method: 'PATCH',
           body: data,
         });
       } else {
-        return apiRequest('/api/part-routings', {
+        routing = await apiRequest('/api/part-routings', {
           method: 'POST',
           body: data,
         });
       }
+      if (operationDepartmentIdsEnabled) {
+        const operations = selectedDepartments.map((name, index) => {
+          const department = routingDepartments.find((entry) => entry.name === name);
+          if (!department) throw new Error(`Shared department identity is missing for ${name}.`);
+          return {
+            stepNumber: index + 1,
+            departmentId: Number(department.id),
+            departmentName: department.name,
+            operationName: `${department.name} operation`,
+            operationType: 'RUN',
+          };
+        });
+        await apiRequest(`/api/part-routings/${routing.id}/operations/replace`, {
+          method: 'PUT',
+          body: operations,
+        });
+      }
+      return routing;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/part-routings'] });
@@ -833,10 +862,13 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
 
     const data = {
       inventoryItemId: String(selectedItem.id), // Ensure inventoryItemId is string
+      ...(stableInventoryLinkEnabled ? { inventoryItemFk: Number(selectedItem.id) } : {}),
       projectId: selectedProjectId || null,
       partNumber: selectedItem.agPartNumber,
       partName: selectedItem.name,
-      departmentSequence: selectedDepartments,
+      ...(!operationDepartmentIdsEnabled || !editRouting
+        ? { departmentSequence: selectedDepartments }
+        : {}),
       traceabilityConfig,
       departmentConfig: sanitizedDepartmentConfig,
       createdBy: editRouting?.createdBy || 'system', // Preserve original creator when editing
@@ -1893,6 +1925,31 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                       <span className="font-mono font-semibold">{selectedItem.agPartNumber}</span>
                       <span className="text-sm">— {selectedItem.name}</span>
                     </div>
+                    {stableInventoryLinkEnabled && (
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        Classification: {selectedItem.itemType || 'Unclassified'}
+                        {selectedItem.manufacturedCategory ? ` / ${selectedItem.manufacturedCategory}` : ''}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {stableInventoryLinkEnabled && selectedItem?.defaultDepartmentId && selectedDepartments.length === 0 && (
+                <Card className="border-dashed">
+                  <CardContent className="p-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Suggested first operation</p>
+                      <p className="text-xs text-muted-foreground">
+                        {routingDepartments.find((d) => Number(d.id) === selectedItem.defaultDepartmentId)?.name || 'Inventory default department'} — confirm to add it to this draft routing.
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => {
+                      const suggested = routingDepartments.find((d) => Number(d.id) === selectedItem.defaultDepartmentId);
+                      if (suggested) toggleDepartment(suggested.name);
+                    }}>
+                      Confirm first operation
+                    </Button>
                   </CardContent>
                 </Card>
               )}
@@ -1914,7 +1971,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                             data-testid={`button-add-dept-${dept.toLowerCase().replace(/[\/\s]/g, '-')}`}
                           >
                             <ChevronRight className="mr-2 h-4 w-4" />
-                            {dept}
+                            {deptRecord?.departmentCode ? `${deptRecord.departmentCode} — ` : ''}{dept}
                           </Button>
                           {deptRecord && (
                             <Button
@@ -2027,7 +2084,12 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
                           try {
                             await apiRequest('/api/part-routings/departments', {
                               method: 'POST',
-                              body: { name: newDeptName.trim() },
+                              body: {
+                                name: newDeptName.trim(),
+                                ...(sharedDepartmentsEnabled
+                                  ? { departmentCode: newDeptName.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_') }
+                                  : {}),
+                              },
                             });
                             queryClient.invalidateQueries({ queryKey: ['/api/part-routings/departments/list'] });
                             setNewDeptName('');

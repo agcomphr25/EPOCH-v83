@@ -200,6 +200,7 @@ const TRAVELER_STATUS_STYLES: Record<string, string> = {
 const emptyNewOp = {
   stepNumber: 1,
   departmentName: '',
+  departmentId: null as number | null,
   operationName: '',
   operationType: 'RUN' as RoutingOperation['operationType'],
   workCenter: '',
@@ -229,6 +230,8 @@ function buildNextOperationDraft(
 }
 
 export default function PartRoutingManagement() {
+  const operationDepartmentIdsEnabled =
+    import.meta.env.VITE_ROUTING_OPERATION_DEPARTMENT_IDS_ENABLED === 'true';
   const [, navigate] = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
@@ -246,6 +249,10 @@ export default function PartRoutingManagement() {
     routing: PartRouting | null;
   }>({ open: false, routing: null });
   const [newOp, setNewOp] = useState({ ...emptyNewOp });
+  const { data: sharedDepartments = [] } = useQuery<Array<{ id: number; name: string; departmentCode?: string | null }>>({
+    queryKey: ['/api/shared-departments?routingOnly=true'],
+    enabled: operationDepartmentIdsEnabled,
+  });
   const [depsDialog, setDepsDialog] = useState<{ open: boolean; routing: PartRouting | null }>({ open: false, routing: null });
   const [newDep, setNewDep] = useState({
     dependencyType: 'CHILD_PART',
@@ -952,17 +959,27 @@ export default function PartRoutingManagement() {
               </div>
               <div>
                 <Label className="text-xs mb-1 block">Department</Label>
-                {operationsDialog.routing?.departmentSequence?.length ? (
+                {operationDepartmentIdsEnabled || operationsDialog.routing?.departmentSequence?.length ? (
                   <Select
                     value={newOp.departmentName}
-                    onValueChange={(value) => setNewOp((p) => ({ ...p, departmentName: value }))}
+                    onValueChange={(value) => {
+                      const shared = sharedDepartments.find((department) => department.name === value);
+                      setNewOp((p) => ({ ...p, departmentName: value, departmentId: shared?.id ?? null }));
+                    }}
                   >
                     <SelectTrigger className="h-8">
                       <SelectValue placeholder="Select department" />
                     </SelectTrigger>
                     <SelectContent>
-                      {operationsDialog.routing.departmentSequence.map((dept, idx) => (
-                        <SelectItem key={`${dept}-${idx}`} value={dept}>{dept}</SelectItem>
+                      {(operationDepartmentIdsEnabled
+                        ? sharedDepartments.map((department) => department.name)
+                        : operationsDialog.routing.departmentSequence
+                      ).map((dept, idx) => (
+                        <SelectItem key={`${dept}-${idx}`} value={dept}>
+                          {sharedDepartments.find((department) => department.name === dept)?.departmentCode
+                            ? `${sharedDepartments.find((department) => department.name === dept)?.departmentCode} — `
+                            : ''}{dept}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

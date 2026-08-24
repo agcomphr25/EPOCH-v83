@@ -150,6 +150,7 @@ import p2TravelerViewerRoutes from './p2TravelerViewer';
 import p2ProductionQueueRoutes from './p2ProductionQueue';
 import p2SerializedItemsRoutes from './p2SerializedItems';
 import partRoutingsRoutes from './partRoutings';
+import sharedDepartmentsRoutes from './sharedDepartments';
 import routingTemplatesRoutes from './routingTemplates';
 import engineeringControlRoutes from './engineeringControl';
 import anodizeJobsRoutes from './anodizeJobs';
@@ -1198,6 +1199,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   
   // Part routing management routes
   app.use('/api/part-routings', partRoutingsRoutes);
+  app.use('/api/shared-departments', sharedDepartmentsRoutes);
   app.use('/api/routing-templates', routingTemplatesRoutes);
   app.use('/api/engineering-control', engineeringControlRoutes);
 

@@ -32,6 +32,7 @@ import {
   p2NonconformingDispositions,
   p2SerializedItems,
   travelers,
+  inventoryDepartments,
 } from '@shared/schema';
 
 function withSupplySourceDashboard(item: InventoryItem) {
@@ -54,8 +55,39 @@ import { requireRole } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
 import { getUserPermissions } from '../services/permissionService';
 import { notificationManager } from '../services/notificationManager';
+import { areSharedInventoryDepartmentWritesEnabled } from '../lib/featureFlags';
+import {
+  createSharedDepartment,
+  deactivateUnreferencedDepartment,
+  updateSharedDepartment,
+} from '../services/sharedDepartmentService';
 
 const router = Router();
+
+async function prepareProspectiveDefaultDepartment(data: any, effectiveType?: string | null) {
+  if (!areSharedInventoryDepartmentWritesEnabled()) {
+    const { defaultDepartmentId: _ignored, ...legacyData } = data;
+    return legacyData;
+  }
+  if (data.defaultDepartmentId == null || data.defaultDepartmentId === '')
+    return { ...data, defaultDepartmentId: null };
+  if (String(effectiveType ?? data.itemType ?? '').toUpperCase() !== 'MANUFACTURED')
+    throw new Error('Only manufactured inventory items may have a default manufacturing department.');
+  const id = Number(data.defaultDepartmentId);
+  if (!Number.isSafeInteger(id) || id <= 0)
+    throw new Error('Default manufacturing department is invalid.');
+  const [department] = await db
+    .select({ id: inventoryDepartments.id })
+    .from(inventoryDepartments)
+    .where(and(
+      eq(inventoryDepartments.id, id),
+      eq(inventoryDepartments.isActive, true),
+      eq(inventoryDepartments.productionEnabled, true)
+    ))
+    .limit(1);
+  if (!department) throw new Error('Default manufacturing department is unavailable.');
+  return { ...data, defaultDepartmentId: id };
+}
 
 const isHostedProduction =
   process.env.NODE_ENV === 'production' ||
@@ -686,6 +718,7 @@ router.post('/', requirePermission('inventory.adjust'), handleInventoryPdfUpload
       }
     }
 
+    itemData = await prepareProspectiveDefaultDepartment(itemData, itemData.itemType);
     const newItem = await storage.createInventoryItem(itemData);
     res.status(201).json(withSupplySourceDashboard(newItem));
   } catch (error) {
@@ -740,6 +773,11 @@ router.put('/:id', requirePermission('inventory.adjust'), handleInventoryPdfUplo
       updates.hasOtherDocs = true;
     }
     
+    const existingForDefault = await storage.getInventoryItem(itemId);
+    updates = await prepareProspectiveDefaultDepartment(
+      updates,
+      updates.itemType ?? existingForDefault?.itemType
+    );
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
@@ -863,6 +901,7 @@ router.post('/items', requirePermission('inventory.adjust'), handleInventoryPdfU
       itemData.hasOtherDocs = true;
     }
     
+    itemData = await prepareProspectiveDefaultDepartment(itemData, itemData.itemType);
     // Strip assignedDepartments from JSONB write — junction table is authoritative
     const { assignedDepartments: deptNames, ...itemStorageData } = itemData as any;
     const newItem = await storage.createInventoryItem(itemStorageData);
@@ -959,6 +998,10 @@ router.put('/items/:id', requirePermission('inventory.adjust'), handleInventoryP
       }
     }
 
+    updates = await prepareProspectiveDefaultDepartment(
+      updates,
+      updates.itemType ?? existingItem?.itemType
+    );
     // Strip assignedDepartments from JSONB write — junction table is authoritative
     const { assignedDepartments: deptNames, ...storageUpdates } = updates as any;
     const updatedItem = await storage.updateInventoryItem(itemId, storageUpdates);
@@ -3772,6 +3815,20 @@ router.get('/departments', async (req: Request, res: Response) => {
 
 router.post('/departments', requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
   try {
+    if (areSharedInventoryDepartmentWritesEnabled()) {
+      const user = req.user as any;
+      return res.status(201).json(await createSharedDepartment(
+        {
+          name: String(req.body?.name || ''),
+          departmentCode: String(req.body?.departmentCode || ''),
+          routingEnabled: req.body?.routingEnabled,
+          productionEnabled: req.body?.productionEnabled,
+          schedulingEnabled: req.body?.schedulingEnabled,
+          sortOrder: req.body?.sortOrder,
+        },
+        { id: Number(user?.id) || null, username: user?.username, role: user?.role }
+      ));
+    }
     const { inventoryDepartments, insertInventoryDepartmentSchema } = await import('../../schema');
     const { db } = await import('../../db');
     const departmentData = insertInventoryDepartmentSchema.parse(req.body);
@@ -3789,6 +3846,14 @@ router.post('/departments', requireRole('ADMIN', 'OWNER'), async (req: Request, 
 router.put('/departments/:id', requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
   try {
     const departmentId = parseInt(req.params.id);
+    if (areSharedInventoryDepartmentWritesEnabled()) {
+      const user = req.user as any;
+      return res.json(await updateSharedDepartment(
+        departmentId,
+        req.body,
+        { id: Number(user?.id) || null, username: user?.username, role: user?.role }
+      ));
+    }
     const { inventoryDepartments, insertInventoryDepartmentSchema } = await import('../../schema');
     const { eq } = await import('drizzle-orm');
     const { db } = await import('../../db');
@@ -3812,6 +3877,13 @@ router.put('/departments/:id', requireRole('ADMIN', 'OWNER'), async (req: Reques
 router.delete('/departments/:id', requireRole('ADMIN', 'OWNER'), async (req: Request, res: Response) => {
   try {
     const departmentId = parseInt(req.params.id);
+    if (areSharedInventoryDepartmentWritesEnabled()) {
+      const user = req.user as any;
+      return res.json(await deactivateUnreferencedDepartment(
+        departmentId,
+        { id: Number(user?.id) || null, username: user?.username, role: user?.role }
+      ));
+    }
     await storage.deleteDepartment(departmentId);
     res.status(204).end();
   } catch (error) {

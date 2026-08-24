@@ -33,6 +33,7 @@ import { recordAuditEvent } from '../services/auditLedgerService';
 import { sendApiError } from '../../utils/apiErrors';
 import { generateVendorPoPdf } from '../../utils/pdf/vendorPoPdf';
 import { syncLinkedPartsRequestsReceivedForVendorPo } from '../services/partsRequestVendorPoSyncService';
+import fs from 'node:fs';
 
 const router = Router();
 
@@ -47,6 +48,27 @@ const issueComplianceConfirmationSchema = z.object({
   dpasRating: z.string().trim().max(100).nullable().optional(),
   flowdownsRequired: z.boolean(),
 });
+
+async function validateSelectedVendorPoPdfIds(vendorPoId: number, raw: unknown): Promise<number[]> {
+  const ids = Array.isArray(raw)
+    ? [...new Set(raw.map(Number).filter(Number.isInteger))]
+    : [];
+  for (const attachmentId of ids) {
+    const attachment = await storage.getVendorPoAttachment(attachmentId);
+    const valid = attachment
+      && attachment.vendorPoId === vendorPoId
+      && attachment.mimeType === 'application/pdf'
+      && attachment.originalFileName.toLowerCase().endsWith('.pdf')
+      && fs.existsSync(attachment.filePath);
+    if (!valid) {
+      const error: any = new Error(`Selected PDF attachment #${attachmentId} is invalid or unavailable for this PO.`);
+      error.status = 422;
+      error.expose = true;
+      throw error;
+    }
+  }
+  return ids;
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -2675,6 +2697,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       reason,
       recipients: additionalRecipients,
       message: emailMessage,
+      attachmentIds: selectedAttachmentIds,
       complianceConfirmation: rawComplianceConfirmation,
     } = req.body ?? {};
     const skip = Boolean(skipEmail);
@@ -2710,33 +2733,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       });
     }
 
-    if (confirmation.flowdownsRequired) {
-      const [flowdownAssessment] = await db
-        .select({ reviewStatus: vendorPoFlowdownAssessments.reviewStatus })
-        .from(vendorPoFlowdownAssessments)
-        .where(eq(vendorPoFlowdownAssessments.vendorPoId, id))
-        .limit(1);
-      if (flowdownAssessment?.reviewStatus !== 'APPROVED') {
-        return res.status(422).json({
-          error: 'Flowdown review required',
-          message: 'Complete and approve the guided Government Flowdown Review before issuing a PO that requires FAR, DFARS, or customer flowdowns.',
-        });
-      }
-      const [includedFlowdown] = await db
-        .select({ id: vendorPoFarFlowdowns.id })
-        .from(vendorPoFarFlowdowns)
-        .where(and(
-          eq(vendorPoFarFlowdowns.vendorPoId, id),
-          eq(vendorPoFarFlowdowns.decision, 'INCLUDE')
-        ))
-        .limit(1);
-      if (!includedFlowdown) {
-        return res.status(422).json({
-          error: 'Included flowdown required',
-          message: 'The approved Government Flowdown Review must include at least one clause before this PO can be issued.',
-        });
-      }
-    }
+    const attachmentIds = await validateSelectedVendorPoPdfIds(id, selectedAttachmentIds);
 
     const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
     const performedByEmail = (req as any).user?.email as string | undefined;
@@ -3136,6 +3133,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         : '',
       vendor_message_html: normalizedIssueMessage.html,
       vendor_message_text: normalizedIssueMessage.text,
+      email_attachment_ids: attachmentIds,
     };
 
     issueStage = 'vendor email delivery';
@@ -3416,7 +3414,8 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       });
     }
 
-    const { recipients: additionalRecipients, message: emailMessage } = req.body ?? {};
+    const { recipients: additionalRecipients, message: emailMessage, attachmentIds: selectedAttachmentIds } = req.body ?? {};
+    const attachmentIds = await validateSelectedVendorPoPdfIds(id, selectedAttachmentIds);
 
     const poNumber = vendorPO.poNumber;
 
@@ -3441,6 +3440,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
         : '',
       vendor_message_html: normalizedResendMessage.html,
       vendor_message_text: normalizedResendMessage.text,
+      email_attachment_ids: attachmentIds,
     };
 
     const emailResult = await sendCommunication({

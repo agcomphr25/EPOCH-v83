@@ -123,11 +123,65 @@ type EmailRecipient = {
   type: 'primary' | 'additional' | 'contact';
 };
 
+type VendorPoEmailAttachment = {
+  id: number;
+  originalFileName: string;
+  fileSize: number;
+  mimeType: string;
+};
+
 const DEFAULT_ISSUE_EMAIL_MESSAGE =
   'AG Composites has issued a new Purchase Order to your company. Please see the attached purchase order PDF for details.';
 
 const DEFAULT_RESEND_EMAIL_MESSAGE =
   'AG Composites is resending this Purchase Order. Please see the attached purchase order PDF for details.';
+
+function EmailAttachmentPicker({
+  attachments,
+  selected,
+  onChange,
+  isLoading,
+}: {
+  attachments: VendorPoEmailAttachment[];
+  selected: number[];
+  onChange: (ids: number[]) => void;
+  isLoading: boolean;
+}) {
+  if (isLoading) return <div className="text-sm text-muted-foreground">Loading PDF attachments…</div>;
+  if (attachments.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+        No PDFs uploaded. Use <strong>Attach PDFs</strong> on the PO before sending if documents are needed.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <p className="text-xs text-muted-foreground">The PO PDF is always attached. Select any additional PDFs to send.</p>
+      {attachments.map((attachment) => (
+        <label key={attachment.id} className="flex cursor-pointer items-center gap-3 text-sm">
+          <Checkbox
+            checked={selected.includes(attachment.id)}
+            onCheckedChange={(checked) => onChange(
+              checked ? [...selected, attachment.id] : selected.filter((id) => id !== attachment.id)
+            )}
+          />
+          <FileText className="h-4 w-4 text-red-600" />
+          <span className="flex-1 truncate">{attachment.originalFileName}</span>
+          <a
+            href={`/api/vendor-po-attachments/download/${attachment.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            Preview
+          </a>
+        </label>
+      ))}
+    </div>
+  );
+}
 
 function RecipientPickerList({
   recipients,
@@ -1002,10 +1056,10 @@ function VendorPOAttachments({ vendorPoId }: { vendorPoId: number }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" multiple />
+        <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="application/pdf,.pdf" multiple />
         <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading} data-testid="button-upload-attachment">
           {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-          {isUploading ? 'Uploading...' : 'Upload Files'}
+          {isUploading ? 'Uploading...' : 'Upload PDFs'}
         </Button>
       </div>
       {attachments.length === 0 ? (
@@ -1214,8 +1268,8 @@ function VendorPOCard({
               Create Revision
             </Button>
           )}
-          {/* Show Attach Docs button for issued POs */}
-          {isIssued && (
+          {/* PDFs may be uploaded before issue so they can be selected for the outgoing email. */}
+          {!isVoided && (
             <Button
               variant={showAttachments ? "secondary" : "outline"}
               size="sm"
@@ -1223,7 +1277,7 @@ function VendorPOCard({
               data-testid={`button-attach-docs-${vendorPo.id}`}
             >
               <Paperclip className="w-4 h-4 mr-1" />
-              Attach Docs{attachments.length > 0 && ` (${attachments.length})`}
+              Attach PDFs{attachments.length > 0 && ` (${attachments.length})`}
             </Button>
           )}
           {!isVoided && (
@@ -1263,7 +1317,7 @@ function VendorPOCard({
           </div>
         )}
 
-        {isIssued && showAttachments && (
+        {!isVoided && showAttachments && (
           <div className="mt-3 pt-3 border-t">
             <VendorPOAttachments vendorPoId={vendorPo.id} />
           </div>
@@ -2548,6 +2602,9 @@ export default function VendorPOManager({
   const [dialogRecipients, setDialogRecipients] = useState<EmailRecipient[]>([]);
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
+  const [dialogAttachments, setDialogAttachments] = useState<VendorPoEmailAttachment[]>([]);
+  const [selectedAttachmentIds, setSelectedAttachmentIds] = useState<number[]>([]);
+  const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
   const [emailMessage, setEmailMessage] = useState(DEFAULT_ISSUE_EMAIL_MESSAGE);
 
   // RFQ confirmation dialog state
@@ -2812,10 +2869,10 @@ export default function VendorPOManager({
 
   // Issue PO mutation - sends PO email to vendor
   const issuePOMutation = useMutation({
-    mutationFn: ({ id, skipEmail = false, reason, recipients, message, complianceConfirmation }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[]; message?: string; complianceConfirmation: { dpasRated: boolean; dpasRating: string | null; flowdownsRequired: boolean } }) =>
+    mutationFn: ({ id, skipEmail = false, reason, recipients, message, attachmentIds, complianceConfirmation }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[]; message?: string; attachmentIds?: number[]; complianceConfirmation: { dpasRated: boolean; dpasRating: string | null; flowdownsRequired: boolean } }) =>
       apiRequest(`/api/vendor-pos/${id}/issue`, {
         method: 'POST',
-        body: JSON.stringify({ skipEmail, reason, recipients, message, complianceConfirmation }),
+        body: JSON.stringify({ skipEmail, reason, recipients, message, attachmentIds, complianceConfirmation }),
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
@@ -2879,10 +2936,10 @@ export default function VendorPOManager({
   });
 
   const resendPOMutation = useMutation({
-    mutationFn: ({ id, recipients, message }: { id: number; recipients: string[]; message?: string }) =>
+    mutationFn: ({ id, recipients, message, attachmentIds }: { id: number; recipients: string[]; message?: string; attachmentIds?: number[] }) =>
       apiRequest(`/api/vendor-pos/${id}/resend`, {
         method: 'POST',
-        body: JSON.stringify({ recipients, message }),
+        body: JSON.stringify({ recipients, message, attachmentIds }),
       }),
     onSuccess: (data: any, variables) => {
       queryClient.invalidateQueries({ queryKey: getResendConfirmationKey(variables.id) });
@@ -3027,6 +3084,24 @@ export default function VendorPOManager({
     }
   }
 
+  async function loadAttachmentsForPO(poId: number) {
+    setIsLoadingAttachments(true);
+    setDialogAttachments([]);
+    setSelectedAttachmentIds([]);
+    try {
+      const raw = await apiRequest(`/api/vendor-po-attachments/list/${poId}`) as VendorPoEmailAttachment[];
+      const pdfs = raw.filter(
+        (attachment) => attachment.mimeType === 'application/pdf' && attachment.originalFileName.toLowerCase().endsWith('.pdf')
+      );
+      setDialogAttachments(pdfs);
+      setSelectedAttachmentIds(pdfs.map((attachment) => attachment.id));
+    } catch {
+      toast.error('Could not load PO attachments. No optional documents will be sent.');
+    } finally {
+      setIsLoadingAttachments(false);
+    }
+  }
+
   const handleOpenRFQDialog = () => {
     if (!selectedVendorPO) return;
     setShowRFQDialog(true);
@@ -3038,6 +3113,7 @@ export default function VendorPOManager({
     setEmailMessage(DEFAULT_RESEND_EMAIL_MESSAGE);
     setShowResendDialog(true);
     loadRecipientsForPO(selectedVendorPO.id);
+    loadAttachmentsForPO(selectedVendorPO.id);
   };
 
   const openComplianceModal = async (poId: number) => {
@@ -3135,6 +3211,7 @@ export default function VendorPOManager({
       setPendingStatus('Sent');
       setShowStatusChangeDialog(true);
       loadRecipientsForPO(selectedVendorPO.id);
+      loadAttachmentsForPO(selectedVendorPO.id);
       return;
     }
     setPendingStatus(newStatus);
@@ -3150,6 +3227,7 @@ export default function VendorPOManager({
           reason: skipEmail ? noEmailReason.trim() : undefined,
           recipients: skipEmail ? undefined : selectedRecipients,
           message: skipEmail ? undefined : (emailMessage.trim() || DEFAULT_ISSUE_EMAIL_MESSAGE),
+          attachmentIds: skipEmail ? undefined : selectedAttachmentIds,
           complianceConfirmation: {
             dpasRated: issueDpasDecision === 'yes',
             dpasRating: issueDpasDecision === 'yes' ? issueDpasRating.trim() : null,
@@ -3695,7 +3773,7 @@ export default function VendorPOManager({
                     </Select>
                     {issueFlowdownDecision === 'yes' && (
                       <p className="text-xs text-amber-800">
-                        The guided Government Flowdown Review must be approved before this PO can be issued.
+                        Upload and select any applicable FAR, DFARS, or customer schedule in Email Attachments below.
                       </p>
                     )}
                   </div>
@@ -3723,6 +3801,15 @@ export default function VendorPOManager({
                         rows={4}
                         className="resize-none"
                         data-testid="textarea-vendor-po-email-message"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Email Attachments</Label>
+                      <EmailAttachmentPicker
+                        attachments={dialogAttachments}
+                        selected={selectedAttachmentIds}
+                        onChange={setSelectedAttachmentIds}
+                        isLoading={isLoadingAttachments}
                       />
                     </div>
                   </div>
@@ -3910,7 +3997,7 @@ export default function VendorPOManager({
 
         {/* Resend PO Confirmation Dialog */}
         <AlertDialog open={showResendDialog} onOpenChange={setShowResendDialog}>
-          <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
             <AlertDialogHeader>
               <AlertDialogTitle>Resend Purchase Order</AlertDialogTitle>
               <AlertDialogDescription>
@@ -3926,6 +4013,25 @@ export default function VendorPOManager({
                 isLoading={isLoadingRecipients}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="vendor-po-resend-message" className="text-sm font-medium">Email Message</Label>
+              <Textarea
+                id="vendor-po-resend-message"
+                value={emailMessage}
+                onChange={(event) => setEmailMessage(event.target.value)}
+                rows={4}
+                className="resize-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Email Attachments</Label>
+              <EmailAttachmentPicker
+                attachments={dialogAttachments}
+                selected={selectedAttachmentIds}
+                onChange={setSelectedAttachmentIds}
+                isLoading={isLoadingAttachments}
+              />
+            </div>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <Button
@@ -3935,6 +4041,7 @@ export default function VendorPOManager({
                       id: selectedVendorPO.id,
                       recipients: selectedRecipients,
                       message: emailMessage.trim() || DEFAULT_RESEND_EMAIL_MESSAGE,
+                      attachmentIds: selectedAttachmentIds,
                     });
                   }
                 }}

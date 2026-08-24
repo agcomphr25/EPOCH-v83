@@ -240,10 +240,9 @@ export function DesignControlStepEditor({
   );
 
   useEffect(() => {
-    if (dirtyRef.current) return;
     const suggestions: Record<string, string> = {};
     for (const field of definition.fields) {
-      if (String(step?.formData?.[field.key] ?? '').trim()) continue;
+      if (String(formData[field.key] ?? '').trim()) continue;
       const presentation = getDesignControlFieldPresentation(
         definition.key,
         field
@@ -276,9 +275,17 @@ export function DesignControlStepEditor({
       }
     }
     if (Object.keys(suggestions).length === 0) return;
-    setFormData((current) => ({ ...suggestions, ...current }));
-    setDirty(true);
-  }, [definition, projectId, step?.formData, teamQuery.data?.assignments]);
+    setFormData((current) => {
+      const applicable = Object.fromEntries(
+        Object.entries(suggestions).filter(
+          ([key]) => !String(current[key] ?? '').trim()
+        )
+      );
+      if (Object.keys(applicable).length === 0) return current;
+      setDirty(true);
+      return { ...current, ...applicable };
+    });
+  }, [definition, formData, projectId, teamQuery.data?.assignments]);
 
   const approvalQuery = useQuery<ApprovalState>({
     queryKey: approvalQueryKey,

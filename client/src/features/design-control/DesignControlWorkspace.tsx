@@ -10,7 +10,6 @@ import { expandDesignControlTerm } from '@shared/designControlTerminology';
 import {
   AlertTriangle,
   CheckCircle2,
-  Circle,
   FileSearch,
   LockKeyhole,
 } from 'lucide-react';
@@ -533,40 +532,6 @@ export function DesignControlWorkspace({
         </details>
 
         <TabsContent value="lifecycle" className="space-y-4">
-          <nav
-            className="hidden"
-            aria-hidden="true"
-            aria-label="Controlled Design Control checkpoints"
-          >
-            {DESIGN_CONTROL_WORKFLOW.map((definition) => {
-              const step = stepByKey.get(definition.key);
-              const selected = definition.key === activeStep;
-              return (
-                <button
-                  aria-current={selected ? 'step' : undefined}
-                  className="flex w-full items-start gap-2 rounded-md border p-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  key={definition.key}
-                  onClick={() => setActiveStep(definition.key)}
-                  type="button"
-                >
-                  {step?.status === 'approved' ? (
-                    <CheckCircle2 className="mt-0.5 h-4 w-4" />
-                  ) : (
-                    <Circle className="mt-0.5 h-4 w-4" />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium">
-                      {definition.order}. {definition.title}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {displayStatus(step?.status)} · generation{' '}
-                      {step?.contentVersion || 0}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
           <Card>
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-2">

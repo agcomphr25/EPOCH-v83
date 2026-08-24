@@ -47,9 +47,11 @@ function renderWithQuery(ui: ReactElement) {
 
 describe('Design Control structured workspaces', () => {
   let failDraftSave = false;
+  let projectTeamAssignments: Array<Record<string, unknown>> = [];
 
   beforeEach(() => {
     failDraftSave = false;
+    projectTeamAssignments = [];
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: unknown, init?: globalThis.RequestInit) => {
@@ -226,7 +228,11 @@ describe('Design Control structured workspaces', () => {
           );
         if (url.endsWith('/project-team'))
           return new Response(
-            JSON.stringify({ activated: false, assignments: [], history: [] }),
+            JSON.stringify({
+              activated: false,
+              assignments: projectTeamAssignments,
+              history: [],
+            }),
             { status: 200 }
           );
         return new Response(JSON.stringify({ message: 'Unexpected request' }), {
@@ -351,6 +357,102 @@ describe('Design Control structured workspaces', () => {
         })
       )
     );
+  });
+
+  it('suggests authoritative project and team values only for blank fields', async () => {
+    projectTeamAssignments = [
+      {
+        userId: 42,
+        username: 'heated-pitot-engineer',
+        firstName: 'Heated',
+        lastName: 'Engineer',
+        projectRole: 'RESPONSIBLE_ENGINEER',
+        status: 'ACTIVE',
+      },
+    ];
+    const definition = DESIGN_CONTROL_WORKFLOW[0];
+    renderWithQuery(
+      <DesignControlStepEditor
+        definition={definition}
+        hasNext
+        hasPrevious={false}
+        onChanged={vi.fn(async () => undefined)}
+        onNext={vi.fn()}
+        onPrevious={vi.fn()}
+        projectId="heated-pitot-project"
+        readOnly={false}
+        recordId="record-1"
+        step={{ stepKey: definition.key, status: 'draft' }}
+      />
+    );
+
+    expect(
+      await screen.findByLabelText('Project / customer / order link', {
+        exact: false,
+      })
+    ).toHaveValue('heated-pitot-project');
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Responsible engineer', { exact: false })
+      ).toHaveValue('Heated Engineer')
+    );
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('design-control-missing-summary')
+    ).toHaveTextContent(/required item/i);
+    expect(
+      screen.queryByText(/Authenticated approval is recorded/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it('never overwrites existing saved values with authoritative suggestions', async () => {
+    projectTeamAssignments = [
+      {
+        userId: 42,
+        username: 'new-engineer',
+        firstName: 'New',
+        lastName: 'Engineer',
+        projectRole: 'RESPONSIBLE_ENGINEER',
+        status: 'ACTIVE',
+      },
+    ];
+    const definition = DESIGN_CONTROL_WORKFLOW[0];
+    const projectField = definition.fields.find((field) =>
+      field.label.includes('Project / customer')
+    )!;
+    const engineerField = definition.fields.find((field) =>
+      field.label.includes('Responsible engineer')
+    )!;
+    renderWithQuery(
+      <DesignControlStepEditor
+        definition={definition}
+        hasNext
+        hasPrevious={false}
+        onChanged={vi.fn(async () => undefined)}
+        onNext={vi.fn()}
+        onPrevious={vi.fn()}
+        projectId="new-project"
+        readOnly={false}
+        recordId="record-1"
+        step={{
+          stepKey: definition.key,
+          status: 'draft',
+          formData: {
+            [projectField.key]: 'saved-project',
+            [engineerField.key]: 'Saved Engineer',
+          },
+        }}
+      />
+    );
+
+    expect(
+      await screen.findByLabelText('Project / customer / order link', {
+        exact: false,
+      })
+    ).toHaveValue('saved-project');
+    expect(
+      screen.getByLabelText('Responsible engineer', { exact: false })
+    ).toHaveValue('Saved Engineer');
   });
 
   it('can focus the stage workspace on the matching authoritative register', async () => {

@@ -660,6 +660,12 @@ export async function recordWadDecision(
         `${capacity} approval is not required for this revision.`,
         409
       );
+    if (authorization.created_by === actor.userId)
+      throw new ProjectWadAuthorizationError(
+        'SEGREGATION_OF_DUTIES',
+        'The WAD creator cannot approve the same controlled revision.',
+        403
+      );
     const existing = await approvals(authorization, tx);
     if (existing.some((entry) => entry.approval_type === `WAD_${capacity}`))
       throw new ProjectWadAuthorizationError(
@@ -799,6 +805,15 @@ export async function releaseWadAuthorization(
         'All required WAD approvals must be recorded.',
         409,
         { missingApprovals: missing }
+      );
+    if (
+      authorization.created_by === actor.userId ||
+      evidence.some((entry) => entry.actor_user_id === actor.userId)
+    )
+      throw new ProjectWadAuthorizationError(
+        'SEGREGATION_OF_DUTIES',
+        'WAD release requires an independent employee who neither created nor approved the revision.',
+        403
       );
     const wizardApprovals = evidence.map((entry) => ({
       role: String(entry.approval_type).replace(/^WAD_/, '').toLowerCase(),

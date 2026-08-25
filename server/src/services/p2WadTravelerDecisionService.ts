@@ -1,9 +1,11 @@
 import { createHash } from 'crypto';
 
 import { pool } from '../../db';
+import { evaluateWadTravelerCoverage } from './p2WadTravelerCoverage';
 
 export type WadTravelerActor = {
   userId: number;
+  employeeId: number | null;
   displayName: string;
   role: string;
 };
@@ -40,6 +42,8 @@ export async function saveWadTravelerDecision(
     inventoryItemId: number;
     assemblyPathIdentity: string;
     requiredQuantity: number;
+    batchApprovedQuantity?: number | null;
+    batchCoverageScope?: string | null;
     travelerRequirement: 'REQUIRED' | 'NOT_REQUIRED_APPROVED';
     travelerType?: 'INDIVIDUAL' | 'BATCH' | null;
     inspectionRequirements: Record<string, unknown>;
@@ -101,6 +105,15 @@ export async function saveWadTravelerDecision(
         'TRAVELER_TYPE_REQUIRED',
         'Required travelers need an INDIVIDUAL or BATCH type.'
       );
+    if (
+      input.travelerType === 'BATCH' &&
+      (!(Number(input.batchApprovedQuantity) >= input.requiredQuantity) ||
+        !clean(input.batchCoverageScope))
+    )
+      throw new WadTravelerDecisionError(
+        'BATCH_COVERAGE_REQUIRED',
+        'A batch decision must explicitly cover the complete released demand quantity and scope.'
+      );
     if (weak && !clean(input.exceptionReason))
       throw new WadTravelerDecisionError(
         'EXCEPTION_REASON_REQUIRED',
@@ -111,6 +124,8 @@ export async function saveWadTravelerDecision(
       inventoryItemId: input.inventoryItemId,
       assemblyPathIdentity: clean(input.assemblyPathIdentity),
       requiredQuantity: input.requiredQuantity,
+      batchApprovedQuantity: input.batchApprovedQuantity ?? null,
+      batchCoverageScope: clean(input.batchCoverageScope) || null,
       travelerRequirement: input.travelerRequirement,
       travelerType: input.travelerType ?? null,
       policyId: row.policy_id,
@@ -131,22 +146,33 @@ export async function saveWadTravelerDecision(
     );
     let saved;
     if (existing.rows[0]) {
-      if (
-        input.expectedVersion == null ||
-        existing.rows[0].concurrency_version !== input.expectedVersion
-      )
+      if (input.expectedVersion == null) {
+        if (existing.rows[0].content_checksum === checksum(content)) {
+          await client.query('COMMIT');
+          return existing.rows[0];
+        }
+        throw new WadTravelerDecisionError(
+          'DECISION_CREATE_CONFLICT',
+          'A traveler decision already exists for this identity with different controlled content.',
+          409
+        );
+      }
+      if (existing.rows[0].concurrency_version !== input.expectedVersion)
         throw new WadTravelerDecisionError(
           'STALE_DECISION',
           'Traveler decision was changed by another user.',
           409
         );
       saved = await client.query(
-        `UPDATE p2_wad_traveler_decisions SET required_quantity=$2,traveler_requirement=$3,traveler_type=$4,
-        inspection_requirements_snapshot=$5::jsonb,exception_required=$6,exception_reason=$7,exception_effectivity=$8::jsonb,
-        status=$9,content_checksum=$10,concurrency_version=concurrency_version+1,updated_at=now() WHERE id=$1 RETURNING *`,
+        `UPDATE p2_wad_traveler_decisions SET required_quantity=$2,batch_approved_quantity=$3,batch_coverage_scope=$4,
+        traveler_requirement=$5,traveler_type=$6,inspection_requirements_snapshot=$7::jsonb,exception_required=$8,
+        exception_reason=$9,exception_effectivity=$10::jsonb,status=$11,content_checksum=$12,
+        concurrency_version=concurrency_version+1,updated_at=now() WHERE id=$1 RETURNING *`,
         [
           existing.rows[0].id,
           input.requiredQuantity,
+          input.batchApprovedQuantity ?? null,
+          clean(input.batchCoverageScope) || null,
           input.travelerRequirement,
           input.travelerType ?? null,
           JSON.stringify(input.inspectionRequirements),
@@ -160,17 +186,19 @@ export async function saveWadTravelerDecision(
     } else {
       saved = await client.query(
         `INSERT INTO p2_wad_traveler_decisions (wad_authorization_id,project_configuration_id,inventory_item_id,
-        assembly_path_identity,required_quantity,traveler_requirement,traveler_type,traceability_policy_id,traceability_policy_revision,
+        assembly_path_identity,required_quantity,batch_approved_quantity,batch_coverage_scope,traveler_requirement,traveler_type,traceability_policy_id,traceability_policy_revision,
         traceability_policy_type_snapshot,traceability_requirements_snapshot,inspection_requirements_snapshot,exception_required,
-        exception_reason,exception_effectivity,status,content_checksum,created_by,created_by_display_name,created_by_role,
-        validated_at,validated_by,validated_by_display_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15::jsonb,$16,$17,$18,$19,$20,
-        CASE WHEN $16='VALIDATED' THEN now() END,CASE WHEN $16='VALIDATED' THEN $18 END,CASE WHEN $16='VALIDATED' THEN $19 END) RETURNING *`,
+        exception_reason,exception_effectivity,status,content_checksum,created_by,created_by_employee_id,created_by_display_name,created_by_role,
+        validated_at,validated_by,validated_by_employee_id,validated_by_display_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,
+        CASE WHEN $18='VALIDATED' THEN now() END,CASE WHEN $18='VALIDATED' THEN $20 END,CASE WHEN $18='VALIDATED' THEN $21 END,CASE WHEN $18='VALIDATED' THEN $22 END) RETURNING *`,
         [
           input.authorizationId,
           row.configuration_id,
           input.inventoryItemId,
           clean(input.assemblyPathIdentity),
           input.requiredQuantity,
+          input.batchApprovedQuantity ?? null,
+          clean(input.batchCoverageScope) || null,
           input.travelerRequirement,
           input.travelerType ?? null,
           row.policy_id,
@@ -190,18 +218,20 @@ export async function saveWadTravelerDecision(
           weak ? 'EXCEPTION_PENDING' : 'VALIDATED',
           checksum(content),
           actor.userId,
+          actor.employeeId,
           actor.displayName,
           actor.role,
         ]
       );
     }
     await client.query(
-      `INSERT INTO p2_wad_traveler_decision_events(decision_id,event_type,actor_user_id,actor_display_name,actor_role,evidence)
-      VALUES($1,$2,$3,$4,$5,$6::jsonb)`,
+      `INSERT INTO p2_wad_traveler_decision_events(decision_id,event_type,actor_user_id,actor_employee_id,actor_display_name,actor_role,evidence)
+      VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)`,
       [
         saved.rows[0].id,
         weak ? 'EXCEPTION_REQUESTED' : 'VALIDATED',
         actor.userId,
+        actor.employeeId,
         actor.displayName,
         actor.role,
         JSON.stringify({
@@ -240,7 +270,7 @@ export async function approveWadTravelerException(
     const result = await client.query(
       `UPDATE p2_wad_traveler_decisions d SET status='VALIDATED',exception_approved_by=$5,
       exception_approver_display_name=$6,exception_signature_meaning=$7,exception_approved_at=now(),validated_at=now(),validated_by=$5,
-      validated_by_display_name=$6,concurrency_version=concurrency_version+1,updated_at=now()
+      validated_by_employee_id=$8,validated_by_display_name=$6,concurrency_version=concurrency_version+1,updated_at=now()
       FROM project_wad_authorizations w WHERE d.id=$3 AND d.wad_authorization_id=w.id AND w.id=$2 AND w.project_id=$1
       AND w.status='DRAFT' AND d.status='EXCEPTION_PENDING' AND d.concurrency_version=$4 AND d.created_by<>$5 RETURNING d.*`,
       [
@@ -251,6 +281,7 @@ export async function approveWadTravelerException(
         actor.userId,
         actor.displayName,
         signatureMeaning,
+        actor.employeeId,
       ]
     );
     if (!result.rows[0])
@@ -260,10 +291,11 @@ export async function approveWadTravelerException(
         409
       );
     await client.query(
-      `INSERT INTO p2_wad_traveler_decision_events(decision_id,event_type,actor_user_id,actor_display_name,actor_role,signature_meaning,evidence) VALUES($1,'EXCEPTION_APPROVED',$2,$3,$4,$5,$6::jsonb)`,
+      `INSERT INTO p2_wad_traveler_decision_events(decision_id,event_type,actor_user_id,actor_employee_id,actor_display_name,actor_role,signature_meaning,evidence) VALUES($1,'EXCEPTION_APPROVED',$2,$3,$4,$5,$6,$7::jsonb)`,
       [
         decisionId,
         actor.userId,
+        actor.employeeId,
         actor.displayName,
         actor.role,
         signatureMeaning,
@@ -286,26 +318,14 @@ export async function wadTravelerDecisionBlockers(
 ) {
   const result = await pool.query(
     `SELECT w.inherited_requirements_snapshot,
-    (SELECT count(*)::int FROM p2_wad_traveler_decisions d WHERE d.wad_authorization_id=w.id AND d.status='VALIDATED') validated_count,
-    (SELECT count(*)::int FROM p2_wad_traveler_decisions d WHERE d.wad_authorization_id=w.id AND d.status<>'VALIDATED') open_count
+    COALESCE((SELECT jsonb_agg(to_jsonb(d)) FROM p2_wad_traveler_decisions d WHERE d.wad_authorization_id=w.id),'[]'::jsonb) decisions
     FROM project_wad_authorizations w WHERE w.project_id=$1 AND w.id=$2`,
     [projectId, authorizationId]
   );
   const row = result.rows[0];
   if (!row) return ['WAD traveler decision authority is missing.'];
-  const expected = (
-    row.inherited_requirements_snapshot?.manufacturedItems ?? []
-  ).filter(
-    (item: Record<string, unknown>) => item.is_manufactured === true
-  ).length;
-  const blockers: string[] = [];
-  if (Number(row.validated_count) < expected)
-    blockers.push(
-      `Validated traveler decisions cover ${row.validated_count} of ${expected} manufactured items.`
-    );
-  if (Number(row.open_count) > 0)
-    blockers.push(
-      `${row.open_count} traveler decision exception(s) remain unresolved.`
-    );
-  return blockers;
+  return evaluateWadTravelerCoverage(
+    row.inherited_requirements_snapshot?.manufacturedItems ?? [],
+    row.decisions ?? []
+  );
 }

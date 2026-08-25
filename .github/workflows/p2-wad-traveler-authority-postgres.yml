@@ -3,7 +3,9 @@ name: P2 WAD Traveler Authority PostgreSQL Certification
 on:
   workflow_dispatch:
   push:
-    branches: [codex/p2-wad-traveler-authority-completion]
+    branches:
+      - codex/p2-wad-traveler-authority-completion
+      - codex/p2-phase4-authority-correction
 
 permissions:
   contents: read
@@ -42,7 +44,7 @@ jobs:
           test -z "${VITE_P2_WAD_TRAVELER_DECISION_READS_ENABLED:-}"
           test -z "${VITE_P2_WAD_TRAVELER_DECISION_WRITES_ENABLED:-}"
       - name: Focused Phase 4 contract tests
-        run: npx vitest run --config vitest.config.server.ts server/__tests__/p2WadTravelerAuthorityFoundation.test.ts --reporter=verbose
+        run: npx vitest run --config vitest.config.server.ts server/__tests__/p2WadTravelerAuthorityFoundation.test.ts server/__tests__/p2WadTravelerAuthorityCorrection.test.ts server/__tests__/p2ProjectControlledConfigurationFoundation.test.ts server/__tests__/projectWadAuthorization.test.ts --reporter=verbose
       - name: Create clean application schema
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
@@ -59,6 +61,11 @@ jobs:
           SELECT 'transactions|'||count(*) FROM inventory_transactions;
           SELECT 'decisions|'||count(*) FROM p2_wad_traveler_decisions;
           SQL
+          pg_dump "$DATABASE_URL" --data-only --column-inserts \
+            --table=inventory_items --table=production_work_orders \
+            --table=travelers --table=inventory_transactions \
+            --table=p2_wad_traveler_decisions > /tmp/before-data.sql
+          sha256sum /tmp/before-data.sql > /tmp/before-data.sha256
           npm run maintenance:safe-migrations
           psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/after.txt
           SELECT 'inventory_items|'||count(*) FROM inventory_items;
@@ -67,7 +74,13 @@ jobs:
           SELECT 'transactions|'||count(*) FROM inventory_transactions;
           SELECT 'decisions|'||count(*) FROM p2_wad_traveler_decisions;
           SQL
+          pg_dump "$DATABASE_URL" --data-only --column-inserts \
+            --table=inventory_items --table=production_work_orders \
+            --table=travelers --table=inventory_transactions \
+            --table=p2_wad_traveler_decisions > /tmp/after-data.sql
+          sha256sum /tmp/after-data.sql | sed 's#/tmp/after-data.sql#/tmp/before-data.sql#' > /tmp/after-data.sha256
           diff -u /tmp/before.txt /tmp/after.txt
+          diff -u /tmp/before-data.sha256 /tmp/after-data.sha256
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           BEGIN;
           ALTER TABLE p2_wad_traveler_decisions ADD COLUMN rollback_probe boolean;
@@ -78,16 +91,47 @@ jobs:
             END IF;
           END $$;
           SQL
-      - name: Verify lifecycle, audit, concurrency, and immutability schema
+      - name: Verify authority, batch coverage, audit, concurrency, and immutability
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          SELECT concurrency_version,status,content_checksum FROM p2_wad_traveler_decisions LIMIT 0;
-          SELECT actor_user_id,actor_display_name,actor_role,signature_meaning FROM p2_wad_traveler_decision_events LIMIT 0;
+          SELECT concurrency_version,status,content_checksum,batch_approved_quantity,batch_coverage_scope,
+                 created_by_employee_id,validated_by_employee_id
+          FROM p2_wad_traveler_decisions LIMIT 0;
+          SELECT actor_user_id,actor_employee_id,actor_display_name,actor_role,signature_meaning
+          FROM p2_wad_traveler_decision_events LIMIT 0;
           SELECT tgname FROM pg_trigger WHERE tgname='p2_wad_traveler_decision_immutable' \gset
           \if :{?tgname}
           \else
             \quit 1
           \endif
+          SELECT tgname FROM pg_trigger WHERE tgname='p2_released_wad_authorization_immutable' \gset
+          \if :{?tgname}
+          \else
+            \quit 1
+          \endif
+
+          CREATE TEMP TABLE phase4_wad_immutability_probe (
+            status text,
+            payload text,
+            superseded_at timestamptz,
+            superseded_by_authorization_id uuid,
+            updated_at timestamptz
+          );
+          CREATE TRIGGER phase4_wad_immutability_probe_trigger
+            BEFORE UPDATE OR DELETE ON phase4_wad_immutability_probe
+            FOR EACH ROW EXECUTE FUNCTION p2_released_wad_authorization_immutable();
+          INSERT INTO phase4_wad_immutability_probe(status,payload,updated_at)
+            VALUES ('RELEASED','authoritative',now());
+          DO $$ BEGIN
+            BEGIN
+              UPDATE phase4_wad_immutability_probe SET payload='tampered';
+              RAISE EXCEPTION 'released WAD mutation unexpectedly succeeded';
+            EXCEPTION WHEN raise_exception THEN
+              IF SQLERRM = 'released WAD mutation unexpectedly succeeded' THEN
+                RAISE;
+              END IF;
+            END;
+          END $$;
           SQL
       - name: Diff hygiene
         run: git diff --check HEAD^ HEAD

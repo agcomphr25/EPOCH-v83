@@ -22,6 +22,35 @@ const migrationRunner = readFileSync(
   join(process.cwd(), 'server/scripts/migrations/runSafeBootMigrations.ts'),
   'utf8'
 );
+const launchEventMigrations = [271, 272, 273, 274, 276, 278].map((number) =>
+  readFileSync(
+    join(
+      process.cwd(),
+      'migrations',
+      `${String(number).padStart(4, '0')}_${
+        {
+          271: 'p2_execution_authorization_event',
+          272: 'p2_production_order_provisioning_event',
+          273: 'p2_serialized_unit_provisioning',
+          274: 'p2_traveler_provisioning',
+          276: 'p2_work_order_provisioning',
+          278: 'p2_component_traveler_provisioning',
+        }[number as 271 | 272 | 273 | 274 | 276 | 278]
+      }.sql`
+    ),
+    'utf8'
+  )
+);
+
+const launchEventTypes = [
+  'RECURSIVE_DEMAND_GRAPH_PERSISTED',
+  'EXECUTION_AUTHORIZED',
+  'P2_PRODUCTION_ORDERS_PROVISIONED',
+  'P2_SERIALIZED_UNITS_PROVISIONED',
+  'P2_DRAFT_TRAVELERS_PROVISIONED',
+  'P2_WORK_ORDERS_PROVISIONED',
+  'P2_COMPONENT_TRAVELERS_PROVISIONED',
+] as const;
 
 describe('Production execution authorization foundation', () => {
   it('is independently fail-closed and server-authorized', () => {
@@ -69,5 +98,13 @@ describe('Production execution authorization foundation', () => {
     expect(
       migrationRunner.match(/0271_p2_execution_authorization_event\.sql/g)
     ).toHaveLength(2);
+  });
+
+  it('keeps every replayed launch-event constraint compatible with later valid events', () => {
+    for (const replayedMigration of launchEventMigrations) {
+      for (const eventType of launchEventTypes) {
+        expect(replayedMigration).toContain(`'${eventType}'`);
+      }
+    }
   });
 });

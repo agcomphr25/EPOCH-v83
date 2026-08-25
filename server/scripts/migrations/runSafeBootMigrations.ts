@@ -354,6 +354,7 @@ export const safeMigrationFiles = [
   '0292_vendor_po_final_compliance_confirmation.sql',
   '0294_shared_department_routing_authority_phase1.sql',
   '0295_inventory_traceability_bom_foundation.sql',
+  '0296_p2_project_controlled_configuration_foundation.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -450,6 +451,7 @@ export const criticalMigrationFiles = new Set([
   '0292_vendor_po_final_compliance_confirmation.sql',
   '0294_shared_department_routing_authority_phase1.sql',
   '0295_inventory_traceability_bom_foundation.sql',
+  '0296_p2_project_controlled_configuration_foundation.sql',
 ]);
 
 export async function runSafeBootMigrations() {

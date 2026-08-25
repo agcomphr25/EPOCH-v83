@@ -1,0 +1,127 @@
+name: P2 Phase 3 project controlled configuration PostgreSQL certification
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/p2-project-controlled-configuration-foundation]
+  pull_request:
+    paths:
+      - '.github/workflows/p2-project-controlled-configuration-postgres.yml'
+      - 'migrations/0296_p2_project_controlled_configuration_foundation.sql'
+      - 'server/src/services/p2ProjectControlledConfigurationService.ts'
+      - 'server/src/routes/p2ProjectControlledConfigurations.ts'
+      - 'server/__tests__/p2ProjectControlledConfigurationFoundation.test.ts'
+      - 'server/src/lib/featureFlags.ts'
+      - 'server/scripts/migrations/runSafeBootMigrations.ts'
+permissions: { contents: read }
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase3_cert
+          POSTGRES_PASSWORD: disposable_phase3_password
+          POSTGRES_DB: phase3_project_configuration_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase3_cert -d phase3_project_configuration_certification"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://phase3_cert:disposable_phase3_password@127.0.0.1:5432/phase3_project_configuration_certification
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '24', cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Focused Phase 3 contracts
+        run: npx vitest run --config vitest.config.server.ts server/__tests__/p2ProjectControlledConfigurationFoundation.test.ts --reporter=verbose
+      - name: Syntax and diff validation
+        run: |
+          git diff --check origin/main...HEAD
+          node --experimental-strip-types --check server/src/services/p2ProjectControlledConfigurationService.ts
+          node --experimental-strip-types --check server/src/routes/p2ProjectControlledConfigurations.ts
+      - name: Prove migration order and disposable boundary
+        run: |
+          l295="$(grep -n "'0295_inventory_traceability_bom_foundation.sql'" server/scripts/migrations/runSafeBootMigrations.ts | head -1 | cut -d: -f1)"
+          l296="$(grep -n "'0296_p2_project_controlled_configuration_foundation.sql'" server/scripts/migrations/runSafeBootMigrations.ts | head -1 | cut -d: -f1)"
+          test "$l295" -lt "$l296"
+          node -e "const u=new URL(process.env.DATABASE_URL);if(u.hostname!=='127.0.0.1'||u.pathname!=='/phase3_project_configuration_certification')process.exit(1)"
+      - name: Clean populated replay rollback preservation and immutability
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE SCHEMA rollback_case; SET search_path TO rollback_case,public;
+          CREATE TABLE projects(id uuid PRIMARY KEY);
+          CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text NOT NULL,name text NOT NULL);
+          CREATE TABLE boms(id uuid PRIMARY KEY,parent_inventory_item_id integer REFERENCES inventory_items(id));
+          CREATE TABLE bom_revisions(id uuid PRIMARY KEY,bom_id uuid REFERENCES boms(id));
+          CREATE TABLE part_routings(id uuid PRIMARY KEY,inventory_item_fk integer REFERENCES inventory_items(id));
+          CREATE TABLE perm_capabilities(id serial PRIMARY KEY,key text UNIQUE,description text,category text);
+          CREATE TABLE perm_roles(id serial PRIMARY KEY,name text UNIQUE);
+          CREATE TABLE perm_role_capabilities(role_id integer,capability_id integer,UNIQUE(role_id,capability_id));
+          BEGIN;
+          \i migrations/0296_p2_project_controlled_configuration_foundation.sql
+          ROLLBACK;
+          DO $$ BEGIN IF to_regclass('rollback_case.p2_project_controlled_configurations') IS NOT NULL THEN RAISE EXCEPTION 'rollback failed'; END IF; END $$;
+          SET search_path TO public; DROP SCHEMA rollback_case CASCADE;
+          CREATE SCHEMA clean_case; SET search_path TO clean_case,public;
+          CREATE TABLE projects(id uuid PRIMARY KEY);
+          CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text NOT NULL,name text NOT NULL);
+          CREATE TABLE boms(id uuid PRIMARY KEY,parent_inventory_item_id integer REFERENCES inventory_items(id));
+          CREATE TABLE bom_revisions(id uuid PRIMARY KEY,bom_id uuid REFERENCES boms(id));
+          CREATE TABLE part_routings(id uuid PRIMARY KEY,inventory_item_fk integer REFERENCES inventory_items(id));
+          CREATE TABLE perm_capabilities(id serial PRIMARY KEY,key text UNIQUE,description text,category text);
+          CREATE TABLE perm_roles(id serial PRIMARY KEY,name text UNIQUE);
+          CREATE TABLE perm_role_capabilities(role_id integer,capability_id integer,UNIQUE(role_id,capability_id));
+          \i migrations/0296_p2_project_controlled_configuration_foundation.sql
+          \i migrations/0296_p2_project_controlled_configuration_foundation.sql
+          SET search_path TO public; DROP SCHEMA clean_case CASCADE;
+          CREATE TABLE projects(id uuid PRIMARY KEY,payload text);
+          CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text NOT NULL,name text NOT NULL,payload text);
+          CREATE TABLE boms(id uuid PRIMARY KEY,parent_inventory_item_id integer REFERENCES inventory_items(id),payload text);
+          CREATE TABLE bom_revisions(id uuid PRIMARY KEY,bom_id uuid REFERENCES boms(id),payload text);
+          CREATE TABLE part_routings(id uuid PRIMARY KEY,inventory_item_fk integer REFERENCES inventory_items(id),payload text);
+          CREATE TABLE perm_capabilities(id serial PRIMARY KEY,key text UNIQUE,description text,category text);
+          CREATE TABLE perm_roles(id serial PRIMARY KEY,name text UNIQUE);
+          CREATE TABLE perm_role_capabilities(role_id integer,capability_id integer,UNIQUE(role_id,capability_id));
+          CREATE TABLE work_orders(id serial,payload text); CREATE TABLE travelers(id serial,payload text);
+          CREATE TABLE inventory_transactions(id serial,payload text); CREATE TABLE inventory_balances(id serial,payload text);
+          CREATE TABLE receiving_records(id serial,payload text); CREATE TABLE barcode_records(id serial,payload text);
+          CREATE TABLE genealogy_records(id serial,payload text);
+          INSERT INTO projects VALUES(gen_random_uuid(),'legacy project');
+          INSERT INTO inventory_items(ag_part_number,name,payload) VALUES('LEGACY','Legacy','legacy item');
+          INSERT INTO boms VALUES(gen_random_uuid(),NULL,'legacy text BOM');
+          INSERT INTO bom_revisions SELECT gen_random_uuid(),id,'legacy revision' FROM boms;
+          INSERT INTO part_routings VALUES(gen_random_uuid(),NULL,'legacy routing');
+          INSERT INTO work_orders(payload) VALUES('legacy'); INSERT INTO travelers(payload) VALUES('legacy');
+          INSERT INTO inventory_transactions(payload) VALUES('legacy'); INSERT INTO inventory_balances(payload) VALUES('legacy');
+          INSERT INTO receiving_records(payload) VALUES('legacy'); INSERT INTO barcode_records(payload) VALUES('legacy'); INSERT INTO genealogy_records(payload) VALUES('legacy');
+          CREATE TEMP TABLE before_state AS SELECT md5(string_agg(t,',' ORDER BY t)) digest FROM (
+            SELECT 'projects:'||count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) t FROM projects UNION ALL
+            SELECT 'items:'||count(*)||':'||md5(string_agg(id||ag_part_number||name||payload,',' ORDER BY id)) FROM inventory_items UNION ALL
+            SELECT 'boms:'||count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM boms UNION ALL
+            SELECT 'revisions:'||count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM bom_revisions UNION ALL
+            SELECT 'routings:'||count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM part_routings UNION ALL
+            SELECT 'downstream:'||(SELECT count(*) FROM work_orders)+(SELECT count(*) FROM travelers)+(SELECT count(*) FROM inventory_transactions)+(SELECT count(*) FROM inventory_balances)+(SELECT count(*) FROM receiving_records)+(SELECT count(*) FROM barcode_records)+(SELECT count(*) FROM genealogy_records) t) s;
+          \i migrations/0296_p2_project_controlled_configuration_foundation.sql
+          \i migrations/0296_p2_project_controlled_configuration_foundation.sql
+          CREATE TEMP TABLE after_state AS SELECT md5(string_agg(t,',' ORDER BY t)) digest FROM (
+            SELECT 'projects:'||count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) t FROM projects UNION ALL
+            SELECT 'items:'||count(*)||':'||md5(string_agg(id||ag_part_number||name||payload,',' ORDER BY id)) FROM inventory_items UNION ALL
+            SELECT 'boms:'||count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM boms UNION ALL
+            SELECT 'revisions:'||count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM bom_revisions UNION ALL
+            SELECT 'routings:'||count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM part_routings UNION ALL
+            SELECT 'downstream:'||(SELECT count(*) FROM work_orders)+(SELECT count(*) FROM travelers)+(SELECT count(*) FROM inventory_transactions)+(SELECT count(*) FROM inventory_balances)+(SELECT count(*) FROM receiving_records)+(SELECT count(*) FROM barcode_records)+(SELECT count(*) FROM genealogy_records) t) s;
+          DO $$ BEGIN IF (SELECT digest FROM before_state)<>(SELECT digest FROM after_state) THEN RAISE EXCEPTION 'preservation failed'; END IF; IF EXISTS(SELECT 1 FROM p2_project_controlled_configurations) THEN RAISE EXCEPTION 'backfill occurred'; END IF; END $$;
+          TABLE before_state; TABLE after_state;
+          SQL
+      - name: Prove all Phase 3 flags remain opt in
+        run: |
+          test -z "${P2_PROJECT_CONTROLLED_CONFIGURATION_READS_ENABLED:-}"
+          test -z "${P2_PROJECT_CONTROLLED_CONFIGURATION_WRITES_ENABLED:-}"
+          test -z "${VITE_P2_PROJECT_CONTROLLED_CONFIGURATION_READS_ENABLED:-}"
+          test -z "${VITE_P2_PROJECT_CONTROLLED_CONFIGURATION_WRITES_ENABLED:-}"

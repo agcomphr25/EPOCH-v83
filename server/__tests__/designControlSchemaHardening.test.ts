@@ -23,17 +23,9 @@ import {
 } from '../src/services/designControlSchemaReadiness';
 
 const root = process.cwd();
-const migrationFiles = [
-  'migrations/0189_design_control_workflow.sql',
-  'migrations/0190_design_control_requirement_applicability.sql',
-  'migrations/0191_engineering_releases.sql',
-  'migrations/0192_engineering_packages.sql',
-  'migrations/0207_design_control_authority_foundation.sql',
-  'migrations/0208_design_control_authenticated_approvals.sql',
-  'migrations/0248_design_project_manufacturing_configuration.sql',
-  'migrations/0251_design_project_configuration_workspace.sql',
-  'migrations/0258_design_control_structured_lifecycle.sql',
-];
+const migrationFiles = requiredDesignControlMigrations.map(
+  (file) => `migrations/${file}`
+);
 
 const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalForceDatabaseUrl = process.env.FORCE_DATABASE_URL;
@@ -230,6 +222,8 @@ describe('Design Control schema hardening', () => {
             { object_name: 'design_control_step_approvals_valid_slot_unique' },
             { object_name: 'prevent_design_control_step_version_delete' },
             { object_name: 'prevent_design_control_step_approval_delete' },
+            { object_name: 'dc_step_approval_assignments_version_slot_uq' },
+            { object_name: 'prevent_design_control_assignment_delete' },
           ];
         }
         return [];

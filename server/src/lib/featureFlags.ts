@@ -110,6 +110,31 @@ export function areRoutingOperationDepartmentIdsEnabled(): boolean {
   return envBool('ROUTING_OPERATION_DEPARTMENT_IDS_ENABLED', false);
 }
 
+/** Phase 2 Inventory Item traceability and controlled BOM flags. */
+export function areInventoryTraceabilityPolicyReadsEnabled(): boolean {
+  return envBool('INVENTORY_TRACEABILITY_POLICY_READS_ENABLED', false);
+}
+
+export function areInventoryTraceabilityPolicyWritesEnabled(): boolean {
+  return envBool('INVENTORY_TRACEABILITY_POLICY_WRITES_ENABLED', false);
+}
+
+export function areControlledItemLinkedBomReadsEnabled(): boolean {
+  return envBool('CONTROLLED_ITEM_LINKED_BOM_READS_ENABLED', false);
+}
+
+export function areControlledItemLinkedBomWritesEnabled(): boolean {
+  return envBool('CONTROLLED_ITEM_LINKED_BOM_WRITES_ENABLED', false);
+}
+
+export function isP2ConfigurationBomIntegrationEnabled(): boolean {
+  return envBool('P2_CONFIGURATION_BOM_INTEGRATION_ENABLED', false);
+}
+
+export function isRecursiveTraceabilityPreviewEnabled(): boolean {
+  return envBool('RECURSIVE_TRACEABILITY_PREVIEW_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

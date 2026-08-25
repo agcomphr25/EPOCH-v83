@@ -623,7 +623,9 @@ router.get('/:id/p2-order-draft', async (req, res) => {
     );
     res.json(rows[0] || null);
   } catch (error) {
-    res.status(error instanceof z.ZodError ? 400 : 500).json({ message: 'Failed to load P2 order draft' });
+    res
+      .status(error instanceof z.ZodError ? 400 : 500)
+      .json({ message: 'Failed to load P2 order draft' });
   }
 });
 
@@ -631,7 +633,10 @@ router.put('/:id/p2-order-draft', async (req: Request, res: Response) => {
   try {
     const projectId = uuidStringSchema.parse(req.params.id);
     const input = p2OrderDraftBodySchema.parse(req.body);
-    const actor = String((req as any).user?.username || (req as any).user?.email || 'unknown');
+    const draftActor = req.user as typeof req.user & { email?: string };
+    const actor = String(
+      draftActor?.username || draftActor?.email || 'unknown'
+    );
     const rows = await pool.query(
       `INSERT INTO p2_order_drafts (project_id, current_step, draft_data, created_by, updated_by)
        VALUES ($1, $2, $3::jsonb, $4, $4)
@@ -648,17 +653,23 @@ router.put('/:id/p2-order-draft', async (req: Request, res: Response) => {
     );
     res.json(rows[0]);
   } catch (error) {
-    res.status(error instanceof z.ZodError ? 400 : 500).json({ message: 'Failed to save P2 order draft' });
+    res
+      .status(error instanceof z.ZodError ? 400 : 500)
+      .json({ message: 'Failed to save P2 order draft' });
   }
 });
 
 router.delete('/:id/p2-order-draft', async (req: Request, res: Response) => {
   try {
     const projectId = uuidStringSchema.parse(req.params.id);
-    await pool.query('DELETE FROM p2_order_drafts WHERE project_id = $1', [projectId]);
+    await pool.query('DELETE FROM p2_order_drafts WHERE project_id = $1', [
+      projectId,
+    ]);
     res.status(204).send();
   } catch (error) {
-    res.status(error instanceof z.ZodError ? 400 : 500).json({ message: 'Failed to delete P2 order draft' });
+    res
+      .status(error instanceof z.ZodError ? 400 : 500)
+      .json({ message: 'Failed to delete P2 order draft' });
   }
 });
 
@@ -3965,7 +3976,9 @@ router.get('/:id/p2-hub', async (req, res) => {
     const orderedQuantityByRootPart = new Map<string, number>();
     assemblySourceItems.forEach((item: LegacyProjectValue) => {
       const rootPartNumber = String(
-        poInventoryPartById.get(Number(item.inventory_item_id)) || item.part_number || ''
+        poInventoryPartById.get(Number(item.inventory_item_id)) ||
+          item.part_number ||
+          ''
       )
         .trim()
         .toLowerCase();

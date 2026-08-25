@@ -1330,33 +1330,47 @@ export default function OEMShipmentsPage() {
                                       Tracking Number
                                     </p>
                                     {editingTrackingId === shipment.id ? (
-                                      <div className="flex items-center gap-2">
+                                      <form
+                                        className="flex items-center gap-2"
+                                        onSubmit={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          saveTrackingNumber(shipment.id);
+                                        }}
+                                      >
                                         <Input
                                           value={editingTrackingValue}
                                           onChange={(e) => setEditingTrackingValue(e.target.value)}
                                           className="h-8 font-mono text-sm w-48"
                                           onKeyDown={(e) => {
-                                            if (e.key === 'Enter') saveTrackingNumber(shipment.id);
                                             if (e.key === 'Escape') cancelEditingTracking();
                                           }}
                                           autoFocus
                                         />
                                         <Button
+                                          type="submit"
                                           size="sm"
                                           variant="ghost"
-                                          onClick={() => saveTrackingNumber(shipment.id)}
-                                          disabled={updateTrackingMutation.isPending}
+                                          disabled={
+                                            updateTrackingMutation.isPending ||
+                                            !editingTrackingValue.trim()
+                                          }
+                                          aria-label="Save tracking number"
+                                          title="Save tracking number"
                                         >
                                           <Check className="h-4 w-4 text-green-600" />
                                         </Button>
                                         <Button
+                                          type="button"
                                           size="sm"
                                           variant="ghost"
                                           onClick={cancelEditingTracking}
+                                          aria-label="Cancel tracking number edit"
+                                          title="Cancel tracking number edit"
                                         >
                                           <X className="h-4 w-4 text-red-600" />
                                         </Button>
-                                      </div>
+                                      </form>
                                     ) : (
                                       <div className="flex items-center gap-2">
                                         <code className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border">
@@ -1740,33 +1754,47 @@ export default function OEMShipmentsPage() {
                                 </td>
                                 <td className="p-3">
                                   {editingTrackingId === item.shipmentId ? (
-                                    <div className="flex items-center gap-2">
+                                    <form
+                                      className="flex items-center gap-2"
+                                      onSubmit={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        saveTrackingNumber(item.shipmentId);
+                                      }}
+                                    >
                                       <Input
                                         value={editingTrackingValue}
                                         onChange={(e) => setEditingTrackingValue(e.target.value)}
                                         className="h-7 font-mono text-xs w-36"
                                         onKeyDown={(e) => {
-                                          if (e.key === 'Enter') saveTrackingNumber(item.shipmentId);
                                           if (e.key === 'Escape') cancelEditingTracking();
                                         }}
                                         autoFocus
                                       />
                                       <Button
+                                        type="submit"
                                         size="sm"
                                         variant="ghost"
-                                        onClick={() => saveTrackingNumber(item.shipmentId)}
-                                        disabled={updateTrackingMutation.isPending}
+                                        disabled={
+                                          updateTrackingMutation.isPending ||
+                                          !editingTrackingValue.trim()
+                                        }
+                                        aria-label="Save tracking number"
+                                        title="Save tracking number"
                                       >
                                         <Check className="h-3 w-3 text-green-600" />
                                       </Button>
                                       <Button
+                                        type="button"
                                         size="sm"
                                         variant="ghost"
                                         onClick={cancelEditingTracking}
+                                        aria-label="Cancel tracking number edit"
+                                        title="Cancel tracking number edit"
                                       >
                                         <X className="h-3 w-3 text-red-600" />
                                       </Button>
-                                    </div>
+                                    </form>
                                   ) : (
                                     <div className="flex items-center gap-2">
                                       <code className="text-xs font-mono bg-muted px-2 py-1 rounded">

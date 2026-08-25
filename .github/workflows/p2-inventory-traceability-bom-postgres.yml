@@ -1,17 +1,20 @@
-name: P2 Inventory traceability BOM PostgreSQL certification
+name: P2 Phase 2 post-merge integration PostgreSQL certification
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - codex/p2-inventory-traceability-bom-foundation
+      - codex/p2-phase2-postmerge-integration-certification
   pull_request:
     paths:
       - '.github/workflows/p2-inventory-traceability-bom-postgres.yml'
+      - 'migrations/0294_shared_department_routing_authority_phase1.sql'
       - 'migrations/0295_inventory_traceability_bom_foundation.sql'
       - 'server/src/services/inventoryTraceabilityBomService.ts'
       - 'server/src/routes/inventoryTraceabilityBoms.ts'
       - 'server/__tests__/inventoryTraceabilityBomFoundation.test.ts'
+      - 'server/__tests__/phase2DraftBomIntegration.test.ts'
+      - 'server/src/routes/robustBoms.ts'
       - 'server/schema.ts'
       - 'server/src/lib/featureFlags.ts'
       - 'server/src/routes/index.ts'
@@ -19,6 +22,7 @@ on:
       - 'client/src/components/inventory/InventoryTraceabilityPolicySection.tsx'
       - 'client/src/components/inventory/InventoryItemsCard.tsx'
       - 'client/src/pages/RobustBOMAdministration.tsx'
+      - 'client/src/pages/DraftBOMBuilderPage.tsx'
       - 'client/src/__tests__/inventoryTraceabilityPolicySection.test.tsx'
 
 permissions:
@@ -51,7 +55,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - name: Focused contract tests
-        run: npx vitest run --config vitest.config.server.ts server/__tests__/inventoryTraceabilityBomFoundation.test.ts --reporter=verbose
+        run: npx vitest run --config vitest.config.server.ts server/__tests__/inventoryTraceabilityBomFoundation.test.ts server/__tests__/phase2DraftBomIntegration.test.ts --reporter=verbose
       - name: Focused client contract tests
         run: npx vitest run --config vitest.config.client.ts client/src/__tests__/inventoryTraceabilityPolicySection.test.tsx --reporter=verbose
       - name: Syntax, diff and scoped TypeScript validation
@@ -59,6 +63,7 @@ jobs:
           git diff --check origin/main...HEAD
           node --experimental-strip-types --check server/src/services/inventoryTraceabilityBomService.ts
           node --experimental-strip-types --check server/src/routes/inventoryTraceabilityBoms.ts
+          node --experimental-strip-types --check server/src/routes/robustBoms.ts
           npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node server/src/lib/featureFlags.ts
       - name: Prove Phase 1 migration dependency order
         shell: bash
@@ -87,16 +92,20 @@ jobs:
           CREATE TABLE users(id serial PRIMARY KEY);
           CREATE TABLE inventory_departments(id serial PRIMARY KEY,name text NOT NULL);
           CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text UNIQUE NOT NULL,name text NOT NULL,item_type text,category text);
+          CREATE TABLE part_routings(id serial PRIMARY KEY,payload text);
+          CREATE TABLE routing_operations(id serial PRIMARY KEY,part_routing_id integer NOT NULL REFERENCES part_routings(id),step_number integer NOT NULL,payload text);
           CREATE TABLE boms(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),parent_part_ag_number text NOT NULL,code text NOT NULL,description text,is_active boolean DEFAULT true);
           CREATE TABLE bom_revisions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bom_id uuid NOT NULL REFERENCES boms(id),rev_code text NOT NULL,notes text,is_released boolean DEFAULT false,effective_from timestamptz,effective_to timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
           CREATE TABLE bom_lines(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),revision_id uuid NOT NULL REFERENCES bom_revisions(id),child_part_ag_number text NOT NULL,qty_per numeric NOT NULL,scrap_pct numeric NOT NULL DEFAULT 0,reference text,operation_seq integer,notes text,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
           CREATE TABLE perm_capabilities(id serial PRIMARY KEY,key text UNIQUE NOT NULL,description text,category text);
           BEGIN;
+          \i migrations/0294_shared_department_routing_authority_phase1.sql
           \i migrations/0295_inventory_traceability_bom_foundation.sql
           ROLLBACK;
           DO $$ BEGIN
             IF to_regclass('rollback_case.inventory_item_traceability_policies') IS NOT NULL THEN RAISE EXCEPTION 'Migration rollback left policy schema'; END IF;
             IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='rollback_case' AND table_name='boms' AND column_name='parent_inventory_item_id') THEN RAISE EXCEPTION 'Migration rollback left BOM schema'; END IF;
+            IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='rollback_case' AND table_name='inventory_departments' AND column_name='department_code') THEN RAISE EXCEPTION 'Migration rollback left Department schema'; END IF;
           END $$;
           SET search_path TO public;
           DROP SCHEMA rollback_case CASCADE;
@@ -105,10 +114,14 @@ jobs:
           CREATE TABLE users(id serial PRIMARY KEY);
           CREATE TABLE inventory_departments(id serial PRIMARY KEY,name text NOT NULL);
           CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text UNIQUE NOT NULL,name text NOT NULL,item_type text,category text);
+          CREATE TABLE part_routings(id serial PRIMARY KEY,payload text);
+          CREATE TABLE routing_operations(id serial PRIMARY KEY,part_routing_id integer NOT NULL REFERENCES part_routings(id),step_number integer NOT NULL,payload text);
           CREATE TABLE boms(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),parent_part_ag_number text NOT NULL,code text NOT NULL,description text,is_active boolean DEFAULT true);
           CREATE TABLE bom_revisions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bom_id uuid NOT NULL REFERENCES boms(id),rev_code text NOT NULL,notes text,is_released boolean DEFAULT false,effective_from timestamptz,effective_to timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
           CREATE TABLE bom_lines(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),revision_id uuid NOT NULL REFERENCES bom_revisions(id),child_part_ag_number text NOT NULL,qty_per numeric NOT NULL,scrap_pct numeric NOT NULL DEFAULT 0,reference text,operation_seq integer,notes text,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
           CREATE TABLE perm_capabilities(id serial PRIMARY KEY,key text UNIQUE NOT NULL,description text,category text);
+          \i migrations/0294_shared_department_routing_authority_phase1.sql
+          \i migrations/0294_shared_department_routing_authority_phase1.sql
           \i migrations/0295_inventory_traceability_bom_foundation.sql
           \i migrations/0295_inventory_traceability_bom_foundation.sql
           SET search_path TO public;
@@ -124,6 +137,8 @@ jobs:
           CREATE TABLE work_orders(id serial PRIMARY KEY,payload text);
           CREATE TABLE travelers(id serial PRIMARY KEY,payload text);
           CREATE TABLE part_routings(id serial PRIMARY KEY,payload text);
+          CREATE TABLE routing_operations(id serial PRIMARY KEY,part_routing_id integer NOT NULL REFERENCES part_routings(id),step_number integer NOT NULL,payload text);
+          CREATE TABLE inventory_reservations(id serial PRIMARY KEY,payload text);
           CREATE TABLE production_schedule_entries(id serial PRIMARY KEY,payload text);
           CREATE TABLE receiving_records(id serial PRIMARY KEY,payload text);
           CREATE TABLE barcode_records(id serial PRIMARY KEY,payload text);
@@ -142,6 +157,8 @@ jobs:
           INSERT INTO work_orders(payload) VALUES('legacy work order');
           INSERT INTO travelers(payload) VALUES('legacy traveler');
           INSERT INTO part_routings(payload) VALUES('legacy routing');
+          INSERT INTO routing_operations(part_routing_id,step_number,payload) VALUES(1,10,'legacy routing operation');
+          INSERT INTO inventory_reservations(payload) VALUES('legacy reservation');
           INSERT INTO production_schedule_entries(payload) VALUES('legacy schedule');
           INSERT INTO receiving_records(payload) VALUES('legacy receipt');
           INSERT INTO barcode_records(payload) VALUES('legacy barcode');
@@ -153,6 +170,7 @@ jobs:
           INSERT INTO genealogy_records(payload) VALUES('legacy genealogy');
           CREATE TEMP TABLE before_state AS SELECT
             (SELECT count(*) FROM inventory_items) item_count,
+            (SELECT count(*) FROM inventory_departments) department_count,
             (SELECT count(*) FROM boms) bom_count,
             (SELECT count(*) FROM bom_revisions) revision_count,
             (SELECT count(*) FROM bom_lines) line_count,
@@ -160,6 +178,8 @@ jobs:
             (SELECT count(*) FROM work_orders) work_order_count,
             (SELECT count(*) FROM travelers) traveler_count,
             (SELECT count(*) FROM part_routings) routing_count,
+            (SELECT count(*) FROM routing_operations) routing_operation_count,
+            (SELECT count(*) FROM inventory_reservations) reservation_count,
             (SELECT count(*) FROM production_schedule_entries) schedule_count,
             (SELECT count(*) FROM receiving_records) receiving_count,
             (SELECT count(*) FROM barcode_records) barcode_count,
@@ -170,6 +190,7 @@ jobs:
             (SELECT count(*) FROM project_received_materials) material_count,
             (SELECT count(*) FROM genealogy_records) genealogy_count,
             md5((SELECT string_agg(ag_part_number||':'||name||':'||COALESCE(item_type,'')||':'||COALESCE(category,''),',' ORDER BY id) FROM inventory_items)) item_digest,
+            md5((SELECT string_agg(id::text||':'||name,',' ORDER BY id) FROM inventory_departments)) department_digest,
             md5((SELECT string_agg(id::text||':'||parent_part_ag_number||':'||code||':'||COALESCE(description,''),',' ORDER BY id) FROM boms)) bom_digest,
             md5((SELECT string_agg(id::text||':'||bom_id::text||':'||rev_code||':'||is_released::text,',' ORDER BY id) FROM bom_revisions)) revision_digest,
             md5((SELECT string_agg(id::text||':'||revision_id::text||':'||child_part_ag_number||':'||qty_per::text,',' ORDER BY id) FROM bom_lines)) line_digest,
@@ -177,6 +198,8 @@ jobs:
             md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM work_orders)) work_order_digest,
             md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM travelers)) traveler_digest,
             md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM part_routings)) routing_digest,
+            md5((SELECT string_agg(id::text||':'||part_routing_id::text||':'||step_number::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM routing_operations)) routing_operation_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM inventory_reservations)) reservation_digest,
             md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM production_schedule_entries)) schedule_digest,
             md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM receiving_records)) receiving_digest,
             md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM barcode_records)) barcode_digest,
@@ -186,16 +209,22 @@ jobs:
             md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM labor_entries)) labor_digest,
             md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM project_received_materials)) material_digest,
             md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM genealogy_records)) genealogy_digest;
+          \i migrations/0294_shared_department_routing_authority_phase1.sql
+          \i migrations/0294_shared_department_routing_authority_phase1.sql
           \i migrations/0295_inventory_traceability_bom_foundation.sql
           \i migrations/0295_inventory_traceability_bom_foundation.sql
           DO $$ DECLARE changed boolean; BEGIN
             SELECT before_state IS DISTINCT FROM after_state INTO changed FROM before_state,LATERAL(SELECT
-              (SELECT count(*) FROM inventory_items) item_count,(SELECT count(*) FROM boms) bom_count,
+              (SELECT count(*) FROM inventory_items) item_count,
+              (SELECT count(*) FROM inventory_departments) department_count,
+              (SELECT count(*) FROM boms) bom_count,
               (SELECT count(*) FROM bom_revisions) revision_count,(SELECT count(*) FROM bom_lines) line_count,
               (SELECT count(*) FROM inventory_transactions) transaction_count,
               (SELECT count(*) FROM work_orders) work_order_count,
               (SELECT count(*) FROM travelers) traveler_count,
               (SELECT count(*) FROM part_routings) routing_count,
+              (SELECT count(*) FROM routing_operations) routing_operation_count,
+              (SELECT count(*) FROM inventory_reservations) reservation_count,
               (SELECT count(*) FROM production_schedule_entries) schedule_count,
               (SELECT count(*) FROM receiving_records) receiving_count,
               (SELECT count(*) FROM barcode_records) barcode_count,
@@ -206,6 +235,7 @@ jobs:
               (SELECT count(*) FROM project_received_materials) material_count,
               (SELECT count(*) FROM genealogy_records) genealogy_count,
               md5((SELECT string_agg(ag_part_number||':'||name||':'||COALESCE(item_type,'')||':'||COALESCE(category,''),',' ORDER BY id) FROM inventory_items)) item_digest,
+              md5((SELECT string_agg(id::text||':'||name,',' ORDER BY id) FROM inventory_departments)) department_digest,
               md5((SELECT string_agg(id::text||':'||parent_part_ag_number||':'||code||':'||COALESCE(description,''),',' ORDER BY id) FROM boms)) bom_digest,
               md5((SELECT string_agg(id::text||':'||bom_id::text||':'||rev_code||':'||is_released::text,',' ORDER BY id) FROM bom_revisions)) revision_digest,
               md5((SELECT string_agg(id::text||':'||revision_id::text||':'||child_part_ag_number||':'||qty_per::text,',' ORDER BY id) FROM bom_lines)) line_digest,
@@ -213,6 +243,8 @@ jobs:
               md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM work_orders)) work_order_digest,
               md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM travelers)) traveler_digest,
               md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM part_routings)) routing_digest,
+              md5((SELECT string_agg(id::text||':'||part_routing_id::text||':'||step_number::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM routing_operations)) routing_operation_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM inventory_reservations)) reservation_digest,
               md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM production_schedule_entries)) schedule_digest,
               md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM receiving_records)) receiving_digest,
               md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM barcode_records)) barcode_digest,

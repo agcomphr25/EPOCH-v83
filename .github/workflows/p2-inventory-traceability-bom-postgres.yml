@@ -2,6 +2,9 @@ name: P2 Inventory traceability BOM PostgreSQL certification
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/p2-inventory-traceability-bom-foundation
   pull_request:
     paths:
       - '.github/workflows/p2-inventory-traceability-bom-postgres.yml'

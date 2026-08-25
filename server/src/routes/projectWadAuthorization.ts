@@ -66,6 +66,8 @@ const travelerDecisionSchema = z.object({
   inventoryItemId: z.number().int().positive(),
   assemblyPathIdentity: z.string().min(1),
   requiredQuantity: z.number().positive(),
+  batchApprovedQuantity: z.number().positive().nullable().optional(),
+  batchCoverageScope: z.string().min(1).nullable().optional(),
   travelerRequirement: z.enum(['REQUIRED', 'NOT_REQUIRED_APPROVED']),
   travelerType: z.enum(['INDIVIDUAL', 'BATCH']).nullable().optional(),
   inspectionRequirements: z.record(z.unknown()),
@@ -84,6 +86,12 @@ function actor(req: Request): WadAuthorizationActor {
       'ACTOR_REQUIRED',
       'Authenticated actor identity is required.',
       401
+    );
+  if (!req.user.employeeId)
+    throw new ProjectWadAuthorizationError(
+      'ACTOR_EMPLOYEE_REQUIRED',
+      'An authenticated employee identity is required for controlled WAD actions.',
+      403
     );
   return {
     userId: req.user.id,

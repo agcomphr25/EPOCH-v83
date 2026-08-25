@@ -307,7 +307,9 @@ export const safeMigrationFiles = [
   '0250_epoch_validation_wizard_phase1.sql',
   '0251_design_project_configuration_workspace.sql',
   '0252_potential_order_duplicate_reviews.sql',
-  '0253_void_duplicate_epoch_validation_packages.sql',
+  // 0253_void_duplicate_epoch_validation_packages.sql is intentionally
+  // excluded. It is a one-off controlled data correction certified by the
+  // dedicated migration-0253 workflow, not a recurring safe-boot migration.
   '0254_controlled_document_reconciliation_certification_controls.sql',
   '0255_p2_v2_definition_v3_handoff.sql',
   '0256_controlled_document_atomic_approval_release.sql',

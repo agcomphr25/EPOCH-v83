@@ -27,7 +27,38 @@ export async function getTemplateByKey(
   );
   const row = rows.rows?.[0] ?? rows[0];
   if (!row) return null;
-  return rowToTemplate(row);
+  return enforceCanonicalVendorPoTemplate(rowToTemplate(row), key);
+}
+
+/**
+ * Vendor PO issue/resend content is operationally controlled by the application.
+ * Preserve the database identity/version for audit purposes, but never allow an
+ * obsolete editable row to restore the retired confirmation workflow or discard
+ * the message the user entered in the send modal.
+ */
+export function enforceCanonicalVendorPoTemplate(
+  template: EmailTemplate,
+  key: string,
+): EmailTemplate {
+  const canonical = key === VENDOR_PO_ISSUE_TEMPLATE.key
+    ? VENDOR_PO_ISSUE_TEMPLATE
+    : key === VENDOR_PO_RESEND_TEMPLATE.key
+      ? VENDOR_PO_RESEND_TEMPLATE
+      : null;
+
+  if (!canonical) return template;
+
+  return {
+    ...template,
+    key: canonical.key,
+    name: canonical.name,
+    subject: canonical.subject,
+    bodyHtml: canonical.bodyHtml,
+    bodyText: canonical.bodyText,
+    allowedVariables: [...canonical.allowedVariables],
+    attachmentRules: { ...canonical.attachmentRules },
+    isActive: true,
+  };
 }
 
 export async function getAllTemplates(db: any): Promise<EmailTemplate[]> {

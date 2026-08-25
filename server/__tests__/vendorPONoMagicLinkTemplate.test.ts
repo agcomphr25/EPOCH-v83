@@ -5,6 +5,7 @@ vi.mock('../db', () => ({
 }));
 
 import {
+  enforceCanonicalVendorPoTemplate,
   VENDOR_PO_ISSUE_TEMPLATE,
   VENDOR_PO_RESEND_TEMPLATE,
 } from '../communication/registry';
@@ -29,6 +30,35 @@ function expectNoVendorConfirmationLanguage(body: string) {
 }
 
 describe('vendor PO email templates', () => {
+  it('replaces a stale database confirmation template with canonical send content', () => {
+    const staleTemplate = {
+      id: 'stale-template-id',
+      key: 'vendor_po_issue',
+      name: 'Purchase Order Confirmation Request',
+      subject: 'PO {{po_number}} - Confirmation Requested',
+      bodyHtml: '<h1>Purchase Order Confirmation Request</h1>',
+      bodyText: 'Purchase Order Confirmation Request',
+      allowedVariables: ['po_number'],
+      attachmentRules: { attachVendorPOPDF: true, systemNotice: true },
+      version: 7,
+      currentVersion: 7,
+      isActive: true,
+      createdAt: null,
+      updatedAt: null,
+      updatedBy: null,
+    };
+
+    const resolved = enforceCanonicalVendorPoTemplate(staleTemplate, staleTemplate.key);
+    const rendered = renderFromObject(resolved as any, context);
+
+    expect(resolved.id).toBe('stale-template-id');
+    expect(resolved.version).toBe(7);
+    expect(resolved.attachmentRules.systemNotice).toBe(false);
+    expect(rendered.subject).toBe('PO 12345 from AG Composites');
+    expect(rendered.html).toContain(context.vendor_message_html);
+    expect(rendered.html).not.toContain('Purchase Order Confirmation Request');
+  });
+
   it('does not add the EPOCH system-generated banner to issue or resend emails', () => {
     expect(VENDOR_PO_ISSUE_TEMPLATE.attachmentRules.systemNotice).toBe(false);
     expect(VENDOR_PO_RESEND_TEMPLATE.attachmentRules.systemNotice).toBe(false);

@@ -241,7 +241,7 @@ jobs:
           UPDATE boms SET parent_inventory_item_id=1,parent_part_number_snapshot='LEGACY-PARENT',parent_name_snapshot='Legacy Parent',parent_revision_snapshot='B' WHERE code='LEGACY-BOM';
           INSERT INTO bom_revisions(bom_id,rev_code,is_released,lifecycle_status,effectivity,content_checksum,
             approved_by_display_name,approved_by_role,approval_capacity,signature_meaning,approved_at)
-          SELECT id,'B',true,'RELEASED','{"revision":"B"}'::jsonb,'bom-checksum','BOM Approver','ENGINEERING','ENGINEERING','I approve',now() FROM boms WHERE code='LEGACY-BOM';
+          SELECT id,'B',false,'DRAFT','{"revision":"B"}'::jsonb,'bom-checksum','BOM Approver','ENGINEERING','ENGINEERING','I approve',now() FROM boms WHERE code='LEGACY-BOM';
           INSERT INTO bom_lines(revision_id,child_part_ag_number,qty_per,child_inventory_item_id,
             child_part_number_snapshot,child_name_snapshot,child_revision_snapshot,unit_of_measure,
             make_buy_disposition,assembly_path_identity,inherited_policy_id,inherited_policy_revision,inherited_policy_type)
@@ -249,6 +249,7 @@ jobs:
           FROM bom_revisions br JOIN boms b ON b.id=br.bom_id
           JOIN inventory_item_traceability_policies p ON p.inventory_item_id=1 AND p.status='RELEASED'
           WHERE b.code='LEGACY-BOM' AND br.rev_code='B';
+          UPDATE bom_revisions SET lifecycle_status='RELEASED',is_released=true WHERE rev_code='B';
           DO $$ DECLARE revision_blocked boolean := false; line_blocked boolean := false; BEGIN
             BEGIN UPDATE bom_revisions SET rev_code='C' WHERE lifecycle_status='RELEASED'; EXCEPTION WHEN raise_exception THEN revision_blocked := true; END;
             BEGIN UPDATE bom_lines SET qty_per=2 WHERE revision_id IN(SELECT id FROM bom_revisions WHERE lifecycle_status='RELEASED'); EXCEPTION WHEN raise_exception THEN line_blocked := true; END;

@@ -35,6 +35,10 @@ type FrozenDemandContext = {
   purchaseOrder: Record<string, unknown>;
 };
 const clean = (v: unknown) => String(v ?? '').trim();
+const objectSnapshot = (value: unknown): Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 
 async function authoritativeSource(
   projectId: string,
@@ -231,8 +235,8 @@ async function authoritativeSource(
             approvedAt: wad.exception_approved_at,
           }
         : {},
-      effectivity: bom?.effectivity ?? {},
-      customerConfiguration: h.customer_configuration,
+      effectivity: objectSnapshot(bom?.effectivity),
+      customerConfiguration: objectSnapshot(h.customer_configuration),
       children,
     };
   };
@@ -259,7 +263,7 @@ async function authoritativeSource(
     {
       id: h.routing_id,
       revision: h.routing_revision_snapshot,
-      ...(h.routing_snapshot ?? {}),
+      ...objectSnapshot(h.routing_snapshot),
     }
   );
   return {

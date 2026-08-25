@@ -24,13 +24,23 @@ export class FrozenDemandError extends Error {
   }
 }
 type Queryable = Pick<PoolClient, 'query'>;
+type FrozenDemandContext = {
+  projectId: string;
+  configurationId: string;
+  configurationChecksum: string;
+  wadAuthorizationId: string;
+  wadChecksum: string;
+  project: Record<string, unknown>;
+  customer: Record<string, unknown>;
+  purchaseOrder: Record<string, unknown>;
+};
 const clean = (v: unknown) => String(v ?? '').trim();
 
 async function authoritativeSource(
   projectId: string,
   tx: Queryable
 ): Promise<{
-  context: Record<string, unknown>;
+  context: FrozenDemandContext;
   root: FrozenDemandSourceNode;
   quantity: string;
 }> {
@@ -249,7 +259,7 @@ async function authoritativeSource(
     {
       id: h.routing_id,
       revision: h.routing_revision_snapshot,
-      ...h.routing_snapshot,
+      ...(h.routing_snapshot ?? {}),
     }
   );
   return {
@@ -281,7 +291,7 @@ async function authoritativeSource(
 
 export async function previewFrozenProductionDemand(
   projectId: string,
-  tx: Queryable = pool
+  tx: Queryable = pool as unknown as Queryable
 ) {
   const source = await authoritativeSource(projectId, tx);
   return {

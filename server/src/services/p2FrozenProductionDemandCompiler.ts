@@ -40,7 +40,10 @@ export type FrozenDemandNode = Omit<
   nodeChecksum: string;
 };
 
-const SCALE = 1_000_000n;
+const ZERO = BigInt(0);
+const ONE = BigInt(1);
+const HUNDRED = BigInt(100);
+const SCALE = BigInt(1_000_000);
 const SUPPORTED = new Set([
   'RAW_MATERIAL',
   'PURCHASED_COMPONENT',
@@ -73,7 +76,7 @@ function format(value: bigint): string {
   return `${value / SCALE}.${String(value % SCALE).padStart(6, '0')}`;
 }
 function multiply(a: bigint, b: bigint): bigint {
-  return (a * b + SCALE - 1n) / SCALE;
+  return (a * b + SCALE - ONE) / SCALE;
 }
 
 export function compileFrozenProductionDemand(
@@ -85,7 +88,7 @@ export function compileFrozenProductionDemand(
   let rootQuantity: bigint;
   try {
     rootQuantity = decimal(projectQuantity);
-    if (rootQuantity <= 0n) throw new Error();
+    if (rootQuantity <= ZERO) throw new Error();
   } catch {
     return {
       nodes,
@@ -151,17 +154,18 @@ export function compileFrozenProductionDemand(
         'Make/Buy authority is missing or invalid.',
         'Correct the released BOM Make/Buy disposition.'
       );
-    let per = 0n,
-      scrap = 0n,
-      required = 0n;
+    let per = ZERO,
+      scrap = ZERO,
+      required = ZERO;
     try {
       per = decimal(source.quantityPerParent);
       scrap = decimal(source.scrapPercent ?? 0);
-      if (per <= 0n || scrap < 0n || scrap >= 100n * SCALE) throw new Error();
+      if (per <= ZERO || scrap < ZERO || scrap >= HUNDRED * SCALE)
+        throw new Error();
       required = multiply(parentQty, per);
       required =
-        (required * 100n * SCALE + (100n * SCALE - scrap) - 1n) /
-        (100n * SCALE - scrap);
+        (required * HUNDRED * SCALE + (HUNDRED * SCALE - scrap) - ONE) /
+        (HUNDRED * SCALE - scrap);
     } catch {
       block(
         'QUANTITY_INVALID',

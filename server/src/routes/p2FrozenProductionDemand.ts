@@ -26,12 +26,19 @@ const version = z.object({
   expectedConcurrencyVersion: z.number().int().positive(),
 });
 const actor = async (req: Request) => {
-  const s = await resolveUserSnapshot(req.user.id);
+  if (!req.user)
+    throw new FrozenDemandError(
+      'AUTHENTICATED_USER_REQUIRED',
+      'An authenticated user is required.',
+      401
+    );
+  const user = req.user;
+  const s = await resolveUserSnapshot(user.id);
   return {
     userId: s.userId,
-    employeeId: req.user.employeeId ?? null,
+    employeeId: user.employeeId ?? null,
     displayName: s.displayName,
-    role: String(req.user.role),
+    role: String(user.role),
   };
 };
 const enabled = (on: boolean) => {
@@ -63,6 +70,12 @@ router.get(
   async (req, res) => {
     try {
       enabled(areP2FrozenProductionDemandReadsEnabled());
+      if (!req.user)
+        throw new FrozenDemandError(
+          'AUTHENTICATED_USER_REQUIRED',
+          'An authenticated user is required.',
+          401
+        );
       const permissions = await getUserPermissions(
         req.user.id,
         String(req.user.role)

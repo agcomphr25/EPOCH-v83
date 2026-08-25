@@ -89,4 +89,4 @@ jobs:
           \endif
           SQL
       - name: Diff hygiene
-        run: git diff --check HEAD^
+        run: git show --check --oneline --no-renames HEAD

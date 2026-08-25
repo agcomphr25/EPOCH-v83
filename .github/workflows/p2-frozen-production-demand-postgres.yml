@@ -57,6 +57,7 @@ jobs:
       - name: TypeScript, lint, format and diff hygiene
         run: |
           npx tsc --project tsconfig.p2-frozen-demand.json --pretty false
+          npx esbuild server/src/services/p2FrozenProductionDemandService.ts server/src/routes/p2FrozenProductionDemand.ts --platform=node --format=esm --outdir=/tmp/p2-frozen-demand-ts-validation
           npx eslint server/src/services/p2FrozenProductionDemandCompiler.ts server/src/services/p2FrozenProductionDemandService.ts server/src/routes/p2FrozenProductionDemand.ts client/src/components/p2/P2FrozenProductionDemand.tsx server/__tests__/p2FrozenProductionDemandFoundation.test.ts client/src/components/p2/__tests__/P2FrozenProductionDemand.test.tsx --max-warnings 0
           npx prettier --check server/src/services/p2FrozenProductionDemandCompiler.ts server/src/services/p2FrozenProductionDemandService.ts server/src/routes/p2FrozenProductionDemand.ts client/src/components/p2/P2FrozenProductionDemand.tsx server/__tests__/p2FrozenProductionDemandFoundation.test.ts client/src/components/p2/__tests__/P2FrozenProductionDemand.test.tsx
           git diff --check HEAD^ HEAD

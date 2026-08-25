@@ -24,6 +24,7 @@ import {
   buildStockBOMTree
 } from '../db/queries/bom';
 import { requirePermission } from '../../middleware/requirePermission';
+import { areControlledItemLinkedBomWritesEnabled } from '../lib/featureFlags';
 
 const router = Router();
 
@@ -245,6 +246,12 @@ router.get('/parts/:id/where-used', async (req, res) => {
 
 router.post('/from-draft-builder', requirePermission('inventory.adjust'), async (req, res) => {
   try {
+    if (areControlledItemLinkedBomWritesEnabled()) {
+      return res.status(409).json({
+        error: 'CONTROLLED_BOM_ENDPOINT_REQUIRED',
+        message: 'Controlled BOM drafts must use the controlled configuration endpoint and lifecycle.',
+      });
+    }
     const payload = draftBuilderBomImportSchema.parse(req.body);
     const rootInventory = payload.rootPart.inventoryItemId
       ? await db.query.inventoryItems.findFirst({

@@ -92,6 +92,7 @@ type DraftBomComponent = {
   partNumber: string;
   description: string;
   quantity: number;
+  unitOfMeasure?: string | null;
   isManufactured: boolean;
   firstDepartment: string;
 };
@@ -262,6 +263,9 @@ type RobustBomAcceptResult = {
   p2PoBomItemCount?: number;
   linkedP2PoIds?: number[];
 };
+
+const controlledItemLinkedBomWritesEnabled =
+  import.meta.env.VITE_CONTROLLED_ITEM_LINKED_BOM_WRITES_ENABLED === 'true';
 
 type InventoryDepartmentOption = {
   id: number;
@@ -744,6 +748,45 @@ async function saveDraftBomToRobustBom(
   draft: BomDraft,
   activate: boolean,
 ): Promise<RobustBomAcceptResult> {
+  if (controlledItemLinkedBomWritesEnabled) {
+    const parentInventoryItemId = Number(bom.rootPart.inventoryItemId);
+    if (!Number.isSafeInteger(parentInventoryItemId) || parentInventoryItemId <= 0) {
+      throw new Error('Controlled BOM drafts require the parent to be finalized as an Inventory Item.');
+    }
+
+    const configuredPart = bom.parts[0];
+    if (!configuredPart || configuredPart.bomItems.length === 0) {
+      throw new Error('Controlled BOM drafts require at least one component.');
+    }
+    const lines = configuredPart.bomItems.map((component) => {
+      const childInventoryItemId = Number(component.inventoryItemId);
+      if (!Number.isSafeInteger(childInventoryItemId) || childInventoryItemId <= 0) {
+        throw new Error(`Controlled BOM component ${component.partNumber} must be finalized as an Inventory Item.`);
+      }
+      return {
+        childInventoryItemId,
+        childRevision: null,
+        quantityPer: component.quantity,
+        unitOfMeasure: component.unitOfMeasure || 'EA',
+      };
+    });
+
+    const result = await apiRequest('/api/configuration-control/controlled-boms', {
+      method: 'POST',
+      body: {
+        parentInventoryItemId,
+        revisionCode: bom.revision || draft.revision || 'DRAFT',
+        effectivity: {
+          source: 'DRAFT_BOM_BUILDER',
+          draftId: draft.id,
+          draftRevision: draft.revision,
+        },
+        lines,
+      },
+    }) as RobustBomAcceptResult;
+    return { ...result, status: 'draft' };
+  }
+
   return await apiRequest('/api/robust-boms/from-draft-builder', {
     method: 'POST',
     body: {
@@ -3592,7 +3635,10 @@ export default function DraftBOMBuilderPage() {
       try {
         for (const bomToPromote of bomsToPromote) {
           const result = await saveDraftBomToRobustBom(bomToPromote, draft, true);
-          promotedDraftBoms.set(bomToPromote.id, markDraftBomAccepted(bomToPromote, result, 'active'));
+          promotedDraftBoms.set(
+            bomToPromote.id,
+            markDraftBomAccepted(bomToPromote, result, controlledItemLinkedBomWritesEnabled ? 'draft' : 'active'),
+          );
         }
         if (promotedDraftBoms.size > 0) {
           setDraft((current) => ({
@@ -3607,6 +3653,13 @@ export default function DraftBOMBuilderPage() {
               childDraftBoms: (line.childDraftBoms ?? []).map((bom) => promotedDraftBoms.get(bom.id) ?? bom),
             })),
           }));
+        }
+        if (controlledItemLinkedBomWritesEnabled && promotedDraftBoms.size > 0) {
+          toast({
+            title: 'Controlled BOM draft created',
+            description: `${promotedDraftBoms.size} controlled BOM draft(s) were created. Submission, independent approval, release, and project execution remain separate controlled actions.`,
+          });
+          return;
         }
         toast({
           title: shouldPromoteDraftBoms ? 'BOM pushed to P2 project' : 'Draft tab pushed to P2 project',
@@ -6028,6 +6081,9 @@ function DraftBomWizardWorkspace({
       partNumber: componentPartNumber.trim(),
       description: componentDescription.trim() || componentPartNumber.trim(),
       quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+      unitOfMeasure: componentSource === 'inventory-item'
+        ? componentInventoryItem?.usageUnit || componentInventoryItem?.unit || 'EA'
+        : draftLines.find((line) => line.id === componentLineId)?.unit || 'EA',
       isManufactured: componentManufactured,
       firstDepartment: componentDepartment || currentDefaultDepartment,
     };

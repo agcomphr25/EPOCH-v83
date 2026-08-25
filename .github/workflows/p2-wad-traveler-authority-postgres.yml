@@ -60,12 +60,12 @@ jobs:
           SELECT 'travelers|'||count(*) FROM travelers;
           SELECT 'transactions|'||count(*) FROM inventory_transactions;
           SELECT 'decisions|'||count(*) FROM p2_wad_traveler_decisions;
+          SELECT 'inventory_items_checksum|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_items t;
+          SELECT 'work_orders_checksum|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM production_work_orders t;
+          SELECT 'travelers_checksum|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM travelers t;
+          SELECT 'transactions_checksum|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_transactions t;
+          SELECT 'decisions_checksum|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM p2_wad_traveler_decisions t;
           SQL
-          pg_dump "$DATABASE_URL" --data-only --column-inserts \
-            --table=inventory_items --table=production_work_orders \
-            --table=travelers --table=inventory_transactions \
-            --table=p2_wad_traveler_decisions > /tmp/before-data.sql
-          sha256sum /tmp/before-data.sql > /tmp/before-data.sha256
           npm run maintenance:safe-migrations
           psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/after.txt
           SELECT 'inventory_items|'||count(*) FROM inventory_items;
@@ -73,14 +73,13 @@ jobs:
           SELECT 'travelers|'||count(*) FROM travelers;
           SELECT 'transactions|'||count(*) FROM inventory_transactions;
           SELECT 'decisions|'||count(*) FROM p2_wad_traveler_decisions;
+          SELECT 'inventory_items_checksum|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_items t;
+          SELECT 'work_orders_checksum|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM production_work_orders t;
+          SELECT 'travelers_checksum|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM travelers t;
+          SELECT 'transactions_checksum|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_transactions t;
+          SELECT 'decisions_checksum|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM p2_wad_traveler_decisions t;
           SQL
-          pg_dump "$DATABASE_URL" --data-only --column-inserts \
-            --table=inventory_items --table=production_work_orders \
-            --table=travelers --table=inventory_transactions \
-            --table=p2_wad_traveler_decisions > /tmp/after-data.sql
-          sha256sum /tmp/after-data.sql | sed 's#/tmp/after-data.sql#/tmp/before-data.sql#' > /tmp/after-data.sha256
           diff -u /tmp/before.txt /tmp/after.txt
-          diff -u /tmp/before-data.sha256 /tmp/after-data.sha256
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           BEGIN;
           ALTER TABLE p2_wad_traveler_decisions ADD COLUMN rollback_probe boolean;

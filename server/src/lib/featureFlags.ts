@@ -135,6 +135,15 @@ export function isRecursiveTraceabilityPreviewEnabled(): boolean {
   return envBool('RECURSIVE_TRACEABILITY_PREVIEW_ENABLED', false);
 }
 
+/** Phase 3 P2 project controlled-configuration foundation; disabled by default. */
+export function areP2ProjectControlledConfigurationReadsEnabled(): boolean {
+  return envBool('P2_PROJECT_CONTROLLED_CONFIGURATION_READS_ENABLED', false);
+}
+
+export function areP2ProjectControlledConfigurationWritesEnabled(): boolean {
+  return envBool('P2_PROJECT_CONTROLLED_CONFIGURATION_WRITES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

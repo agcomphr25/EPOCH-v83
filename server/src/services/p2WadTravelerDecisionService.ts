@@ -5,7 +5,7 @@ import { evaluateWadTravelerCoverage } from './p2WadTravelerCoverage';
 
 export type WadTravelerActor = {
   userId: number;
-  employeeId: number | null;
+  employeeId?: number | null;
   displayName: string;
   role: string;
 };
@@ -53,6 +53,12 @@ export async function saveWadTravelerDecision(
   },
   actor: WadTravelerActor
 ) {
+  if (!actor.employeeId)
+    throw new WadTravelerDecisionError(
+      'ACTOR_EMPLOYEE_REQUIRED',
+      'An authenticated employee identity is required for controlled WAD decisions.',
+      403
+    );
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -259,6 +265,12 @@ export async function approveWadTravelerException(
   signatureMeaning: string,
   actor: WadTravelerActor
 ) {
+  if (!actor.employeeId)
+    throw new WadTravelerDecisionError(
+      'ACTOR_EMPLOYEE_REQUIRED',
+      'An authenticated employee identity is required for controlled WAD exception approval.',
+      403
+    );
   if (!clean(signatureMeaning))
     throw new WadTravelerDecisionError(
       'SIGNATURE_REQUIRED',

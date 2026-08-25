@@ -47,7 +47,7 @@ export function evaluateWadTravelerCoverage(
         `${identity}: approved batch coverage does not cover released demand ${required}.`
       );
   }
-  for (const identity of byIdentity.keys())
+  for (const identity of Array.from(byIdentity.keys()))
     if (!expectedKeys.has(identity))
       blockers.push(
         `${identity}: traveler decision is outside the released manufactured-demand set.`

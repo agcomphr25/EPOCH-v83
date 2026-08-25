@@ -43,6 +43,8 @@ jobs:
       DATABASE_URL: postgresql://phase2_cert:disposable_phase2_password@127.0.0.1:5432/phase2_inventory_bom_certification
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -50,6 +52,27 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Focused contract tests
         run: npx vitest run --config vitest.config.server.ts server/__tests__/inventoryTraceabilityBomFoundation.test.ts --reporter=verbose
+      - name: Focused client contract tests
+        run: npx vitest run --config vitest.config.client.ts client/src/__tests__/inventoryTraceabilityPolicySection.test.tsx --reporter=verbose
+      - name: Syntax, diff and scoped TypeScript validation
+        run: |
+          git diff --check origin/main...HEAD
+          node --experimental-strip-types --check server/src/services/inventoryTraceabilityBomService.ts
+          node --experimental-strip-types --check server/src/routes/inventoryTraceabilityBoms.ts
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --types node server/src/lib/featureFlags.ts
+      - name: Prove Phase 1 migration dependency order
+        shell: bash
+        run: |
+          test -f migrations/0294_shared_department_routing_authority_phase1.sql
+          test -f migrations/0295_inventory_traceability_bom_foundation.sql
+          safe_0294="$(grep -n "'0294_shared_department_routing_authority_phase1.sql'" server/scripts/migrations/runSafeBootMigrations.ts | head -1 | cut -d: -f1)"
+          safe_0295="$(grep -n "'0295_inventory_traceability_bom_foundation.sql'" server/scripts/migrations/runSafeBootMigrations.ts | head -1 | cut -d: -f1)"
+          critical_0294="$(grep -n "'0294_shared_department_routing_authority_phase1.sql'" server/scripts/migrations/runSafeBootMigrations.ts | tail -1 | cut -d: -f1)"
+          critical_0295="$(grep -n "'0295_inventory_traceability_bom_foundation.sql'" server/scripts/migrations/runSafeBootMigrations.ts | tail -1 | cut -d: -f1)"
+          test "$safe_0294" -lt "$safe_0295"
+          test "$critical_0294" -lt "$critical_0295"
+          echo "safe order: 0294 line $safe_0294 before 0295 line $safe_0295"
+          echo "critical order: 0294 line $critical_0294 before 0295 line $critical_0295"
       - name: Prove disposable database boundary
         run: |
           node -e "const u=new URL(process.env.DATABASE_URL); if(u.hostname!=='127.0.0.1'||u.pathname!=='/phase2_inventory_bom_certification') process.exit(1)"
@@ -59,11 +82,29 @@ jobs:
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE SCHEMA rollback_case;
+          SET search_path TO rollback_case,public;
+          CREATE TABLE users(id serial PRIMARY KEY);
+          CREATE TABLE inventory_departments(id serial PRIMARY KEY,name text NOT NULL);
+          CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text UNIQUE NOT NULL,name text NOT NULL,item_type text,category text);
+          CREATE TABLE boms(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),parent_part_ag_number text NOT NULL,code text NOT NULL,description text,is_active boolean DEFAULT true);
+          CREATE TABLE bom_revisions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bom_id uuid NOT NULL REFERENCES boms(id),rev_code text NOT NULL,notes text,is_released boolean DEFAULT false,effective_from timestamptz,effective_to timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+          CREATE TABLE bom_lines(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),revision_id uuid NOT NULL REFERENCES bom_revisions(id),child_part_ag_number text NOT NULL,qty_per numeric NOT NULL,scrap_pct numeric NOT NULL DEFAULT 0,reference text,operation_seq integer,notes text,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+          CREATE TABLE perm_capabilities(id serial PRIMARY KEY,key text UNIQUE NOT NULL,description text,category text);
+          BEGIN;
+          \i migrations/0295_inventory_traceability_bom_foundation.sql
+          ROLLBACK;
+          DO $$ BEGIN
+            IF to_regclass('rollback_case.inventory_item_traceability_policies') IS NOT NULL THEN RAISE EXCEPTION 'Migration rollback left policy schema'; END IF;
+            IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='rollback_case' AND table_name='boms' AND column_name='parent_inventory_item_id') THEN RAISE EXCEPTION 'Migration rollback left BOM schema'; END IF;
+          END $$;
+          SET search_path TO public;
+          DROP SCHEMA rollback_case CASCADE;
           CREATE SCHEMA clean_case;
           SET search_path TO clean_case,public;
           CREATE TABLE users(id serial PRIMARY KEY);
           CREATE TABLE inventory_departments(id serial PRIMARY KEY,name text NOT NULL);
-          CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text UNIQUE NOT NULL,name text NOT NULL);
+          CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text UNIQUE NOT NULL,name text NOT NULL,item_type text,category text);
           CREATE TABLE boms(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),parent_part_ag_number text NOT NULL,code text NOT NULL,description text,is_active boolean DEFAULT true);
           CREATE TABLE bom_revisions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bom_id uuid NOT NULL REFERENCES boms(id),rev_code text NOT NULL,notes text,is_released boolean DEFAULT false,effective_from timestamptz,effective_to timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
           CREATE TABLE bom_lines(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),revision_id uuid NOT NULL REFERENCES bom_revisions(id),child_part_ag_number text NOT NULL,qty_per numeric NOT NULL,scrap_pct numeric NOT NULL DEFAULT 0,reference text,operation_seq integer,notes text,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
@@ -74,19 +115,42 @@ jobs:
           DROP SCHEMA clean_case CASCADE;
           CREATE TABLE users(id serial PRIMARY KEY);
           CREATE TABLE inventory_departments(id serial PRIMARY KEY,name text NOT NULL);
-          CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text UNIQUE NOT NULL,name text NOT NULL);
+          CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text UNIQUE NOT NULL,name text NOT NULL,item_type text,category text);
           CREATE TABLE boms(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),parent_part_ag_number text NOT NULL,code text NOT NULL,description text,is_active boolean DEFAULT true);
           CREATE TABLE bom_revisions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bom_id uuid NOT NULL REFERENCES boms(id),rev_code text NOT NULL,notes text,is_released boolean DEFAULT false,effective_from timestamptz,effective_to timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
           CREATE TABLE bom_lines(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),revision_id uuid NOT NULL REFERENCES bom_revisions(id),child_part_ag_number text NOT NULL,qty_per numeric NOT NULL,scrap_pct numeric NOT NULL DEFAULT 0,reference text,operation_seq integer,notes text,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
           CREATE TABLE perm_capabilities(id serial PRIMARY KEY,key text UNIQUE NOT NULL,description text,category text);
-          CREATE TABLE inventory_transactions(id serial PRIMARY KEY);
-          CREATE TABLE work_orders(id serial PRIMARY KEY);
-          CREATE TABLE travelers(id serial PRIMARY KEY);
+          CREATE TABLE inventory_transactions(id serial PRIMARY KEY,payload text);
+          CREATE TABLE work_orders(id serial PRIMARY KEY,payload text);
+          CREATE TABLE travelers(id serial PRIMARY KEY,payload text);
+          CREATE TABLE part_routings(id serial PRIMARY KEY,payload text);
+          CREATE TABLE production_schedule_entries(id serial PRIMARY KEY,payload text);
+          CREATE TABLE receiving_records(id serial PRIMARY KEY,payload text);
+          CREATE TABLE barcode_records(id serial PRIMARY KEY,payload text);
+          CREATE TABLE inventory_balances(id serial PRIMARY KEY,payload text);
+          CREATE TABLE inspection_records(id serial PRIMARY KEY,payload text);
+          CREATE TABLE nonconformance_records(id serial PRIMARY KEY,payload text);
+          CREATE TABLE labor_entries(id serial PRIMARY KEY,payload text);
+          CREATE TABLE project_received_materials(id serial PRIMARY KEY,payload text);
+          CREATE TABLE genealogy_records(id serial PRIMARY KEY,payload text);
           INSERT INTO inventory_departments(name) VALUES('Legacy Department');
-          INSERT INTO inventory_items(ag_part_number,name) VALUES('LEGACY-PARENT','Legacy Parent'),('LEGACY-CHILD','Legacy Child');
+          INSERT INTO inventory_items(ag_part_number,name,item_type,category) VALUES('LEGACY-PARENT','Legacy Parent','MANUFACTURED','ASSEMBLY'),('LEGACY-CHILD','Legacy Child','PURCHASED','RAW_MATERIAL');
           INSERT INTO boms(parent_part_ag_number,code,description) VALUES('LEGACY-PARENT','LEGACY-BOM','Historical BOM');
           INSERT INTO bom_revisions(bom_id,rev_code) SELECT id,'A' FROM boms;
           INSERT INTO bom_lines(revision_id,child_part_ag_number,qty_per) SELECT id,'LEGACY-CHILD',1 FROM bom_revisions;
+          INSERT INTO inventory_transactions(payload) VALUES('legacy transaction');
+          INSERT INTO work_orders(payload) VALUES('legacy work order');
+          INSERT INTO travelers(payload) VALUES('legacy traveler');
+          INSERT INTO part_routings(payload) VALUES('legacy routing');
+          INSERT INTO production_schedule_entries(payload) VALUES('legacy schedule');
+          INSERT INTO receiving_records(payload) VALUES('legacy receipt');
+          INSERT INTO barcode_records(payload) VALUES('legacy barcode');
+          INSERT INTO inventory_balances(payload) VALUES('legacy balance');
+          INSERT INTO inspection_records(payload) VALUES('legacy inspection');
+          INSERT INTO nonconformance_records(payload) VALUES('legacy NCR');
+          INSERT INTO labor_entries(payload) VALUES('legacy labor');
+          INSERT INTO project_received_materials(payload) VALUES('legacy material');
+          INSERT INTO genealogy_records(payload) VALUES('legacy genealogy');
           CREATE TEMP TABLE before_state AS SELECT
             (SELECT count(*) FROM inventory_items) item_count,
             (SELECT count(*) FROM boms) bom_count,
@@ -95,8 +159,33 @@ jobs:
             (SELECT count(*) FROM inventory_transactions) transaction_count,
             (SELECT count(*) FROM work_orders) work_order_count,
             (SELECT count(*) FROM travelers) traveler_count,
-            md5((SELECT string_agg(ag_part_number||':'||name,',' ORDER BY id) FROM inventory_items)) item_digest,
-            md5((SELECT string_agg(parent_part_ag_number||':'||code,',' ORDER BY id) FROM boms)) bom_digest;
+            (SELECT count(*) FROM part_routings) routing_count,
+            (SELECT count(*) FROM production_schedule_entries) schedule_count,
+            (SELECT count(*) FROM receiving_records) receiving_count,
+            (SELECT count(*) FROM barcode_records) barcode_count,
+            (SELECT count(*) FROM inventory_balances) balance_count,
+            (SELECT count(*) FROM inspection_records) inspection_count,
+            (SELECT count(*) FROM nonconformance_records) ncr_count,
+            (SELECT count(*) FROM labor_entries) labor_count,
+            (SELECT count(*) FROM project_received_materials) material_count,
+            (SELECT count(*) FROM genealogy_records) genealogy_count,
+            md5((SELECT string_agg(ag_part_number||':'||name||':'||COALESCE(item_type,'')||':'||COALESCE(category,''),',' ORDER BY id) FROM inventory_items)) item_digest,
+            md5((SELECT string_agg(id::text||':'||parent_part_ag_number||':'||code||':'||COALESCE(description,''),',' ORDER BY id) FROM boms)) bom_digest,
+            md5((SELECT string_agg(id::text||':'||bom_id::text||':'||rev_code||':'||is_released::text,',' ORDER BY id) FROM bom_revisions)) revision_digest,
+            md5((SELECT string_agg(id::text||':'||revision_id::text||':'||child_part_ag_number||':'||qty_per::text,',' ORDER BY id) FROM bom_lines)) line_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM inventory_transactions)) transaction_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM work_orders)) work_order_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM travelers)) traveler_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM part_routings)) routing_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM production_schedule_entries)) schedule_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM receiving_records)) receiving_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM barcode_records)) barcode_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM inventory_balances)) balance_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM inspection_records)) inspection_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM nonconformance_records)) ncr_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM labor_entries)) labor_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM project_received_materials)) material_digest,
+            md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM genealogy_records)) genealogy_digest;
           \i migrations/0295_inventory_traceability_bom_foundation.sql
           \i migrations/0295_inventory_traceability_bom_foundation.sql
           DO $$ DECLARE changed boolean; BEGIN
@@ -106,10 +195,37 @@ jobs:
               (SELECT count(*) FROM inventory_transactions) transaction_count,
               (SELECT count(*) FROM work_orders) work_order_count,
               (SELECT count(*) FROM travelers) traveler_count,
-              md5((SELECT string_agg(ag_part_number||':'||name,',' ORDER BY id) FROM inventory_items)) item_digest,
-              md5((SELECT string_agg(parent_part_ag_number||':'||code,',' ORDER BY id) FROM boms)) bom_digest) after_state;
+              (SELECT count(*) FROM part_routings) routing_count,
+              (SELECT count(*) FROM production_schedule_entries) schedule_count,
+              (SELECT count(*) FROM receiving_records) receiving_count,
+              (SELECT count(*) FROM barcode_records) barcode_count,
+              (SELECT count(*) FROM inventory_balances) balance_count,
+              (SELECT count(*) FROM inspection_records) inspection_count,
+              (SELECT count(*) FROM nonconformance_records) ncr_count,
+              (SELECT count(*) FROM labor_entries) labor_count,
+              (SELECT count(*) FROM project_received_materials) material_count,
+              (SELECT count(*) FROM genealogy_records) genealogy_count,
+              md5((SELECT string_agg(ag_part_number||':'||name||':'||COALESCE(item_type,'')||':'||COALESCE(category,''),',' ORDER BY id) FROM inventory_items)) item_digest,
+              md5((SELECT string_agg(id::text||':'||parent_part_ag_number||':'||code||':'||COALESCE(description,''),',' ORDER BY id) FROM boms)) bom_digest,
+              md5((SELECT string_agg(id::text||':'||bom_id::text||':'||rev_code||':'||is_released::text,',' ORDER BY id) FROM bom_revisions)) revision_digest,
+              md5((SELECT string_agg(id::text||':'||revision_id::text||':'||child_part_ag_number||':'||qty_per::text,',' ORDER BY id) FROM bom_lines)) line_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM inventory_transactions)) transaction_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM work_orders)) work_order_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM travelers)) traveler_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM part_routings)) routing_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM production_schedule_entries)) schedule_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM receiving_records)) receiving_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM barcode_records)) barcode_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM inventory_balances)) balance_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM inspection_records)) inspection_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM nonconformance_records)) ncr_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM labor_entries)) labor_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM project_received_materials)) material_digest,
+              md5((SELECT string_agg(id::text||':'||COALESCE(payload,''),',' ORDER BY id) FROM genealogy_records)) genealogy_digest) after_state;
             IF changed THEN RAISE EXCEPTION 'Historical counts or checksums changed'; END IF;
           END $$;
+          TABLE before_state;
+          DO $$ BEGIN IF (SELECT count(*) FROM inventory_item_traceability_policies)<>0 THEN RAISE EXCEPTION 'Historical traceability was inferred'; END IF; END $$;
           INSERT INTO inventory_item_traceability_policies
             (inventory_item_id,revision_number,status,policy_type,item_classification,part_configuration_revision,
              unit_of_measure,quantity_entry_required,content_checksum,created_by_display_name,created_by_role,
@@ -121,6 +237,22 @@ jobs:
             EXCEPTION WHEN raise_exception THEN blocked := true;
             END;
             IF NOT blocked THEN RAISE EXCEPTION 'Released policy mutation was not blocked'; END IF;
+          END $$;
+          UPDATE boms SET parent_inventory_item_id=1,parent_part_number_snapshot='LEGACY-PARENT',parent_name_snapshot='Legacy Parent',parent_revision_snapshot='B' WHERE code='LEGACY-BOM';
+          INSERT INTO bom_revisions(bom_id,rev_code,is_released,lifecycle_status,effectivity,content_checksum,
+            approved_by_display_name,approved_by_role,approval_capacity,signature_meaning,approved_at)
+          SELECT id,'B',true,'RELEASED','{"revision":"B"}'::jsonb,'bom-checksum','BOM Approver','ENGINEERING','ENGINEERING','I approve',now() FROM boms WHERE code='LEGACY-BOM';
+          INSERT INTO bom_lines(revision_id,child_part_ag_number,qty_per,child_inventory_item_id,
+            child_part_number_snapshot,child_name_snapshot,child_revision_snapshot,unit_of_measure,
+            make_buy_disposition,assembly_path_identity,inherited_policy_id,inherited_policy_revision,inherited_policy_type)
+          SELECT br.id,'LEGACY-CHILD',1,2,'LEGACY-CHILD','Legacy Child','A','EA','BUY','1/2',p.id,p.revision_number,p.policy_type
+          FROM bom_revisions br JOIN boms b ON b.id=br.bom_id
+          JOIN inventory_item_traceability_policies p ON p.inventory_item_id=1 AND p.status='RELEASED'
+          WHERE b.code='LEGACY-BOM' AND br.rev_code='B';
+          DO $$ DECLARE revision_blocked boolean := false; line_blocked boolean := false; BEGIN
+            BEGIN UPDATE bom_revisions SET rev_code='C' WHERE lifecycle_status='RELEASED'; EXCEPTION WHEN raise_exception THEN revision_blocked := true; END;
+            BEGIN UPDATE bom_lines SET qty_per=2 WHERE revision_id IN(SELECT id FROM bom_revisions WHERE lifecycle_status='RELEASED'); EXCEPTION WHEN raise_exception THEN line_blocked := true; END;
+            IF NOT revision_blocked OR NOT line_blocked THEN RAISE EXCEPTION 'Released BOM snapshot mutation was not blocked'; END IF;
           END $$;
           BEGIN;
           INSERT INTO inventory_item_traceability_policies
@@ -138,3 +270,9 @@ jobs:
           test -z "${CONTROLLED_ITEM_LINKED_BOM_WRITES_ENABLED:-}"
           test -z "${P2_CONFIGURATION_BOM_INTEGRATION_ENABLED:-}"
           test -z "${RECURSIVE_TRACEABILITY_PREVIEW_ENABLED:-}"
+          test -z "${VITE_INVENTORY_TRACEABILITY_POLICY_READS_ENABLED:-}"
+          test -z "${VITE_INVENTORY_TRACEABILITY_POLICY_WRITES_ENABLED:-}"
+          test -z "${VITE_CONTROLLED_ITEM_LINKED_BOM_READS_ENABLED:-}"
+          test -z "${VITE_CONTROLLED_ITEM_LINKED_BOM_WRITES_ENABLED:-}"
+          test -z "${VITE_P2_CONFIGURATION_BOM_INTEGRATION_ENABLED:-}"
+          test -z "${VITE_RECURSIVE_TRACEABILITY_PREVIEW_ENABLED:-}"

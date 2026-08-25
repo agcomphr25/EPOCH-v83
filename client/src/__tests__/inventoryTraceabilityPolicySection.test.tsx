@@ -34,4 +34,9 @@ describe('Inventory Item traceability policy authoring surface', () => {
     expect(source).toContain('Save the Inventory Item first');
     expect(source).toContain('A stable Inventory Item ID is required');
   });
+
+  it('keeps both client policy flags explicitly opt-in', () => {
+    expect(source.match(/VITE_INVENTORY_TRACEABILITY_POLICY_[A-Z_]+_ENABLED === 'true'/g)).toHaveLength(2);
+    expect(source).not.toMatch(/VITE_INVENTORY_TRACEABILITY_POLICY_[A-Z_]+_ENABLED\s*!==\s*'false'/);
+  });
 });

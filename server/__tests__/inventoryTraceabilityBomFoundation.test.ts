@@ -102,6 +102,23 @@ describe('Inventory Item traceability and stable-identity BOM foundation', () =>
       'engineering.controlled_bom.approve','engineering.controlled_bom.traceability_override',
     ]) expect(`${migration}\n${routes}`).toContain(capability);
     expect(routes).not.toContain("requirePermission('inventory.adjust')");
+    expect(service).toContain('INDEPENDENT_APPROVAL_REQUIRED');
+    expect(service).toContain('submitted_by<>$3');
+    expect(routes).toMatch(/traceability-policies\/:policyId\/decision'[\s\S]*?inventory\.traceability_policy\.approve/);
+    expect(routes).toMatch(/controlled-bom-revisions\/:revisionId\/decision'[\s\S]*?engineering\.controlled_bom\.approve/);
+    expect(routes).toMatch(/requireOverrideAuthority[\s\S]*?engineering\.controlled_bom\.traceability_override/);
+  });
+
+  it('creates no downstream execution records', () => {
+    const controlledWrites = service.slice(
+      service.indexOf('export async function createTraceabilityPolicyDraft'),
+      service.indexOf('export async function getControlledBomStatus')
+    );
+    for (const table of [
+      'inventory_transactions','work_orders','travelers','production_schedule',
+      'receipts','barcodes','inventory_balances','inspections','nonconformance',
+      'labor_entries','project_received_materials','genealogy',
+    ]) expect(controlledWrites).not.toMatch(new RegExp(`INSERT\\s+INTO\\s+${table}`, 'i'));
   });
 
   it('keeps the recursive preview read-only and free of downstream creation', () => {

@@ -118,6 +118,12 @@ type DraftPartBom = {
   robustBomRevisionId?: string | null;
   robustBomStatus?: 'draft' | 'active' | null;
   robustBomAcceptedAt?: string | null;
+  robustBomPartLinks?: Record<string, {
+    bomId: string | null;
+    revisionId: string | null;
+    status: 'draft' | 'active';
+    acceptedAt: string;
+  }>;
 };
 type BuiltInWorkspaceTabId = 'po-draft' | 'parts-request' | 'direct-labor' | 'nrc' | 'bom-wizard' | 'assembly-tree';
 type CustomWorkspaceTabId = `custom:${string}`;
@@ -1011,6 +1017,64 @@ function applyFinalizedInventoryToDraftBom(
     parts: bom.parts.map((part) => ({
       ...finalizedPartForLine(part, createdByLineId),
       bomItems: part.bomItems.map((component) => finalizedPartForLine(component, createdByLineId)),
+    })),
+  };
+}
+
+function queuedPartIdForComponent(componentId: string) {
+  return `mfg-${componentId}`;
+}
+
+function draftBomPartInventoryKey(part: DraftBomPart | DraftBomComponent) {
+  if (part.sourceLineId) return `line:${part.sourceLineId}`;
+  const id = part.id.startsWith('mfg-') ? part.id.slice(4) : part.id;
+  return `part:${id}`;
+}
+
+function pruneManufacturedComponentBranch(bom: DraftPartBom, componentId: string) {
+  const removedPartIds = new Set<string>();
+  const visit = (queuedPartId: string) => {
+    if (removedPartIds.has(queuedPartId)) return;
+    removedPartIds.add(queuedPartId);
+    const queuedPart = bom.parts.find((part) => part.id === queuedPartId);
+    queuedPart?.bomItems.forEach((component) => visit(queuedPartIdForComponent(component.id)));
+  };
+  visit(queuedPartIdForComponent(componentId));
+  return bom.parts.filter((part) => !removedPartIds.has(part.id));
+}
+
+function bomForConfiguredPart(bom: DraftPartBom, part: DraftBomPart): DraftPartBom {
+  const isRootPart = part.id === bom.rootPart.id;
+  return {
+    ...bom,
+    id: isRootPart ? bom.id : `${bom.id}-${part.id}`,
+    name: `${part.partNumber} Draft BOM`,
+    rootPart: part,
+    parts: [part],
+  };
+}
+
+function applyWizardInventoryToDraftBom(
+  bom: DraftPartBom,
+  createdByPartKey: Map<string, DraftFinalizedInventoryItem>,
+): DraftPartBom {
+  const apply = <T extends DraftBomPart | DraftBomComponent>(part: T): T => {
+    const createdItem = createdByPartKey.get(draftBomPartInventoryKey(part));
+    if (!createdItem) return part;
+    return {
+      ...part,
+      source: 'inventory-item' as const,
+      inventoryItemId: createdItem.id,
+      partNumber: createdItem.agPartNumber,
+      description: createdItem.name || part.description,
+    } as T;
+  };
+  return {
+    ...bom,
+    rootPart: apply(bom.rootPart),
+    parts: bom.parts.map((part) => ({
+      ...apply(part),
+      bomItems: part.bomItems.map(apply),
     })),
   };
 }
@@ -2591,6 +2655,115 @@ export default function DraftBOMBuilderPage() {
         childDraftBoms: (line.childDraftBoms ?? []).filter((bom) => bom.id !== bomId),
       })),
     }));
+  }
+
+  async function finalizeWizardBom(bom: DraftPartBom, partIds: string[]) {
+    if (!canEditActiveDraft || isFinalizingParts) return;
+    if (!draft.project) {
+      toast({
+        title: 'Select a project first',
+        description: 'Choose a P2 project or R&D project before finalizing a BOM.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const requestedPartIds = new Set(partIds);
+    const partsToFinalize = bom.parts.filter((part) => requestedPartIds.has(part.id));
+    if (partsToFinalize.length === 0) return;
+    const inventoryCandidates = new Map<string, DraftBomPart | DraftBomComponent>();
+    for (const part of partsToFinalize) {
+      if (!part.inventoryItemId) inventoryCandidates.set(draftBomPartInventoryKey(part), part);
+      for (const component of part.bomItems) {
+        if (!component.inventoryItemId) inventoryCandidates.set(draftBomPartInventoryKey(component), component);
+      }
+    }
+
+    const createdByPartKey = new Map<string, DraftFinalizedInventoryItem>();
+    setIsFinalizingParts(true);
+    try {
+      for (const [key, part] of inventoryCandidates) {
+        const sourceLine = part.sourceLineId
+          ? assemblySourceLines.find((line) => line.id === part.sourceLineId)
+          : null;
+        const inventoryLine = sourceLine ?? normalizeBomLine({
+          ...newLine(),
+          id: key,
+          description: part.description,
+          agPartNumber: part.partNumber,
+          qtyNeeded: part.quantity,
+          isDraftPart: true,
+          isManufactured: 'bomItems' in part || part.isManufactured === true,
+          firstDepartment: 'firstDepartment' in part ? part.firstDepartment : defaultDepartment,
+        });
+        createdByPartKey.set(key, await createInventoryItemFromDraftLine(inventoryLine, draft));
+      }
+
+      let finalizedBom = applyWizardInventoryToDraftBom(bom, createdByPartKey);
+      const links = { ...(finalizedBom.robustBomPartLinks ?? {}) };
+      const orderedParts = finalizedBom.parts.filter((part) => requestedPartIds.has(part.id)).reverse();
+      for (const part of orderedParts) {
+        const result = await saveDraftBomToRobustBom(bomForConfiguredPart(finalizedBom, part), draft, false);
+        links[part.id] = {
+          bomId: result.bom?.id ?? null,
+          revisionId: result.revision?.id ?? null,
+          status: 'draft',
+          acceptedAt: new Date().toISOString(),
+        };
+      }
+      finalizedBom = {
+        ...finalizedBom,
+        robustBomPartLinks: links,
+        ...(requestedPartIds.has(finalizedBom.rootPart.id)
+          ? {
+              robustBomId: links[finalizedBom.rootPart.id]?.bomId ?? finalizedBom.robustBomId ?? null,
+              robustBomRevisionId: links[finalizedBom.rootPart.id]?.revisionId ?? finalizedBom.robustBomRevisionId ?? null,
+              robustBomStatus: 'draft' as const,
+              robustBomAcceptedAt: links[finalizedBom.rootPart.id]?.acceptedAt ?? new Date().toISOString(),
+            }
+          : {}),
+      };
+
+      const createdByLineId = new Map<string, DraftFinalizedInventoryItem>();
+      for (const part of [...finalizedBom.parts, ...finalizedBom.parts.flatMap((item) => item.bomItems)]) {
+        if (!part.sourceLineId) continue;
+        const created = createdByPartKey.get(draftBomPartInventoryKey(part));
+        if (created) createdByLineId.set(part.sourceLineId, created);
+      }
+      setDraft((current) => ({
+        ...current,
+        savedDraftBoms: (current.savedDraftBoms ?? []).map((item) => item.id === bom.id ? finalizedBom : item),
+        lines: current.lines.map((line) => {
+          const created = createdByLineId.get(line.id);
+          const nextLine = created ? { ...line, inventoryItemId: created.id, inventoryItemName: created.name, agPartNumber: created.agPartNumber, isDraftPart: false } : line;
+          return {
+            ...nextLine,
+            childDraftBoms: (nextLine.childDraftBoms ?? []).map((item) => item.id === bom.id ? finalizedBom : item),
+          };
+        }),
+        partsRequestLines: (current.partsRequestLines ?? []).map((line) => {
+          const created = createdByLineId.get(line.id);
+          const nextLine = created ? { ...line, inventoryItemId: created.id, inventoryItemName: created.name, agPartNumber: created.agPartNumber, isDraftPart: false } : line;
+          return {
+            ...nextLine,
+            childDraftBoms: (nextLine.childDraftBoms ?? []).map((item) => item.id === bom.id ? finalizedBom : item),
+          };
+        }),
+      }));
+      await queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      toast({
+        title: partsToFinalize.length === 1 ? 'BOM finalized' : 'Whole BOM finalized',
+        description: `${partsToFinalize.length} BOM level${partsToFinalize.length === 1 ? '' : 's'} saved as draft BOMs in Robust BOM.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'BOM finalization failed',
+        description: error instanceof Error ? error.message : 'Unable to finalize the BOM.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsFinalizingParts(false);
+    }
   }
 
   function createLineFromPoDescription(item?: InventoryItemOption) {
@@ -4408,7 +4581,9 @@ export default function DraftBOMBuilderPage() {
                   onSeedLineConsumed={() => setWizardSeedLineId(null)}
                   onSaveWizardBom={saveWizardBom}
                   onDeleteWizardBom={deleteWizardBom}
+                  onFinalizeWizardBom={finalizeWizardBom}
                   isEditMode={effectiveEditMode}
+                  isFinalizing={isFinalizingParts}
                 />
               </TabsContent>
             ) : null}
@@ -5715,7 +5890,9 @@ function DraftBomWizardWorkspace({
   onSeedLineConsumed,
   onSaveWizardBom,
   onDeleteWizardBom,
+  onFinalizeWizardBom,
   isEditMode,
+  isFinalizing,
 }: {
   draftLines: BomLine[];
   savedDraftBoms: DraftPartBom[];
@@ -5725,7 +5902,9 @@ function DraftBomWizardWorkspace({
   onSeedLineConsumed: () => void;
   onSaveWizardBom: (part: DraftBomPart, bom: DraftPartBom) => void;
   onDeleteWizardBom: (bomId: string) => void;
+  onFinalizeWizardBom: (bom: DraftPartBom, partIds: string[]) => Promise<void>;
   isEditMode: boolean;
+  isFinalizing: boolean;
 }) {
   const [sourceMode, setSourceMode] = useState<DraftBomSource>('draft-part');
   const [selectedLineId, setSelectedLineId] = useState('');
@@ -5881,16 +6060,14 @@ function DraftBomWizardWorkspace({
   function removeComponent(componentId: string) {
     setActiveBom((current) => {
       if (!current) return current;
-      const queuedPartId = `mfg-${componentId}`;
       return {
         ...current,
-        parts: current.parts
+        parts: pruneManufacturedComponentBranch(current, componentId)
           .map((part, index) =>
             index === currentPartIndex
               ? { ...part, bomItems: part.bomItems.filter((component) => component.id !== componentId) }
               : part,
-          )
-          .filter((part) => part.id !== queuedPartId),
+          ),
         updatedAt: new Date().toISOString(),
       };
     });
@@ -5965,6 +6142,21 @@ function DraftBomWizardWorkspace({
     setActiveBom(null);
     setCurrentPartIndex(0);
     resetComponentForm();
+  }
+
+  async function finalizeBom(scope: 'current' | 'whole') {
+    if (!activeBom || !currentPart) return;
+    const nextBom = {
+      ...activeBom,
+      parts: activeBom.parts.map((part, index) => index === currentPartIndex ? { ...part, hasBOM: true } : part),
+      updatedAt: new Date().toISOString(),
+    };
+    const partIds = scope === 'current'
+      ? [currentPart.id]
+      : nextBom.parts.filter((part) => part.hasBOM).map((part) => part.id);
+    setActiveBom(nextBom);
+    onSaveWizardBom(nextBom.rootPart, nextBom);
+    await onFinalizeWizardBom(nextBom, partIds);
   }
 
   return (
@@ -6316,8 +6508,14 @@ function DraftBomWizardWorkspace({
               </Table>
             </div>
 
-            <div className="flex justify-end">
-              <Button type="button" onClick={saveAndAdvance} disabled={!isEditMode}>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => void finalizeBom('current')} disabled={!isEditMode || isFinalizing}>
+                {currentPartIndex === 0 ? 'Finalize this BOM to Robust BOM' : 'Finalize this child BOM'}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => void finalizeBom('whole')} disabled={!isEditMode || isFinalizing}>
+                Finalize whole BOM
+              </Button>
+              <Button type="button" onClick={saveAndAdvance} disabled={!isEditMode || isFinalizing}>
                 {currentPartIndex < activeBom.parts.length - 1 ? 'Save & Next' : 'Save Draft BOM'}
               </Button>
             </div>

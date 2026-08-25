@@ -15,6 +15,15 @@ const safeBoot = fs.readFileSync(
   path.join(root, 'server/scripts/migrations/runSafeBootMigrations.ts'),
   'utf8'
 );
+const safeBootEntries =
+  safeBoot
+    .match(/safeMigrationFiles\s*=\s*\[([\s\S]*?)\];/)?.[1]
+    .match(/'[^']+\.sql'/g)
+    ?.map((entry) => entry.slice(1, -1)) ?? [];
+const migrationSync = fs.readFileSync(
+  path.join(root, 'scripts/sync-safe-migrations.js'),
+  'utf8'
+);
 const certification = fs.readFileSync(
   path.join(root, '.github/workflows/p2-v2-postgres-certification.yml'),
   'utf8'
@@ -74,8 +83,11 @@ describe('EPOCH validation duplicate cleanup', () => {
   });
 
   it('keeps retired migration 0253 out of recurring safe boot', () => {
-    expect(safeBoot).not.toContain(
+    expect(safeBootEntries).not.toContain(
       '0253_void_duplicate_epoch_validation_packages.sql'
+    );
+    expect(migrationSync).toMatch(
+      /INTENTIONALLY_EXCLUDED\s*=\s*new Set\(\[[\s\S]*?'0253_void_duplicate_epoch_validation_packages\.sql'/
     );
   });
 

@@ -83,6 +83,9 @@ while ((m = entryRegex.exec(arrayBody)) !== null) {
 // boot once the repair has been applied or the target row state has changed.
 // List them here so the sync script never re-adds them automatically.
 const INTENTIONALLY_EXCLUDED = new Set([
+  // One-off controlled validation-package correction. It is certified by the
+  // dedicated migration-0253 workflow and must not replay during safe boot.
+  '0253_void_duplicate_epoch_validation_packages.sql',
   // One-off row-level data repair for PO-P18380-46-1.  Its fail-closed guard
   // raises an exception when the target production_orders row is not in the
   // exact legacy mismatch state it was authored against (CANCELLED / Shipping QC),

@@ -1,0 +1,137 @@
+name: P2 Inventory traceability BOM PostgreSQL certification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/p2-inventory-traceability-bom-postgres.yml'
+      - 'migrations/0295_inventory_traceability_bom_foundation.sql'
+      - 'server/src/services/inventoryTraceabilityBomService.ts'
+      - 'server/src/routes/inventoryTraceabilityBoms.ts'
+      - 'server/__tests__/inventoryTraceabilityBomFoundation.test.ts'
+      - 'server/schema.ts'
+      - 'server/src/lib/featureFlags.ts'
+      - 'server/src/routes/index.ts'
+      - 'server/scripts/migrations/runSafeBootMigrations.ts'
+      - 'client/src/components/inventory/InventoryTraceabilityPolicySection.tsx'
+      - 'client/src/components/inventory/InventoryItemsCard.tsx'
+      - 'client/src/pages/RobustBOMAdministration.tsx'
+      - 'client/src/__tests__/inventoryTraceabilityPolicySection.test.tsx'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase2_cert
+          POSTGRES_PASSWORD: disposable_phase2_password
+          POSTGRES_DB: phase2_inventory_bom_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase2_cert -d phase2_inventory_bom_certification"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://phase2_cert:disposable_phase2_password@127.0.0.1:5432/phase2_inventory_bom_certification
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Focused contract tests
+        run: npx vitest run --config vitest.config.server.ts server/__tests__/inventoryTraceabilityBomFoundation.test.ts --reporter=verbose
+      - name: Prove disposable database boundary
+        run: |
+          node -e "const u=new URL(process.env.DATABASE_URL); if(u.hostname!=='127.0.0.1'||u.pathname!=='/phase2_inventory_bom_certification') process.exit(1)"
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT current_database()')" = 'phase2_inventory_bom_certification'
+      - name: Clean, populated, replay, preservation, rollback and immutability
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE SCHEMA clean_case;
+          SET search_path TO clean_case,public;
+          CREATE TABLE users(id serial PRIMARY KEY);
+          CREATE TABLE inventory_departments(id serial PRIMARY KEY,name text NOT NULL);
+          CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text UNIQUE NOT NULL,name text NOT NULL);
+          CREATE TABLE boms(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),parent_part_ag_number text NOT NULL,code text NOT NULL,description text,is_active boolean DEFAULT true);
+          CREATE TABLE bom_revisions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bom_id uuid NOT NULL REFERENCES boms(id),rev_code text NOT NULL,notes text,is_released boolean DEFAULT false,effective_from timestamptz,effective_to timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+          CREATE TABLE bom_lines(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),revision_id uuid NOT NULL REFERENCES bom_revisions(id),child_part_ag_number text NOT NULL,qty_per numeric NOT NULL,scrap_pct numeric NOT NULL DEFAULT 0,reference text,operation_seq integer,notes text,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+          CREATE TABLE perm_capabilities(id serial PRIMARY KEY,key text UNIQUE NOT NULL,description text,category text);
+          \i migrations/0295_inventory_traceability_bom_foundation.sql
+          \i migrations/0295_inventory_traceability_bom_foundation.sql
+          SET search_path TO public;
+          DROP SCHEMA clean_case CASCADE;
+          CREATE TABLE users(id serial PRIMARY KEY);
+          CREATE TABLE inventory_departments(id serial PRIMARY KEY,name text NOT NULL);
+          CREATE TABLE inventory_items(id serial PRIMARY KEY,ag_part_number text UNIQUE NOT NULL,name text NOT NULL);
+          CREATE TABLE boms(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),parent_part_ag_number text NOT NULL,code text NOT NULL,description text,is_active boolean DEFAULT true);
+          CREATE TABLE bom_revisions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bom_id uuid NOT NULL REFERENCES boms(id),rev_code text NOT NULL,notes text,is_released boolean DEFAULT false,effective_from timestamptz,effective_to timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+          CREATE TABLE bom_lines(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),revision_id uuid NOT NULL REFERENCES bom_revisions(id),child_part_ag_number text NOT NULL,qty_per numeric NOT NULL,scrap_pct numeric NOT NULL DEFAULT 0,reference text,operation_seq integer,notes text,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+          CREATE TABLE perm_capabilities(id serial PRIMARY KEY,key text UNIQUE NOT NULL,description text,category text);
+          CREATE TABLE inventory_transactions(id serial PRIMARY KEY);
+          CREATE TABLE work_orders(id serial PRIMARY KEY);
+          CREATE TABLE travelers(id serial PRIMARY KEY);
+          INSERT INTO inventory_departments(name) VALUES('Legacy Department');
+          INSERT INTO inventory_items(ag_part_number,name) VALUES('LEGACY-PARENT','Legacy Parent'),('LEGACY-CHILD','Legacy Child');
+          INSERT INTO boms(parent_part_ag_number,code,description) VALUES('LEGACY-PARENT','LEGACY-BOM','Historical BOM');
+          INSERT INTO bom_revisions(bom_id,rev_code) SELECT id,'A' FROM boms;
+          INSERT INTO bom_lines(revision_id,child_part_ag_number,qty_per) SELECT id,'LEGACY-CHILD',1 FROM bom_revisions;
+          CREATE TEMP TABLE before_state AS SELECT
+            (SELECT count(*) FROM inventory_items) item_count,
+            (SELECT count(*) FROM boms) bom_count,
+            (SELECT count(*) FROM bom_revisions) revision_count,
+            (SELECT count(*) FROM bom_lines) line_count,
+            (SELECT count(*) FROM inventory_transactions) transaction_count,
+            (SELECT count(*) FROM work_orders) work_order_count,
+            (SELECT count(*) FROM travelers) traveler_count,
+            md5((SELECT string_agg(ag_part_number||':'||name,',' ORDER BY id) FROM inventory_items)) item_digest,
+            md5((SELECT string_agg(parent_part_ag_number||':'||code,',' ORDER BY id) FROM boms)) bom_digest;
+          \i migrations/0295_inventory_traceability_bom_foundation.sql
+          \i migrations/0295_inventory_traceability_bom_foundation.sql
+          DO $$ DECLARE changed boolean; BEGIN
+            SELECT before_state IS DISTINCT FROM after_state INTO changed FROM before_state,LATERAL(SELECT
+              (SELECT count(*) FROM inventory_items) item_count,(SELECT count(*) FROM boms) bom_count,
+              (SELECT count(*) FROM bom_revisions) revision_count,(SELECT count(*) FROM bom_lines) line_count,
+              (SELECT count(*) FROM inventory_transactions) transaction_count,
+              (SELECT count(*) FROM work_orders) work_order_count,
+              (SELECT count(*) FROM travelers) traveler_count,
+              md5((SELECT string_agg(ag_part_number||':'||name,',' ORDER BY id) FROM inventory_items)) item_digest,
+              md5((SELECT string_agg(parent_part_ag_number||':'||code,',' ORDER BY id) FROM boms)) bom_digest) after_state;
+            IF changed THEN RAISE EXCEPTION 'Historical counts or checksums changed'; END IF;
+          END $$;
+          INSERT INTO inventory_item_traceability_policies
+            (inventory_item_id,revision_number,status,policy_type,item_classification,part_configuration_revision,
+             unit_of_measure,quantity_entry_required,content_checksum,created_by_display_name,created_by_role,
+             approved_by_display_name,approved_by_role,approval_capacity,signature_meaning,approved_at)
+          VALUES(1,1,'RELEASED','STANDARD_QUANTITY','ASSEMBLY','A','EA',true,'checksum','Creator','ENGINEERING','Approver','QUALITY','QUALITY','I approve',now());
+          DO $$ DECLARE blocked boolean := false; BEGIN
+            BEGIN
+              UPDATE inventory_item_traceability_policies SET unit_of_measure='LB' WHERE inventory_item_id=1;
+            EXCEPTION WHEN raise_exception THEN blocked := true;
+            END;
+            IF NOT blocked THEN RAISE EXCEPTION 'Released policy mutation was not blocked'; END IF;
+          END $$;
+          BEGIN;
+          INSERT INTO inventory_item_traceability_policies
+            (inventory_item_id,revision_number,policy_type,item_classification,part_configuration_revision,
+             unit_of_measure,quantity_entry_required,content_checksum,created_by_display_name,created_by_role)
+          VALUES(2,1,'STANDARD_QUANTITY','PURCHASED_COMPONENT','A','EA',true,'rollback','Creator','ENGINEERING');
+          ROLLBACK;
+          DO $$ BEGIN IF EXISTS(SELECT 1 FROM inventory_item_traceability_policies WHERE content_checksum='rollback') THEN RAISE EXCEPTION 'Rollback failed'; END IF; END $$;
+          SQL
+      - name: Prove flags remain opt-in
+        run: |
+          test -z "${INVENTORY_TRACEABILITY_POLICY_READS_ENABLED:-}"
+          test -z "${INVENTORY_TRACEABILITY_POLICY_WRITES_ENABLED:-}"
+          test -z "${CONTROLLED_ITEM_LINKED_BOM_READS_ENABLED:-}"
+          test -z "${CONTROLLED_ITEM_LINKED_BOM_WRITES_ENABLED:-}"
+          test -z "${P2_CONFIGURATION_BOM_INTEGRATION_ENABLED:-}"
+          test -z "${RECURSIVE_TRACEABILITY_PREVIEW_ENABLED:-}"

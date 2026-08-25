@@ -3,6 +3,16 @@ import { z } from 'zod';
 
 import { getUserPermissions } from '../services/permissionService';
 import {
+  areP2WadTravelerDecisionReadsEnabled,
+  areP2WadTravelerDecisionWritesEnabled,
+} from '../lib/featureFlags';
+import {
+  approveWadTravelerException,
+  listWadTravelerDecisions,
+  saveWadTravelerDecision,
+  WadTravelerDecisionError,
+} from '../services/p2WadTravelerDecisionService';
+import {
   createWadDraft,
   getCurrentWadAuthorization,
   linkExistingWad,
@@ -52,6 +62,21 @@ const decisionSchema = z.object({
   reason: z.string().optional().default(''),
 });
 const releaseSchema = z.object({ signatureMeaning: z.string().min(1) });
+const travelerDecisionSchema = z.object({
+  inventoryItemId: z.number().int().positive(),
+  assemblyPathIdentity: z.string().min(1),
+  requiredQuantity: z.number().positive(),
+  travelerRequirement: z.enum(['REQUIRED', 'NOT_REQUIRED_APPROVED']),
+  travelerType: z.enum(['INDIVIDUAL', 'BATCH']).nullable().optional(),
+  inspectionRequirements: z.record(z.unknown()),
+  exceptionReason: z.string().nullable().optional(),
+  exceptionEffectivity: z.record(z.unknown()).nullable().optional(),
+  expectedVersion: z.number().int().positive().optional(),
+});
+const exceptionApprovalSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  signatureMeaning: z.string().min(1),
+});
 
 function actor(req: Request): WadAuthorizationActor {
   if (!req.user?.id || !req.user?.username || !req.user?.role)
@@ -88,6 +113,10 @@ function fail(res: Response, error: unknown) {
     return res
       .status(error.status)
       .json({ error: error.code, message: error.message, ...error.details });
+  if (error instanceof WadTravelerDecisionError)
+    return res
+      .status(error.status)
+      .json({ error: error.code, message: error.message });
   console.error('P2 V2 WAD Authorization error:', error);
   return res.status(500).json({
     error: 'WAD_AUTHORIZATION_FAILED',
@@ -95,6 +124,79 @@ function fail(res: Response, error: unknown) {
   });
 }
 const projectId = (req: Request) => String(req.params.id);
+
+router.get('/:authorizationId/traveler-decisions', async (req, res) => {
+  try {
+    if (!areP2WadTravelerDecisionReadsEnabled())
+      throw new ProjectWadAuthorizationError(
+        'FEATURE_DISABLED',
+        'WAD traveler-decision reads are disabled.',
+        404
+      );
+    actor(req);
+    res.json(
+      await listWadTravelerDecisions(projectId(req), req.params.authorizationId)
+    );
+  } catch (error) {
+    fail(res, error);
+  }
+});
+router.put('/:authorizationId/traveler-decisions', async (req, res) => {
+  try {
+    if (!areP2WadTravelerDecisionWritesEnabled())
+      throw new ProjectWadAuthorizationError(
+        'FEATURE_DISABLED',
+        'WAD traveler-decision writes are disabled.',
+        404
+      );
+    const user = await requireCapability(
+      req,
+      'projects.wad_traveler_decisions.manage'
+    );
+    res.json(
+      await saveWadTravelerDecision(
+        {
+          projectId: projectId(req),
+          authorizationId: req.params.authorizationId,
+          ...travelerDecisionSchema.parse(req.body),
+        },
+        user
+      )
+    );
+  } catch (error) {
+    fail(res, error);
+  }
+});
+router.post(
+  '/:authorizationId/traveler-decisions/:decisionId/exception-approve',
+  async (req, res) => {
+    try {
+      if (!areP2WadTravelerDecisionWritesEnabled())
+        throw new ProjectWadAuthorizationError(
+          'FEATURE_DISABLED',
+          'WAD traveler-decision writes are disabled.',
+          404
+        );
+      const user = await requireCapability(
+        req,
+        'projects.wad_traveler_decisions.exception_approve'
+      );
+      const body = exceptionApprovalSchema.parse(req.body);
+      res.json(
+        await approveWadTravelerException(
+          projectId(req),
+          req.params.authorizationId,
+          req.params.decisionId,
+          body.expectedVersion,
+          body.signatureMeaning,
+          user
+        )
+      );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
 
 router.get('/', async (req, res) => {
   try {

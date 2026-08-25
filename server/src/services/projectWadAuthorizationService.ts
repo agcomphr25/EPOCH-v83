@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { sql } from 'drizzle-orm';
 
 import { db } from '../../db';
+import { areP2WadTravelerDecisionWritesEnabled } from '../lib/featureFlags';
 import { recordAuditEvent, type AuditLedgerTx } from './auditLedgerService';
 import { getCurrentProductionPlan } from './projectProductionPlanningService';
 import { evaluateCommercialBaseline } from './projectCommercialReviewService';
@@ -14,6 +15,7 @@ import {
   wadBudgetBlockers,
   type WadBudgetInput,
 } from './projectWadAuthorizationValidation';
+import { wadTravelerDecisionBlockers } from './p2WadTravelerDecisionService';
 
 type Executor = AuditLedgerTx;
 // Raw-query rows keep the additive bridge isolated from the central schema.
@@ -586,6 +588,11 @@ export async function submitWadAuthorization(
         409
       );
     const state = await readiness(projectId, authorization, tx);
+    if (areP2WadTravelerDecisionWritesEnabled())
+      state.blockers.push(
+        ...(await wadTravelerDecisionBlockers(projectId, authorizationId))
+      );
+    state.ready = state.blockers.length === 0;
     if (!state.ready)
       throw new ProjectWadAuthorizationError(
         'WAD_NOT_READY',
@@ -765,6 +772,11 @@ export async function releaseWadAuthorization(
         409
       );
     const state = await readiness(projectId, authorization, tx);
+    if (areP2WadTravelerDecisionWritesEnabled())
+      state.blockers.push(
+        ...(await wadTravelerDecisionBlockers(projectId, authorizationId))
+      );
+    state.ready = state.blockers.length === 0;
     if (!state.ready)
       throw new ProjectWadAuthorizationError(
         'WAD_NOT_READY',

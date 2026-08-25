@@ -357,6 +357,7 @@ export const safeMigrationFiles = [
   '0295_inventory_traceability_bom_foundation.sql',
   '0296_p2_project_controlled_configuration_foundation.sql',
   '0297_p2_wad_traveler_authority_foundation.sql',
+  '0298_p2_wad_traveler_authority_completion.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -456,6 +457,7 @@ export const criticalMigrationFiles = new Set([
   '0295_inventory_traceability_bom_foundation.sql',
   '0296_p2_project_controlled_configuration_foundation.sql',
   '0297_p2_wad_traveler_authority_foundation.sql',
+  '0298_p2_wad_traveler_authority_completion.sql',
 ]);
 
 export async function runSafeBootMigrations() {

@@ -72,6 +72,7 @@ import vendorPoAttachmentsRoutes from './vendorPoAttachments';
 import discountsRoutes from './discounts';
 // import bomsRoutes from './boms'; // Legacy BOM routes - replaced by Robust BOM system
 import robustBomsRoutes from './robustBoms';
+import inventoryTraceabilityBomsRoutes from './inventoryTraceabilityBoms';
 import communicationsRoutes from './communications';
 import marketingRoutes from './marketing';
 import internalMessagesRoutes from './internalMessages';
@@ -1448,6 +1449,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Robust BOM management routes - Advanced BOM system with revisions and parts library
   app.use('/api/robust-boms', robustBomsRoutes);
+  app.use('/api/configuration-control', inventoryTraceabilityBomsRoutes);
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);

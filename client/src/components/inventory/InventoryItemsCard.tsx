@@ -36,6 +36,7 @@ import {
 
 import InventoryItemCostHistory from './InventoryItemCostHistory';
 import TraceabilityConfigModal from './TraceabilityConfigModal';
+import InventoryTraceabilityPolicySection from './InventoryTraceabilityPolicySection';
 import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
 
 import { apiRequest } from '@/lib/queryClient';
@@ -989,6 +990,20 @@ const InventoryForm = ({
         })}
       </div>
     </div>
+
+    {/* Controlled traceability policy — opt-in Phase 2 */}
+    <InventoryTraceabilityPolicySection
+      itemId={editingItem?.id}
+      itemType={formData.itemType || formData.type}
+      manufacturedCategory={formData.manufacturedCategory}
+      manufacturingLevel={formData.manufacturingLevel}
+      unitOfMeasure={formData.usageUnit || formData.purchaseUnit}
+      shelfLifeControlled={formData.shelfLifeControlled}
+      requiresSds={Boolean((editingItem as any)?.requiresSds)}
+      requiresTds={Boolean((editingItem as any)?.requiresTds)}
+      requiresCoc={Boolean((editingItem as any)?.requiresCoc)}
+      requiresTestReport={Boolean((editingItem as any)?.requiresTestReport)}
+    />
 
     {/* Section 2 — Purchasing */}
     <div className="space-y-4">

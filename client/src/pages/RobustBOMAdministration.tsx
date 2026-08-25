@@ -98,6 +98,8 @@ function CategoryBOMTab({ category }: { category: ManufacturedCategory }) {
 // BOMs Tab Component
 function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; setSearchTerm: (s: string) => void; category?: ManufacturedCategory }) {
   const { toast } = useToast();
+  const controlledBomWritesEnabled =
+    import.meta.env.VITE_CONTROLLED_ITEM_LINKED_BOM_WRITES_ENABLED === 'true';
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [wizardData, setWizardData] = useState<any>({
@@ -130,6 +132,7 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
   const { data: partsData } = useQuery({
     queryKey: ['/api/robust-boms/parts?pageSize=1000'],
   });
+  const inventoryParts = (partsData as any)?.data || [];
 
   // Debounced search for child part picker (wizard Step 3)
   const [debouncedLinePartSearch, setDebouncedLinePartSearch] = useState('');
@@ -435,6 +438,48 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
     setIsCreatingBom(true);
     
     try {
+      if (controlledBomWritesEnabled) {
+        const parentPart = inventoryParts.find(
+          (part: any) => part.agPartNumber === wizardData.step1.parentPartAgNumber
+        );
+        if (!parentPart?.id) {
+          throw new Error('Select a real parent Inventory Item before creating a controlled BOM.');
+        }
+        const controlledLines = bomLines.map((line) => {
+          const child = inventoryParts.find(
+            (part: any) => part.agPartNumber === line.childPartAgNumber
+          );
+          if (!child?.id) {
+            throw new Error(`Child ${line.childPartAgNumber || 'line'} is not linked to an Inventory Item.`);
+          }
+          return {
+            childInventoryItemId: child.id,
+            childRevision: null,
+            quantityPer: Number(line.quantityPer),
+            unitOfMeasure: child.usageUnit || child.purchaseUnit || 'EA',
+            operationSequence: line.operationSequence || 10,
+          };
+        });
+        await apiRequest('/api/configuration-control/controlled-boms', {
+          method: 'POST',
+          body: {
+            parentInventoryItemId: parentPart.id,
+            revisionCode: wizardData.step2.revCode,
+            effectivity: {
+              type: 'CONFIGURATION_REVISION',
+              revision: wizardData.step2.revCode,
+            },
+            lines: controlledLines,
+          },
+        });
+        queryClient.invalidateQueries({ predicate: (query) =>
+          typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('/api/robust-boms/boms')
+        });
+        toast({ title: 'Controlled draft created', description: 'The BOM remains draft and created no demand, work orders, travelers, reservations, or inventory movement.' });
+        handleWizardCancel();
+        return;
+      }
+
       // Step 1: Create BOM
       const bomResponse = await apiRequest('/api/robust-boms/boms', {
         method: 'POST',
@@ -1238,7 +1283,7 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
                                   <div className="flex items-center justify-between mb-4">
                                     <h4 className="font-semibold">Line Items</h4>
                                     <div className="flex items-center gap-2">
-                                      {!rev.isReleased && (
+                                      {!rev.isReleased && !controlledBomWritesEnabled && (
                                         <Button
                                           size="sm"
                                           variant="outline"
@@ -2237,4 +2282,3 @@ function P2POBOMsSection() {
     </Card>
   );
 }
-

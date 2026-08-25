@@ -56,7 +56,7 @@ jobs:
           npx vitest run client/src/components/p2/__tests__/P2FrozenProductionDemand.test.tsx --reporter=verbose
       - name: TypeScript, lint, format and diff hygiene
         run: |
-          NODE_OPTIONS=--max-old-space-size=6144 npx tsc --noEmit --pretty false
+          npx tsc --project tsconfig.p2-frozen-demand.json --pretty false
           npx eslint server/src/services/p2FrozenProductionDemandCompiler.ts server/src/services/p2FrozenProductionDemandService.ts server/src/routes/p2FrozenProductionDemand.ts client/src/components/p2/P2FrozenProductionDemand.tsx server/__tests__/p2FrozenProductionDemandFoundation.test.ts client/src/components/p2/__tests__/P2FrozenProductionDemand.test.tsx --max-warnings 0
           npx prettier --check server/src/services/p2FrozenProductionDemandCompiler.ts server/src/services/p2FrozenProductionDemandService.ts server/src/routes/p2FrozenProductionDemand.ts client/src/components/p2/P2FrozenProductionDemand.tsx server/__tests__/p2FrozenProductionDemandFoundation.test.ts client/src/components/p2/__tests__/P2FrozenProductionDemand.test.tsx
           git diff --check HEAD^ HEAD

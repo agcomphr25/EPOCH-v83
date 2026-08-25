@@ -29,6 +29,7 @@ jobs:
       SAFE_BOOT_MIGRATIONS_ONLY: 'true'
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
       - uses: actions/setup-node@v4
         with: { node-version: '20', cache: npm }
       - run: npm ci --ignore-scripts
@@ -89,4 +90,4 @@ jobs:
           \endif
           SQL
       - name: Diff hygiene
-        run: git show --check --oneline --no-renames HEAD
+        run: git diff --check HEAD^ HEAD

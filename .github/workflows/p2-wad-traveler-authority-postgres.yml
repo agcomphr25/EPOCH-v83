@@ -1,0 +1,93 @@
+name: P2 WAD Traveler Authority PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/p2-wad-traveler-authority-completion]
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase4_cert
+          POSTGRES_PASSWORD: disposable_phase4_password
+          POSTGRES_DB: epoch_phase4_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase4_cert -d epoch_phase4_certification"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://phase4_cert:disposable_phase4_password@127.0.0.1:5432/epoch_phase4_certification
+      NODE_ENV: test
+      SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Prove disposable boundary and disabled flags
+        shell: bash
+        run: |
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).hostname)")" = 127.0.0.1
+          test -z "${P2_WAD_TRAVELER_DECISION_READS_ENABLED:-}"
+          test -z "${P2_WAD_TRAVELER_DECISION_WRITES_ENABLED:-}"
+          test -z "${VITE_P2_WAD_TRAVELER_DECISION_READS_ENABLED:-}"
+          test -z "${VITE_P2_WAD_TRAVELER_DECISION_WRITES_ENABLED:-}"
+      - name: Focused Phase 4 contract tests
+        run: npx vitest run --config vitest.config.server.ts server/__tests__/p2WadTravelerAuthorityFoundation.test.ts --reporter=verbose
+      - name: Create clean application schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
+          npx drizzle-kit push --force --config drizzle.app.config.ts
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql
+      - name: Clean migration, replay, and preservation certification
+        shell: bash
+        run: |
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/before.txt
+          SELECT 'inventory_items|'||count(*) FROM inventory_items;
+          SELECT 'work_orders|'||count(*) FROM production_work_orders;
+          SELECT 'travelers|'||count(*) FROM travelers;
+          SELECT 'transactions|'||count(*) FROM inventory_transactions;
+          SELECT 'decisions|'||count(*) FROM p2_wad_traveler_decisions;
+          SQL
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/after.txt
+          SELECT 'inventory_items|'||count(*) FROM inventory_items;
+          SELECT 'work_orders|'||count(*) FROM production_work_orders;
+          SELECT 'travelers|'||count(*) FROM travelers;
+          SELECT 'transactions|'||count(*) FROM inventory_transactions;
+          SELECT 'decisions|'||count(*) FROM p2_wad_traveler_decisions;
+          SQL
+          diff -u /tmp/before.txt /tmp/after.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          ALTER TABLE p2_wad_traveler_decisions ADD COLUMN rollback_probe boolean;
+          ROLLBACK;
+          DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='p2_wad_traveler_decisions' AND column_name='rollback_probe') THEN
+              RAISE EXCEPTION 'rollback probe persisted';
+            END IF;
+          END $$;
+          SQL
+      - name: Verify lifecycle, audit, concurrency, and immutability schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT concurrency_version,status,content_checksum FROM p2_wad_traveler_decisions LIMIT 0;
+          SELECT actor_user_id,actor_display_name,actor_role,signature_meaning FROM p2_wad_traveler_decision_events LIMIT 0;
+          SELECT tgname FROM pg_trigger WHERE tgname='p2_wad_traveler_decision_immutable' \gset
+          \if :{?tgname}
+          \else
+            \quit 1
+          \endif
+          SQL
+      - name: Diff hygiene
+        run: git diff --check HEAD^ HEAD

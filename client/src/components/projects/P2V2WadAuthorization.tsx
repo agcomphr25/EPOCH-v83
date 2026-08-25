@@ -64,6 +64,19 @@ export default function P2V2WadAuthorization({
   });
   const allowed = new Set<string>(permissions?.permissions ?? []);
   const authorization = data?.authorization;
+  const travelerReadsEnabled =
+    import.meta.env.VITE_P2_WAD_TRAVELER_DECISION_READS_ENABLED === 'true';
+  const travelerWritesEnabled =
+    import.meta.env.VITE_P2_WAD_TRAVELER_DECISION_WRITES_ENABLED === 'true';
+  const { data: travelerDecisions = [], refetch: refetchTravelerDecisions } =
+    useQuery<Row[]>({
+      queryKey: [endpoint(projectId), authorization?.id, 'traveler-decisions'],
+      queryFn: () =>
+        request(
+          `${endpoint(projectId)}/${authorization.id}/traveler-decisions`
+        ),
+      enabled: open && travelerReadsEnabled && Boolean(authorization?.id),
+    });
   const status = value(authorization, 'status');
   const canManage = allowed.has('projects.wad_authorization.manage');
 
@@ -94,6 +107,7 @@ export default function P2V2WadAuthorization({
         body: JSON.stringify(body),
       });
       await refetch();
+      if (travelerReadsEnabled) await refetchTravelerDecisions();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     }
@@ -241,6 +255,64 @@ export default function P2V2WadAuthorization({
                       ))}
                     </div>
                   </section>
+                  {travelerReadsEnabled && (
+                    <section data-testid="wad-traveler-decisions">
+                      <h3 className="font-semibold">
+                        Controlled traveler decisions
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        These snapshots apply the released Inventory Item
+                        traceability policy. They do not create travelers or
+                        work orders.
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        {travelerDecisions.map((decision: Row) => (
+                          <div
+                            className="rounded border p-3 text-sm"
+                            key={decision.id}
+                          >
+                            Item {decision.inventory_item_id} ·{' '}
+                            {decision.assembly_path_identity}{' '}
+                            <Badge>{decision.status}</Badge>
+                            <p>
+                              {decision.traveler_requirement}{' '}
+                              {decision.traveler_type || 'No traveler'} · Policy{' '}
+                              {decision.traceability_policy_type_snapshot} Rev{' '}
+                              {decision.traceability_policy_revision}
+                            </p>
+                            {decision.status === 'EXCEPTION_PENDING' &&
+                              travelerWritesEnabled &&
+                              allowed.has(
+                                'projects.wad_traveler_decisions.exception_approve'
+                              ) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    act(
+                                      `/${authorization.id}/traveler-decisions/${decision.id}/exception-approve`,
+                                      {
+                                        expectedVersion:
+                                          decision.concurrency_version,
+                                        signatureMeaning:
+                                          'Approve controlled WAD traveler exception',
+                                      }
+                                    )
+                                  }
+                                >
+                                  Approve exception
+                                </Button>
+                              )}
+                          </div>
+                        ))}
+                        {!travelerDecisions.length && (
+                          <p className="text-sm">
+                            No controlled traveler decisions have been recorded.
+                          </p>
+                        )}
+                      </div>
+                    </section>
+                  )}
                   <section>
                     <h3 className="font-semibold">Budgets and charge codes</h3>
                     {(budget.departments ?? []).map((entry: Row) => (

@@ -1,0 +1,8 @@
+import { readFileSync } from 'fs'; import { resolve } from 'path'; import { describe,expect,it } from 'vitest';
+const root=resolve(__dirname,'../..'); const read=(p:string)=>readFileSync(resolve(root,p),'utf8');
+describe('Phase 4 WAD traveler authority foundation',()=>{const m=read('migrations/0297_p2_wad_traveler_authority_foundation.sql');const f=read('server/src/lib/featureFlags.ts');const r=read('server/scripts/migrations/runSafeBootMigrations.ts');
+it('is additive and ordered after Phase 3',()=>{expect(m).not.toMatch(/UPDATE|DELETE FROM|TRUNCATE/i);expect(r.match(/0297_p2_wad_traveler_authority_foundation\.sql/g)).toHaveLength(2);expect(r.indexOf('0296_p2_project')).toBeLessThan(r.indexOf('0297_p2_wad'));});
+it('binds decisions to released authority identities and snapshots',()=>{for(const v of ['project_configuration_id','inventory_item_id','assembly_path_identity','traceability_policy_id','traceability_policy_revision','content_checksum'])expect(m).toContain(v);});
+it('requires controlled evidence for traveler-not-required',()=>{expect(m).toContain("traveler_requirement='REQUIRED' OR (exception_required AND exception_reason IS NOT NULL)");expect(m).toContain('exception_signature_meaning');expect(m).toContain('projects.wad_traveler_decisions.exception_approve');});
+it('keeps Phase 4 disabled by default',()=>{expect(f).toContain("envBool('P2_WAD_TRAVELER_DECISION_READS_ENABLED', false)");expect(f).toContain("envBool('P2_WAD_TRAVELER_DECISION_WRITES_ENABLED', false)");});
+it('creates no execution records',()=>{for(const table of ['work_orders','travelers','inventory_transactions','barcodes','genealogy'])expect(m).not.toMatch(new RegExp(`INSERT INTO ${table}`,'i'));});});

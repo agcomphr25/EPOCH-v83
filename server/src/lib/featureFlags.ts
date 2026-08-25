@@ -144,6 +144,14 @@ export function areP2ProjectControlledConfigurationWritesEnabled(): boolean {
   return envBool('P2_PROJECT_CONTROLLED_CONFIGURATION_WRITES_ENABLED', false);
 }
 
+/** Phase 4 controlled WAD traveler-decision authority; disabled by default. */
+export function areP2WadTravelerDecisionReadsEnabled(): boolean {
+  return envBool('P2_WAD_TRAVELER_DECISION_READS_ENABLED', false);
+}
+export function areP2WadTravelerDecisionWritesEnabled(): boolean {
+  return envBool('P2_WAD_TRAVELER_DECISION_WRITES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

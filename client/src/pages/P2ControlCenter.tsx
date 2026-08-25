@@ -50,6 +50,7 @@ import P2NonconformingTab from '@/components/p2/P2ScrappedItemsTab';
 import { P2POItemsManager } from '@/components/P2POItemsManager';
 import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import ProgramManufacturingOrchestration from '@/components/p2/ProgramManufacturingOrchestration';
+import P2FrozenProductionDemand from '@/components/p2/P2FrozenProductionDemand';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -829,6 +830,10 @@ export default function P2ControlCenter() {
             <Route className="h-4 w-4" />
             Assembly Tree
           </TabsTrigger>
+          <TabsTrigger value="frozen-demand" className="flex items-center gap-2" data-testid="tab-frozen-demand">
+            <Lock className="h-4 w-4" />
+            Frozen Demand
+          </TabsTrigger>
           <TabsTrigger value="swimlane" className="flex items-center gap-2" data-testid="tab-swimlane">
             <BarChart3 className="h-4 w-4" />
             Swimlane
@@ -942,6 +947,10 @@ export default function P2ControlCenter() {
 
         <TabsContent value="assembly-tree">
           <ProgramManufacturingOrchestration mode="tree" projectId={programProjectId} />
+        </TabsContent>
+
+        <TabsContent value="frozen-demand">
+          <P2FrozenProductionDemand projectId={programProjectId} />
         </TabsContent>
 
         <TabsContent value="swimlane">

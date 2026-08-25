@@ -8,7 +8,7 @@
     "build": "vite build && mkdir -p dist/public && ( [ -f client/public/logo_updated.png ] && cp client/public/logo_updated.png dist/public/logo_updated.png || true )",
     "start": "NODE_ENV=production tsx server/index.ts",
     "start:with-db-maintenance": "RUN_STARTUP_DB_MAINTENANCE=true tsx server/index.ts",
-    "deploy": "npm run predb:push && npm run build",
+    "deploy": "npm run predeploy-migrate && npm run build",
     "check": "tsc",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx --max-warnings 0 && node scripts/check-format-dates.js",
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
@@ -24,7 +24,7 @@
     "repair:project-to-p2-v2": "tsx server/scripts/convertLegacyProjectToP2V2.ts",
     "trace:ar-invoice-number": "tsx server/scripts/traceArInvoiceNumber.ts",
     "timekeeping:import-timetrakgo-pdf": "tsx server/scripts/importTimeTrakGoTimeCardPdf.ts",
-    "predb:push": "npx tsx server/pre-deploy-migrate.ts",
+    "predeploy-migrate": "npx tsx server/pre-deploy-migrate.ts",
     "db:push": "drizzle-kit push --config drizzle.app.config.ts",
     "prepare": "husky || true",
     "generate:audit-pdf": "node scripts/generate-audit-pdf.cjs"

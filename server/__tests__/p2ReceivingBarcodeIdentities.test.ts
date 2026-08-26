@@ -71,6 +71,16 @@ describe('Phase 8 controlled Receiving barcode identities', () => {
     expect(migration).toContain('UNIQUE(identity_id,request_key)');
   });
 
+  it('preserves per-item copy counts from the integrated Receiving label UI', () => {
+    expect(client).toContain('const [labelCounts, setLabelCounts]');
+    expect(client).toContain('getEachPartCount');
+    expect(client).toContain('getLabelCount(label.unitId)');
+    expect(client).toContain(
+      'recordControlledPrint(unit.id, getLabelCount(unit.id))'
+    );
+    expect(routes).toContain('unitId: unit.id');
+  });
+
   it('does not create availability, balances, transactions, travelers, or genealogy', () => {
     for (const forbidden of [
       'INSERT INTO inventory_transactions',

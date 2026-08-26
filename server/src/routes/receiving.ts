@@ -2369,6 +2369,7 @@ router.get(
       }
 
       res.json({
+        unitId: unit.id,
         barcode: barcodeValue,
         receivingIdentityId: controlledIdentity?.id ?? null,
         barcodeImage,
@@ -2491,6 +2492,7 @@ router.post(
             });
           } catch (_) {}
           return {
+            unitId: unit.id,
             barcode: unit.barcode,
             barcodeImage,
             agPartNumber: line?.agPartNumber ?? '',

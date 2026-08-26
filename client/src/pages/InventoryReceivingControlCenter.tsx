@@ -5147,14 +5147,27 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
     {}
   );
   const [labelSize, setLabelSize] = useState<ReceivingLabelSize>('avery-5160');
+  const [labelCounts, setLabelCounts] = useState<Record<number, number>>({});
   const [printerName, setPrinterName] = useState(
     'Browser PDF / selected printer'
   );
-  const [copies, setCopies] = useState(1);
   const [reprintReason, setReprintReason] = useState('');
+  const getLabelCount = (unitId: number) => labelCounts[unitId] ?? 1;
+  const getEachPartCount = (unit: ReceivedUnit) =>
+    Math.max(1, Math.ceil(Number(unit.quantity) || 1));
+  const setLabelCount = (unitId: number, count: number) => {
+    setLabelCounts((previous) => ({
+      ...previous,
+      [unitId]: Math.max(0, Math.floor(count || 0)),
+    }));
+  };
+  const totalLabelCount = units.reduce(
+    (total, unit) => total + getLabelCount(unit.id),
+    0
+  );
   const controlledReceivingBarcodes =
     import.meta.env.VITE_P2_RECEIVING_BARCODE_IDENTITIES_ENABLED === 'true';
-  const recordControlledPrint = (unitId: number) =>
+  const recordControlledPrint = (unitId: number, copies: number) =>
     apiRequest(`/api/receipts/${receipt.id}/units/${unitId}/controlled-print`, {
       method: 'POST',
       body: JSON.stringify({
@@ -5190,6 +5203,7 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
 
   const printLabel = async (unitId: number) => {
     try {
+      const copies = getLabelCount(unitId);
       const labelData = await apiRequest(
         `/api/receipts/${receipt.id}/units/${unitId}/label`
       );
@@ -5198,7 +5212,8 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
         `Label ${labelData.barcode}`,
         labelSize
       );
-      if (controlledReceivingBarcodes) await recordControlledPrint(unitId);
+      if (controlledReceivingBarcodes)
+        await recordControlledPrint(unitId, copies);
     } catch {
       toast.error('Failed to fetch label data');
     }
@@ -5216,7 +5231,7 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
             method: 'POST',
           });
       const printableLabels = labels.flatMap((label: ReceivingLabel) =>
-        Array.from({ length: copies }, () => label)
+        Array.from({ length: getLabelCount(label.unitId) }, () => label)
       );
       await printLabelPDF(
         printableLabels,
@@ -5224,7 +5239,13 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
         labelSize
       );
       if (controlledReceivingBarcodes)
-        await Promise.all(units.map((unit) => recordControlledPrint(unit.id)));
+        await Promise.all(
+          units
+            .filter((unit) => getLabelCount(unit.id) > 0)
+            .map((unit) =>
+              recordControlledPrint(unit.id, getLabelCount(unit.id))
+            )
+        );
     } catch {
       toast.error('Failed to fetch batch labels');
     }
@@ -5266,19 +5287,6 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
               value={printerName}
               onChange={(event) => setPrinterName(event.target.value)}
             />
-            <Label htmlFor="receiving-print-copies" className="text-xs">
-              Copies
-            </Label>
-            <Input
-              id="receiving-print-copies"
-              type="number"
-              min={1}
-              max={100}
-              value={copies}
-              onChange={(event) =>
-                setCopies(Math.max(1, Number(event.target.value) || 1))
-              }
-            />
             <Label htmlFor="receiving-reprint-reason" className="text-xs">
               Reprint reason (required after first print)
             </Label>
@@ -5292,8 +5300,14 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
       </div>
 
       {units.length > 1 && (
-        <Button size="sm" className="w-full text-xs" onClick={printBatch} disabled={totalLabelCount === 0}>
-          <Printer className="w-3 h-3 mr-1" /> Batch Print All ({totalLabelCount} labels)
+        <Button
+          size="sm"
+          className="w-full text-xs"
+          onClick={printBatch}
+          disabled={totalLabelCount === 0}
+        >
+          <Printer className="w-3 h-3 mr-1" /> Batch Print All (
+          {totalLabelCount} labels)
         </Button>
       )}
 
@@ -5340,13 +5354,53 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
                 Exp: {new Date(unit.expirationDate).toLocaleDateString()}
               </div>
             )}
+            <div className="mt-2 rounded border bg-gray-50 dark:bg-gray-900 p-2 space-y-1.5">
+              <Label htmlFor={`label-count-${unit.id}`} className="text-xs">
+                Labels needed
+              </Label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  id={`label-count-${unit.id}`}
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={getLabelCount(unit.id)}
+                  onChange={(event) =>
+                    setLabelCount(unit.id, Number(event.target.value))
+                  }
+                  className="h-7 w-20 text-xs"
+                  data-testid={`input-label-count-${unit.id}`}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={() => setLabelCount(unit.id, 1)}
+                >
+                  Container: 1
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={() => setLabelCount(unit.id, getEachPartCount(unit))}
+                >
+                  Each part: {getEachPartCount(unit)}
+                </Button>
+              </div>
+            </div>
             <Button
               size="sm"
               variant="outline"
               className="w-full h-6 text-xs mt-2"
               onClick={() => printLabel(unit.id)}
+              disabled={getLabelCount(unit.id) === 0}
             >
-              <Printer className="w-3 h-3 mr-1" /> Print Label
+              <Printer className="w-3 h-3 mr-1" /> Print{' '}
+              {getLabelCount(unit.id)} Label
+              {getLabelCount(unit.id) === 1 ? '' : 's'}
             </Button>
           </div>
         ))}
@@ -5412,6 +5466,7 @@ function formatAction(action: string): string {
 
 type ReceivingLabelSize = 'avery-5160' | 'avery-5163' | 'receiving-4x6';
 type ReceivingLabel = {
+  unitId: number;
   agPartNumber?: string | null;
   barcode: string;
   barcodeImage: string;

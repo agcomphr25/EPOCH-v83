@@ -171,8 +171,8 @@ export async function provisionP2Travelers(
           String(actor.userId),
         ]
       );
-      for (const [index, operationValue] of operations.entries()) {
-        const operation = record(operationValue);
+      for (let index = 0; index < operations.length; index += 1) {
+        const operation = operations[index];
         await client.query(
           `INSERT INTO traveler_steps (traveler_id,department_name,step_number,status) VALUES ($1,$2,$3,'NOT_STARTED')`,
           [

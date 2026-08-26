@@ -26,8 +26,6 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
   try {
     const allOrders = await storage.getAllOrders();
 
-    // Split orders into two categories: those to move to Shipping QC vs those needing attention
-    const ordersToMoveToShipping = [];
     const ordersNeedingAttention = [];
 
     for (const order of allOrders) {
@@ -40,14 +38,16 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
         continue;
       }
 
-      // Orders with "no_stock", "no stock", or "None" go directly to Shipping QC
+      // A missing/non-manufactured stock model is a production configuration
+      // defect, never evidence that manufacturing is complete. Keep the order
+      // in P1 Production Queue until its routing is corrected.
       if (
         stockModel &&
         (stockModel.toLowerCase() === 'no_stock' ||
           stockModel.toLowerCase() === 'no stock' ||
           stockModel.toLowerCase() === 'none')
       ) {
-        ordersToMoveToShipping.push(order);
+        ordersNeedingAttention.push(order);
       }
       // Orders with missing stock model or missing action_length need attention
       // Flattop orders are excluded - they never need attention
@@ -65,28 +65,8 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
     }
 
     console.log(
-      `🧹 Found ${ordersToMoveToShipping.length} orders to move to Shipping QC and ${ordersNeedingAttention.length} orders needing attention`
+      `🧹 Found ${ordersNeedingAttention.length} P1 orders needing manufacturing configuration attention`
     );
-
-    // Move orders with "no_stock"/"None" to Shipping QC
-    for (const order of ordersToMoveToShipping) {
-      const stockModel = order.stockModelId || order.modelId || 'empty';
-      console.log(
-        `🚀 AUTO-MOVING: Order ${order.orderId} (stock model: "${stockModel}") from P1 Production Queue → Shipping QC`
-      );
-
-      try {
-        await storage.updateFinalizedOrder(order.orderId, {
-          currentDepartment: 'Shipping QC',
-          updatedAt: new Date(),
-        });
-        console.log(
-          `✅ Successfully moved order ${order.orderId} to Shipping QC`
-        );
-      } catch (error) {
-        console.error(`❌ Failed to move order ${order.orderId}:`, error);
-      }
-    }
 
     // Log orders needing attention (these will be returned by a separate endpoint)
     for (const order of ordersNeedingAttention) {
@@ -107,11 +87,10 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
     }
 
     if (
-      ordersToMoveToShipping.length > 0 ||
       ordersNeedingAttention.length > 0
     ) {
       console.log(
-        `🧹 AUTO-CLEANUP COMPLETE: Moved ${ordersToMoveToShipping.length} orders to Shipping QC, identified ${ordersNeedingAttention.length} orders needing attention`
+        `🧹 PRODUCTION CONFIGURATION CHECK: identified ${ordersNeedingAttention.length} orders needing attention; no departments were changed`
       );
     }
   } catch (error) {

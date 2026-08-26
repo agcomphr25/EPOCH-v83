@@ -72,7 +72,7 @@ describe('P1 shipped-order containment', () => {
     expect(ordersRoute).toContain("updateData.currentDepartment = 'Shipping Management'");
   });
 
-  it('registers an auditable all-department restoration migration', () => {
+  it('keeps the historical containment migration retired from recurring boot', () => {
     const sql = readFileSync(
       path.join(root, 'migrations', migrationName),
       'utf8'
@@ -82,7 +82,7 @@ describe('P1 shipped-order containment', () => {
       'utf8'
     );
 
-    expect(registry.match(new RegExp(migrationName, 'g'))).toHaveLength(2);
+    expect(registry).not.toContain(`'${migrationName}'`);
     expect(sql).toContain('p1_shipped_order_containment_audit');
     expect(sql).toContain("'Gunsmith', 'Finish', 'Finish QC', 'Paint', 'Shipping QC'");
     expect(sql).toContain("reason_code = 'CONTAIN_SHIPPED_MANUFACTURING_ORDER'");

@@ -92,6 +92,11 @@ const INTENTIONALLY_EXCLUDED = new Set([
   // which blocks boot after the order state changes.  Idempotency key:
   // migration.0267_reconcile_p18380_persisted_shipment
   '0267_reconcile_p18380_persisted_shipment.sql',
+  // Historical row-level corrections. These are applied once by the tracked
+  // migration runner and must never replay on application boot.
+  '0257_restore_shipping_qc_after_0171_replay.sql',
+  '0281_contain_shipped_p1_auto_populate_regression.sql',
+  '0301_repair_0171_manufacturing_bypass.sql',
 ]);
 
 const missing = diskFiles.filter(

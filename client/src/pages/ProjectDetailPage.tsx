@@ -3414,67 +3414,81 @@ export default function ProjectDetailPage() {
           )}
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Layers className="h-5 w-5" />
-                  BOM Records
-                </CardTitle>
-                <CardDescription>
-                  BOMs for the manufactured PO part and every manufactured child assembly.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {bomRoutingRecords.length === 0 ? (
-                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    No BOM records are linked to the manufactured PO parts yet.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {bomRoutingRecords.map((bom: any) => (
-                      <div key={bom.id} className="rounded-md border p-4 space-y-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="font-mono font-semibold">{bom.parent_part_ag_number ?? bom.code ?? 'Unknown part'}</p>
-                            <p className="truncate text-sm text-muted-foreground">{bom.description || 'No BOM description'}</p>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant={bom.is_active ? 'default' : 'secondary'}>{bom.is_active ? 'Active' : 'Inactive'}</Badge>
-                            {bom.latest_rev_code && <Badge variant="outline">Rev {bom.latest_rev_code}</Badge>}
-                          </div>
-                        </div>
-                        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-                          <span>Lines: {Number(bom.line_count ?? 0).toLocaleString()}</span>
-                          <span>Revision ID: {bom.latest_revision_id ?? 'None'}</span>
-                          <span>Created: {formatDateLabel(bom.latest_rev_created_at, 'No revision date')}</span>
-                        </div>
+            <div className="space-y-4">
+              <Accordion type="single" collapsible className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                <AccordionItem value="assembly-tree" className="border-0">
+                  <AccordionTrigger className="px-6 py-4 text-left hover:no-underline">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <Layers className="h-5 w-5" />
+                        Assembly Tree
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <p className="text-sm font-normal text-muted-foreground">
+                        Build flow from each PO assembly through manufactured children and component parts.
+                      </p>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-6 pb-6">
+                    {bomAssemblyTree.length === 0 ? (
+                      <div className="rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground">
+                        No assembly structure is available for the linked PO parts yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-4 rounded-md bg-muted/30 p-3">
+                        {bomAssemblyTree.map((root: any) => (
+                          <BomAssemblyTreeNode key={root.key} node={root} isRoot />
+                        ))}
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
 
-                <Separator />
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="font-medium">Assembly Tree</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Build flow from each PO assembly through manufactured children and component parts.
-                    </p>
-                  </div>
-                  {bomAssemblyTree.length === 0 ? (
-                    <div className="rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground">
-                      No assembly structure is available for the linked PO parts yet.
+              <Accordion type="single" collapsible className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                <AccordionItem value="bom-records" className="border-0">
+                  <AccordionTrigger className="px-6 py-4 text-left hover:no-underline">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <Layers className="h-5 w-5" />
+                        BOM Records
+                      </div>
+                      <p className="text-sm font-normal text-muted-foreground">
+                        BOMs for the manufactured PO part and every manufactured child assembly.
+                      </p>
                     </div>
-                  ) : (
-                    <div className="space-y-4 rounded-md bg-muted/30 p-3">
-                      {bomAssemblyTree.map((root: any) => (
-                        <BomAssemblyTreeNode key={root.key} node={root} isRoot />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-6 pb-6">
+                    {bomRoutingRecords.length === 0 ? (
+                      <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                        No BOM records are linked to the manufactured PO parts yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {bomRoutingRecords.map((bom: any) => (
+                          <div key={bom.id} className="rounded-md border p-4 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-mono font-semibold">{bom.parent_part_ag_number ?? bom.code ?? 'Unknown part'}</p>
+                                <p className="truncate text-sm text-muted-foreground">{bom.description || 'No BOM description'}</p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant={bom.is_active ? 'default' : 'secondary'}>{bom.is_active ? 'Active' : 'Inactive'}</Badge>
+                                {bom.latest_rev_code && <Badge variant="outline">Rev {bom.latest_rev_code}</Badge>}
+                              </div>
+                            </div>
+                            <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                              <span>Lines: {Number(bom.line_count ?? 0).toLocaleString()}</span>
+                              <span>Revision ID: {bom.latest_revision_id ?? 'None'}</span>
+                              <span>Created: {formatDateLabel(bom.latest_rev_created_at, 'No revision date')}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
 
             <Card>
               <CardHeader>

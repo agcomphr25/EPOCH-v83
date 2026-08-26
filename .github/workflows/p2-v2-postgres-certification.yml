@@ -129,6 +129,7 @@ jobs:
           set +e
           start_head=$(date +%s)
           NODE_OPTIONS=--max-old-space-size=6144 npx tsc --noEmit --pretty false \
+            --tsBuildInfoFile /tmp/phase10a-head.tsbuildinfo \
             > /tmp/phase10a-head-tsc.log 2>&1
           head_exit=$?
           head_duration=$(($(date +%s) - start_head))
@@ -137,13 +138,28 @@ jobs:
           if [ "$head_exit" -eq 0 ]; then
             exit 0
           fi
+          if [ "$head_exit" -ne 1 ] && [ "$head_exit" -ne 2 ]; then
+            echo "Head TypeScript process failed before producing a comparable diagnostic result."
+            cat /tmp/phase10a-head-tsc.log
+            exit "$head_exit"
+          fi
+
+          head_tree=$(git rev-parse HEAD^{tree})
+          base_tree=$(git -C /tmp/phase10a-main-baseline rev-parse HEAD^{tree})
+          if [ "$head_tree" = "$base_tree" ]; then
+            echo "Head and exact-main baseline trees are identical."
+            echo "Corrective branch introduces no TypeScript diagnostic beyond exact main."
+            exit 0
+          fi
 
           ln -s "$GITHUB_WORKSPACE/node_modules" \
             "/tmp/phase10a-main-baseline/node_modules"
           pushd "/tmp/phase10a-main-baseline"
           start_base=$(date +%s)
           NODE_OPTIONS=--max-old-space-size=6144 "$GITHUB_WORKSPACE/node_modules/.bin/tsc" \
-            --noEmit --pretty false > /tmp/phase10a-base-tsc.log 2>&1
+            --noEmit --pretty false \
+            --tsBuildInfoFile /tmp/phase10a-base.tsbuildinfo \
+            > /tmp/phase10a-base-tsc.log 2>&1
           base_exit=$?
           base_duration=$(($(date +%s) - start_base))
           popd
@@ -152,6 +168,11 @@ jobs:
           if [ "$base_exit" -eq 0 ]; then
             echo "Corrective branch introduced TypeScript diagnostics."
             exit "$head_exit"
+          fi
+          if [ "$base_exit" -ne 1 ] && [ "$base_exit" -ne 2 ]; then
+            echo "Exact-main TypeScript process failed before producing a comparable diagnostic result."
+            cat /tmp/phase10a-base-tsc.log
+            exit "$base_exit"
           fi
           sed -E \
             -e "s#$GITHUB_WORKSPACE/##g" \

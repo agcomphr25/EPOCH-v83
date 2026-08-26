@@ -150,3 +150,15 @@ test('workflow retains reachable PostgreSQL stages after formatting', () => {
     /designProjectConfigurationSecurityPostgres\.test\.ts/
   );
 });
+
+test('bounded TypeScript comparison isolates compiler state and rejects abnormal exits', () => {
+  const workflow = fs.readFileSync(
+    path.resolve('.github/workflows/p2-v2-postgres-certification.yml'),
+    'utf8'
+  );
+  assert.match(workflow, /phase10a-head\.tsbuildinfo/);
+  assert.match(workflow, /phase10a-base\.tsbuildinfo/);
+  assert.match(workflow, /head_exit" -ne 1.*head_exit" -ne 2/);
+  assert.match(workflow, /base_exit" -ne 1.*base_exit" -ne 2/);
+  assert.match(workflow, /head_tree" = "\$base_tree/);
+});

@@ -1771,7 +1771,8 @@ export default function Navigation() {
       p2QueueDepartments
         .filter(
           (department) =>
-            department.isActive !== false && department.productionEnabled !== false
+            department.isActive !== false &&
+            department.productionEnabled !== false
         )
         .map((department) => ({
           path: `/p2-work-orders/queues/${department.id}`,
@@ -1891,6 +1892,9 @@ export default function Navigation() {
       icon: Home,
       description: `Personal dashboard for ${currentUser.username}`,
     }];
+    // The dashboard definitions are static within a render and intentionally
+    // included to preserve the legacy per-user navigation behavior.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userDashboardsItems, currentUser?.username]);
   const filteredPurchaseOrdersItems = useMemo(
     () => filterByPermissions(purchaseOrdersItems, currentUser?.username, userRole),

@@ -75,6 +75,7 @@ import robustBomsRoutes from './robustBoms';
 import inventoryTraceabilityBomsRoutes from './inventoryTraceabilityBoms';
 import p2ProjectControlledConfigurationsRoutes from './p2ProjectControlledConfigurations';
 import p2FrozenProductionDemandRoutes from './p2FrozenProductionDemand';
+import p2ManufacturingWorkOrderRoutes from './p2ManufacturingWorkOrders';
 import communicationsRoutes from './communications';
 import marketingRoutes from './marketing';
 import internalMessagesRoutes from './internalMessages';
@@ -1454,6 +1455,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/configuration-control', inventoryTraceabilityBomsRoutes);
   app.use('/api/configuration-control', p2ProjectControlledConfigurationsRoutes);
   app.use('/api/configuration-control', p2FrozenProductionDemandRoutes);
+  app.use('/api', p2ManufacturingWorkOrderRoutes);
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);

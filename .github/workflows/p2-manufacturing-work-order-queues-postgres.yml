@@ -1,0 +1,112 @@
+name: P2 Manufacturing Work Order Queues PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/p2-phase6-work-order-queue-foundation]
+  pull_request:
+    paths:
+      - 'migrations/0301_p2_manufacturing_work_order_queue_foundation.sql'
+      - 'server/src/services/p2ManufacturingWorkOrderService.ts'
+      - 'server/src/routes/p2ManufacturingWorkOrders.ts'
+      - 'server/src/routes/travelers.ts'
+      - 'client/src/pages/P2WorkOrderQueuePage.tsx'
+      - 'client/src/components/Navigation.tsx'
+      - '.github/workflows/p2-manufacturing-work-order-queues-postgres.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase6_cert
+          POSTGRES_PASSWORD: disposable_phase6_password
+          POSTGRES_DB: epoch_phase6_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase6_cert -d epoch_phase6_certification"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://phase6_cert:disposable_phase6_password@127.0.0.1:5432/epoch_phase6_certification
+      NODE_ENV: test
+      SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Prove disposable boundary and disabled flags
+        shell: bash
+        run: |
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).hostname)")" = 127.0.0.1
+          test -z "${P2_MANUFACTURING_WORK_ORDER_QUEUE_READS_ENABLED:-}"
+          test -z "${P2_MANUFACTURING_WORK_ORDER_MATERIALIZATION_ENABLED:-}"
+          test -z "${P2_MANUFACTURING_WORK_ORDER_EXECUTION_ENABLED:-}"
+          test -z "${VITE_P2_MANUFACTURING_WORK_ORDER_QUEUE_READS_ENABLED:-}"
+          test -z "${VITE_P2_MANUFACTURING_WORK_ORDER_EXECUTION_ENABLED:-}"
+      - name: Focused Phase 3-6 contracts
+        run: |
+          npx vitest run --config vitest.config.server.ts server/__tests__/p2ProjectControlledConfigurationFoundation.test.ts server/__tests__/p2WadTravelerAuthorityFoundation.test.ts server/__tests__/p2WadTravelerAuthorityCorrection.test.ts server/__tests__/p2FrozenProductionDemandFoundation.test.ts server/__tests__/p2ManufacturingWorkOrderQueueFoundation.test.ts --reporter=verbose
+          npx vitest run client/src/components/p2/__tests__/P2FrozenProductionDemand.test.tsx client/src/__tests__/p2ManufacturingWorkOrderQueues.client.test.tsx --reporter=verbose
+      - name: TypeScript, lint, format, and diff hygiene
+        run: |
+          npx tsc --project tsconfig.p2-work-order-queues.json --pretty false
+          npx esbuild server/src/services/p2ManufacturingWorkOrderService.ts server/src/routes/p2ManufacturingWorkOrders.ts --platform=node --format=esm --outdir=/tmp/p2-mwo-ts-validation
+          npx eslint server/src/services/p2ManufacturingWorkOrderService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/__tests__/p2ManufacturingWorkOrderQueueFoundation.test.ts client/src/pages/P2WorkOrderQueuePage.tsx client/src/__tests__/p2ManufacturingWorkOrderQueues.client.test.tsx --max-warnings 0
+          npx prettier --check server/src/services/p2ManufacturingWorkOrderService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/__tests__/p2ManufacturingWorkOrderQueueFoundation.test.ts client/src/pages/P2WorkOrderQueuePage.tsx client/src/__tests__/p2ManufacturingWorkOrderQueues.client.test.tsx
+          git diff --check HEAD^ HEAD
+      - name: Create clean application schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
+          npx drizzle-kit push --force --config drizzle.app.config.ts
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql
+      - name: Clean migration, populated preservation, and replay
+        shell: bash
+        run: |
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/before.txt
+          SELECT 'projects|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM projects t;
+          SELECT 'inventory_items|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_items t;
+          SELECT 'work_orders|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM production_work_orders t;
+          SELECT 'travelers|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM travelers t;
+          SELECT 'p1_orders|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM orders t;
+          SELECT 'inventory_transactions|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_transactions t;
+          SQL
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0301_p2_manufacturing_work_order_queue_foundation.sql
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/after.txt
+          SELECT 'projects|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM projects t;
+          SELECT 'inventory_items|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_items t;
+          SELECT 'work_orders|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM production_work_orders t;
+          SELECT 'travelers|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM travelers t;
+          SELECT 'p1_orders|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM orders t;
+          SELECT 'inventory_transactions|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_transactions t;
+          SQL
+          diff -u /tmp/before.txt /tmp/after.txt
+      - name: Rollback, registry, constraints, and immutability probes
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          ALTER TABLE p2_manufacturing_work_order_authorities ADD COLUMN rollback_probe boolean;
+          ROLLBACK;
+          DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='p2_manufacturing_work_order_authorities' AND column_name='rollback_probe') THEN RAISE EXCEPTION 'rollback probe persisted'; END IF; END $$;
+          SELECT frozen_demand_node_id,production_work_order_id,parent_authority_id,required_quantity,completed_quantity,accepted_quantity,current_department_id,traveler_requirement,authority_checksum FROM p2_manufacturing_work_order_authorities LIMIT 0;
+          SELECT predecessor_authority_id,successor_authority_id,dependency_type,required_quantity,satisfied_quantity,status FROM p2_manufacturing_work_order_dependencies LIMIT 0;
+          SELECT actor_user_id,actor_employee_id,actor_display_name,actor_role FROM p2_manufacturing_work_order_events LIMIT 0;
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_mwo_authority_identity_immutable') THEN RAISE EXCEPTION 'authority immutability trigger missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_mwo_operation_snapshot_immutable') THEN RAISE EXCEPTION 'operation snapshot immutability trigger missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_mwo_event_immutable') THEN RAISE EXCEPTION 'event immutability trigger missing'; END IF;
+          END $$;
+          SQL
+          test "$(grep -c "'0301_p2_manufacturing_work_order_queue_foundation.sql'" server/scripts/migrations/runSafeBootMigrations.ts)" = 2
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT count(*) FROM p2_manufacturing_work_order_authorities')" = 0
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT count(*) FROM p2_manufacturing_work_order_events')" = 0

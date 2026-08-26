@@ -127,6 +127,9 @@ const WorkOrderDetailPage = React.lazy(
 const ProductionWorkOrderDetailPage = React.lazy(
   () => import('./pages/ProductionWorkOrderDetailPage')
 );
+const P2WorkOrderQueuePage = React.lazy(
+  () => import('./pages/P2WorkOrderQueuePage')
+);
 const WADWizardPage = React.lazy(() => import('./pages/WADWizardPage'));
 const WADWizardLauncherPage = React.lazy(
   () => import('./pages/WADWizardLauncherPage')
@@ -2129,6 +2132,10 @@ function App() {
                         <Route path="/p2-production-queue">
                           <Redirect to="/p2-control-center" />
                         </Route>
+                        <Route
+                          path="/p2-work-orders/queues/:departmentId"
+                          component={P2WorkOrderQueuePage}
+                        />
                         <Route path="/cutting-table-queue">
                           <Redirect to="/cutting-control-center" />
                         </Route>

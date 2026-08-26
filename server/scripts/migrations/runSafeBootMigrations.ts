@@ -362,6 +362,7 @@ export const safeMigrationFiles = [
   '0298_p2_wad_traveler_authority_completion.sql',
   '0299_p2_wad_authority_correction.sql',
   '0300_p2_frozen_production_demand_foundation.sql',
+  '0301_p2_manufacturing_work_order_queue_foundation.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -464,6 +465,7 @@ export const criticalMigrationFiles = new Set([
   '0298_p2_wad_traveler_authority_completion.sql',
   '0299_p2_wad_authority_correction.sql',
   '0300_p2_frozen_production_demand_foundation.sql',
+  '0301_p2_manufacturing_work_order_queue_foundation.sql',
 ]);
 
 export async function runSafeBootMigrations() {

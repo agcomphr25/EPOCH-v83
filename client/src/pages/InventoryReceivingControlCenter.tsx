@@ -1691,7 +1691,11 @@ export function LineItemsStep({
   const [partComboOpen, setPartComboOpen] = useState(false);
   const [partSearch, setPartSearch] = useState('');
   type SortCol =
-    'partNumber' | 'description' | 'ordered' | 'received' | 'status';
+    | 'partNumber'
+    | 'description'
+    | 'ordered'
+    | 'received'
+    | 'status';
   const SORT_COL_KEY = 'receivingLines_sortCol';
   const SORT_DIR_KEY = 'receivingLines_sortDir';
   const [sortCol, setSortColState] = useState<SortCol | null>(() => {

@@ -1477,7 +1477,9 @@ router.post(
           .where(eq(inventoryItems.agPartNumber, line.agPartNumber))
           .limit(1);
         const fieldConfig = invItem?.traceabilityFieldConfig as
-          Record<string, string> | null | undefined;
+          | Record<string, string>
+          | null
+          | undefined;
         if (fieldConfig && Object.keys(fieldConfig).length > 0) {
           // Validate required fields (excluding the always-optional set)
           const missingRequired = TRACE_FIELDS.filter(
@@ -2703,8 +2705,9 @@ async function handleAcceptedUnit(
       // auto-creating a minimal inventory_items placeholder rather than
       // hard-failing. Parts Management can fill in metadata later, but the
       // receiving → ITL invariant is preserved either way.
-      const { ensureInventoryItemForReceipt } =
-        await import('../services/ensureInventoryItemForReceipt');
+      const { ensureInventoryItemForReceipt } = await import(
+        '../services/ensureInventoryItemForReceipt'
+      );
       await ensureInventoryItemForReceipt(db, {
         agPartNumber: line.agPartNumber,
         fallbackName: line.description ?? line.agPartNumber,
@@ -3012,7 +3015,9 @@ async function lineRequiresStrictSplit(
     .where(eq(inventoryItems.agPartNumber, line.agPartNumber))
     .limit(1);
   const cfg = invItem?.traceabilityFieldConfig as
-    Record<string, string> | null | undefined;
+    | Record<string, string>
+    | null
+    | undefined;
   if (!cfg) return { requires: false, fields: [] };
   const STRICT_KEYS = ['serialNumber', 'rollNumber'] as const;
   const fields = STRICT_KEYS.filter(

@@ -20,7 +20,7 @@ DO $$ BEGIN
         batch_coverage_scope IS NOT NULL AND
         btrim(batch_coverage_scope) <> ''
       )
-    ) NOT VALID;
+    );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE OR REPLACE FUNCTION p2_released_wad_authorization_immutable()

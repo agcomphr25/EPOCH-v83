@@ -32,6 +32,9 @@ export function resolveCertificationPaths({
   }
   const resolved = filterCertificationPaths(sourcePaths, kind);
   if (resolved.length === 0) {
+    if (eventName === 'pull_request') {
+      return [];
+    }
     throw new Error(
       `${eventName} resolved an empty ${kind} certification scope; refusing a repository-wide fallback`
     );

@@ -12,6 +12,7 @@ ALTER TABLE p2_wad_traveler_decision_events
 
 DO $$ BEGIN
   ALTER TABLE p2_wad_traveler_decisions
+    -- Enforce the rule prospectively without rejecting preserved legacy rows.
     ADD CONSTRAINT p2_wad_traveler_batch_coverage_check CHECK (
       traveler_type <> 'BATCH' OR (
         batch_approved_quantity IS NOT NULL AND
@@ -20,7 +21,7 @@ DO $$ BEGIN
         batch_coverage_scope IS NOT NULL AND
         btrim(batch_coverage_scope) <> ''
       )
-    );
+    ) NOT VALID;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE OR REPLACE FUNCTION p2_released_wad_authorization_immutable()

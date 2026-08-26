@@ -48,6 +48,9 @@ import { recordInventoryLedgerEntry } from '../services/inventoryTransactionLedg
 import { ensureInventoryItemForReceipt } from '../services/ensureInventoryItemForReceipt';
 import { syncLinkedPartsRequestsReceivedForVendorPo } from '../services/partsRequestVendorPoSyncService';
 import { previewReceiptReversal, ReceiptReversalError, reverseReceipt } from '../services/receiptReversalService';
+import { areP2ReceivingBarcodeIdentitiesEnabled } from '../lib/featureFlags';
+import { requirePermission } from '../../middleware/requirePermission';
+import { P2ReceivingBarcodeError, recordP2ReceivingBarcodePrint, resolveP2ReceivingBarcodeIdentity } from '../services/p2ReceivingBarcodeService';
 
 const router = Router();
 
@@ -1669,17 +1672,26 @@ router.get('/:id/units/:unitId/label', requireReceivingAccess, async (req: Reque
     const [line] = await db.select().from(receiptLines).where(eq(receiptLines.id, unit.receiptLineId));
 
     const user = req.user;
-    await logAudit(receiptId, 'label_printed', user?.employeeId, actorName(user), { unitId, barcode: unit.barcode });
+    const controlledIdentity = areP2ReceivingBarcodeIdentitiesEnabled()
+      ? await resolveP2ReceivingBarcodeIdentity(receiptId, unitId, {
+          userId: user!.id, employeeId: user?.employeeId ?? null,
+          displayName: actorName(user), role: String(user?.role ?? ''),
+        })
+      : null;
+    if (!controlledIdentity)
+      await logAudit(receiptId, 'label_printed', user?.employeeId, actorName(user), { unitId, barcode: unit.barcode });
+    const barcodeValue = controlledIdentity?.barcode_value ?? unit.barcode;
 
     let barcodeImage: string | null = null;
     try {
-      barcodeImage = await generateBarcodeImage(unit.barcode, { format: 'CODE128', width: 3, height: 12 });
+      barcodeImage = await generateBarcodeImage(barcodeValue, { format: 'CODE128', width: 3, height: 12 });
     } catch (barcodeErr) {
       console.warn('Barcode image generation failed:', barcodeErr);
     }
 
     res.json({
-      barcode: unit.barcode,
+      barcode: barcodeValue,
+      receivingIdentityId: controlledIdentity?.id ?? null,
       barcodeImage,
       agPartNumber: line?.agPartNumber ?? '',
       description: line?.description ?? '',
@@ -1706,6 +1718,32 @@ router.get('/:id/units/:unitId/label', requireReceivingAccess, async (req: Reque
     res.status(500).json({ error: 'Failed to fetch label data' });
   }
 });
+
+const controlledPrintSchema = z.object({
+  labelFormat: z.enum(['avery-5160', 'avery-5163', 'receiving-4x6']),
+  printerName: z.string().trim().min(1).max(200),
+  copies: z.number().int().positive().max(100),
+  reprintReason: z.string().trim().max(1000).optional(),
+  idempotencyKey: z.string().trim().min(1).max(200),
+});
+
+router.post('/:id/units/:unitId/controlled-print', requireReceivingAccess,
+  requirePermission('p2.receiving_barcodes.print'), async (req: Request, res: Response) => {
+    try {
+      if (!areP2ReceivingBarcodeIdentitiesEnabled()) return res.status(404).json({ error: 'FEATURE_DISABLED' });
+      const input = controlledPrintSchema.parse(req.body);
+      const user = req.user!;
+      res.status(201).json(await recordP2ReceivingBarcodePrint(Number(req.params.id), Number(req.params.unitId), input, {
+        userId: user.id, employeeId: user.employeeId ?? null,
+        displayName: actorName(user), role: String(user.role),
+      }));
+    } catch (error) {
+      if (error instanceof P2ReceivingBarcodeError) return res.status(error.status).json({ error: error.code, message: error.message });
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'INVALID_PRINT_EVIDENCE', details: error.flatten() });
+      console.error('POST controlled print:', error);
+      return res.status(500).json({ error: 'CONTROLLED_PRINT_FAILED' });
+    }
+  });
 
 // ── POST /api/receipts/:id/labels/batch ──────────────────────────────────────
 // Returns array of label data with barcodeImage for batch PDF printing on the client

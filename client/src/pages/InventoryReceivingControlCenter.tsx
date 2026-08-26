@@ -3664,6 +3664,18 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
   const [barcodeImages, setBarcodeImages] = useState<Record<number, string>>({});
   const [loadingImages, setLoadingImages] = useState<Record<number, boolean>>({});
   const [labelSize, setLabelSize] = useState<ReceivingLabelSize>('avery-5160');
+  const [printerName, setPrinterName] = useState('Browser PDF / selected printer');
+  const [copies, setCopies] = useState(1);
+  const [reprintReason, setReprintReason] = useState('');
+  const controlledReceivingBarcodes = import.meta.env.VITE_P2_RECEIVING_BARCODE_IDENTITIES_ENABLED === 'true';
+  const recordControlledPrint = (unitId: number) => apiRequest(
+    `/api/receipts/${receipt.id}/units/${unitId}/controlled-print`, {
+      method: 'POST', body: JSON.stringify({
+        labelFormat: labelSize, printerName, copies,
+        reprintReason: reprintReason.trim() || undefined,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    });
 
   // Pre-fetch barcode images for all units when the tab renders
   useEffect(() => {
@@ -3685,7 +3697,8 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
   const printLabel = async (unitId: number) => {
     try {
       const labelData = await apiRequest(`/api/receipts/${receipt.id}/units/${unitId}/label`);
-      await printLabelPDF([labelData], `Label ${labelData.barcode}`, labelSize);
+      await printLabelPDF(Array.from({ length: copies }, () => labelData), `Label ${labelData.barcode}`, labelSize);
+      if (controlledReceivingBarcodes) await recordControlledPrint(unitId);
     } catch {
       toast.error('Failed to fetch label data');
     }
@@ -3693,8 +3706,12 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
 
   const printBatch = async () => {
     try {
-      const labels = await apiRequest(`/api/receipts/${receipt.id}/labels/batch`, { method: 'POST' });
-      await printLabelPDF(labels, `Batch Labels - ${receipt.receiptNumber}`, labelSize);
+      const labels = controlledReceivingBarcodes
+        ? await Promise.all(units.map(unit => apiRequest(`/api/receipts/${receipt.id}/units/${unit.id}/label`)))
+        : await apiRequest(`/api/receipts/${receipt.id}/labels/batch`, { method: 'POST' });
+      const printableLabels = labels.flatMap((label: any) => Array.from({ length: copies }, () => label));
+      await printLabelPDF(printableLabels, `Batch Labels - ${receipt.receiptNumber}`, labelSize);
+      if (controlledReceivingBarcodes) await Promise.all(units.map(unit => recordControlledPrint(unit.id)));
     } catch {
       toast.error('Failed to fetch batch labels');
     }
@@ -3717,6 +3734,16 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
         <div className="mt-1 text-[11px] text-gray-500">
           Every size includes the AG part number and description.
         </div>
+        {controlledReceivingBarcodes && (
+          <div className="mt-2 grid gap-2">
+            <Label htmlFor="receiving-printer-name" className="text-xs">Printer / destination</Label>
+            <Input id="receiving-printer-name" value={printerName} onChange={event => setPrinterName(event.target.value)} />
+            <Label htmlFor="receiving-print-copies" className="text-xs">Copies</Label>
+            <Input id="receiving-print-copies" type="number" min={1} max={100} value={copies} onChange={event => setCopies(Math.max(1, Number(event.target.value) || 1))} />
+            <Label htmlFor="receiving-reprint-reason" className="text-xs">Reprint reason (required after first print)</Label>
+            <Input id="receiving-reprint-reason" value={reprintReason} onChange={event => setReprintReason(event.target.value)} />
+          </div>
+        )}
       </div>
 
       {units.length > 1 && (

@@ -1,0 +1,92 @@
+name: P2 Receiving Barcode Identities PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/p2-receiving-barcode-identities]
+  pull_request:
+    paths:
+      - 'migrations/0303_p2_receiving_barcode_identities.sql'
+      - 'server/src/services/p2ReceivingBarcodeService.ts'
+      - 'server/src/routes/receiving.ts'
+      - 'client/src/pages/InventoryReceivingControlCenter.tsx'
+      - '.github/workflows/p2-receiving-barcode-identities-postgres.yml'
+
+permissions: { contents: read }
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase8_cert
+          POSTGRES_PASSWORD: disposable_phase8_password
+          POSTGRES_DB: epoch_phase8_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase8_cert -d epoch_phase8_certification"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://phase8_cert:disposable_phase8_password@127.0.0.1:5432/epoch_phase8_certification
+      NODE_ENV: test
+      SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Prove isolation and disabled flags
+        shell: bash
+        run: |
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).hostname)")" = 127.0.0.1
+          test -z "${P2_RECEIVING_BARCODE_IDENTITIES_ENABLED:-}"
+          test -z "${VITE_P2_RECEIVING_BARCODE_IDENTITIES_ENABLED:-}"
+      - name: Focused Phase 7-8 contracts
+        run: npx vitest run --config vitest.config.server.ts server/__tests__/p2TravelerProvisioningCoverageLedger.test.ts server/__tests__/p2ReceivingBarcodeIdentities.test.ts --reporter=verbose
+      - name: Syntax, focused lint, and diff hygiene
+        run: |
+          npx esbuild server/src/services/p2ReceivingBarcodeService.ts server/src/routes/receiving.ts --platform=node --format=esm --outdir=/tmp/p2-phase8-ts-validation
+          npx eslint server/src/services/p2ReceivingBarcodeService.ts server/__tests__/p2ReceivingBarcodeIdentities.test.ts --max-warnings 0
+          npx prettier --check server/src/services/p2ReceivingBarcodeService.ts server/__tests__/p2ReceivingBarcodeIdentities.test.ts
+          git diff --check HEAD^ HEAD
+      - name: Create clean application schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
+          npx drizzle-kit push --force --config drizzle.app.config.ts
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql
+      - name: Safe migration, preservation, replay, rollback, and immutability
+        shell: bash
+        run: |
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/before.txt
+          SELECT 'received_units|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM received_units t;
+          SELECT 'material_lots|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM material_lots t;
+          SELECT 'inventory_transactions|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_transactions t;
+          SELECT 'travelers|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM travelers t;
+          SQL
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0303_p2_receiving_barcode_identities.sql
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/after.txt
+          SELECT 'received_units|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM received_units t;
+          SELECT 'material_lots|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM material_lots t;
+          SELECT 'inventory_transactions|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_transactions t;
+          SELECT 'travelers|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM travelers t;
+          SQL
+          diff -u /tmp/before.txt /tmp/after.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          ALTER TABLE p2_receiving_barcode_identities ADD COLUMN rollback_probe boolean;
+          ROLLBACK;
+          DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='p2_receiving_barcode_identities' AND column_name='rollback_probe') THEN RAISE EXCEPTION 'rollback probe persisted'; END IF; END $$;
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_receiving_barcode_identity_immutable') THEN RAISE EXCEPTION 'identity immutability missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_receiving_barcode_print_immutable') THEN RAISE EXCEPTION 'print immutability missing'; END IF;
+          END $$;
+          SQL
+          test "$(grep -c "'0303_p2_receiving_barcode_identities.sql'" server/scripts/migrations/runSafeBootMigrations.ts)" = 2
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT count(*) FROM p2_receiving_barcode_identities')" = 0
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT count(*) FROM p2_receiving_barcode_print_events')" = 0

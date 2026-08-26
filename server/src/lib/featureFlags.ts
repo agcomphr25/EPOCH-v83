@@ -179,6 +179,11 @@ export function areP2TravelerProvisioningWritesEnabled(): boolean {
   return envBool('P2_TRAVELER_PROVISIONING_WRITES_ENABLED', false);
 }
 
+/** Phase 8 controlled Receiving barcode identities and printing; defaults off. */
+export function areP2ReceivingBarcodeIdentitiesEnabled(): boolean {
+  return envBool('P2_RECEIVING_BARCODE_IDENTITIES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

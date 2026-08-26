@@ -1892,10 +1892,7 @@ export default function Navigation() {
       icon: Home,
       description: `Personal dashboard for ${currentUser.username}`,
     }];
-    // The dashboard definitions are static within a render and intentionally
-    // included to preserve the legacy per-user navigation behavior.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userDashboardsItems, currentUser?.username]);
+  }, [userDashboardsItems, currentUser?.username]); // eslint-disable-line react-hooks/exhaustive-deps
   const filteredPurchaseOrdersItems = useMemo(
     () => filterByPermissions(purchaseOrdersItems, currentUser?.username, userRole),
     [purchaseOrdersItems, currentUser?.username, userRole, navCapSet]

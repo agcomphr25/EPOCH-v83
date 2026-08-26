@@ -3878,9 +3878,9 @@ async function initializeBackgroundServices() {
         let fixedCount = 0;
         for (const row of legacyRows.rows as any[]) {
           const fields: string[] = row.traceability_fields || [];
-          const normalized = Array.from(new Set(
-            fields.map((f: string) => legacyMap[f] || f)
-          ));
+          const normalized = Array.from(
+            new Set(fields.map((f: string) => legacyMap[f] || f))
+          );
           if (JSON.stringify(normalized) !== JSON.stringify(fields)) {
             await db.execute(sqlTrace`
               UPDATE inventory_items
@@ -4542,7 +4542,39 @@ async function initializeBackgroundServices() {
         const epochCapabilities = [
           { key: 'work_orders.release', description: 'Release a WAD to the production floor and create traveler packages', category: 'work_orders' },
           { key: 'work_orders.approve_overrun', description: 'Approve labor budget overruns on production work orders', category: 'work_orders' },
-          { key: 'work_orders.override_charges', description: 'Override labor charge codes and approve cost overruns on work orders', category: 'work_orders' }, { key: 'p2.work_orders.view', description: 'View P2 manufacturing work-order queues', category: 'work_orders' }, { key: 'p2.work_orders.materialize', description: 'Materialize P2 work orders from released Frozen Production Demand', category: 'work_orders' }, { key: 'p2.work_orders.execute', description: 'Start P2 manufacturing work and travelers', category: 'work_orders' }, { key: 'p2.work_orders.complete_operation', description: 'Complete P2 routing operations', category: 'work_orders' }, { key: 'p2.work_orders.accept', description: 'Record controlled Quality acceptance of P2 manufactured output', category: 'work_orders' },
+          {
+            key: 'work_orders.override_charges',
+            description:
+              'Override labor charge codes and approve cost overruns on work orders',
+            category: 'work_orders',
+          },
+          {
+            key: 'p2.work_orders.view',
+            description: 'View P2 manufacturing work-order queues',
+            category: 'work_orders',
+          },
+          {
+            key: 'p2.work_orders.materialize',
+            description:
+              'Materialize P2 work orders from released Frozen Production Demand',
+            category: 'work_orders',
+          },
+          {
+            key: 'p2.work_orders.execute',
+            description: 'Start P2 manufacturing work and travelers',
+            category: 'work_orders',
+          },
+          {
+            key: 'p2.work_orders.complete_operation',
+            description: 'Complete P2 routing operations',
+            category: 'work_orders',
+          },
+          {
+            key: 'p2.work_orders.accept',
+            description:
+              'Record controlled Quality acceptance of P2 manufactured output',
+            category: 'work_orders',
+          },
           { key: 'travelers.start', description: 'Start a traveler (transition DRAFT → IN_PROGRESS)', category: 'travelers' },
           { key: 'travelers.finish', description: 'Mark a traveler as complete (transition IN_PROGRESS → COMPLETED)', category: 'travelers' },
           { key: 'travelers.sign_qc', description: 'Sign off / QC-approve a traveler step or CNC program', category: 'travelers' },
@@ -7769,7 +7801,12 @@ async function initializeBackgroundServices() {
             `INSERT INTO cmmc_control_status (practice_id, family, status, notes, updated_at)
              VALUES ($1, $2, $3, $4, NOW())
              ON CONFLICT (practice_id) DO NOTHING`,
-            [practice.practiceId, practice.family, mapping.seedStatus, mapping.gapNote ?? null],
+            [
+              practice.practiceId,
+              practice.family,
+              mapping.seedStatus,
+              mapping.gapNote ?? null,
+            ]
           );
         }
         console.log(`✅ Seeded cmmc_control_status with ${CMMC_PRACTICES.length} practices`);

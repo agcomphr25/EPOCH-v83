@@ -1,0 +1,115 @@
+name: P2 Frozen Production Demand PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/p2-frozen-production-demand-foundation]
+  pull_request:
+    paths:
+      - 'migrations/0300_p2_frozen_production_demand_foundation.sql'
+      - 'server/src/services/p2FrozenProductionDemand*'
+      - 'server/src/routes/p2FrozenProductionDemand.ts'
+      - 'client/src/components/p2/P2FrozenProductionDemand.tsx'
+      - '.github/workflows/p2-frozen-production-demand-postgres.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase5_cert
+          POSTGRES_PASSWORD: disposable_phase5_password
+          POSTGRES_DB: epoch_phase5_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase5_cert -d epoch_phase5_certification"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://phase5_cert:disposable_phase5_password@127.0.0.1:5432/epoch_phase5_certification
+      NODE_ENV: test
+      SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Prove disposable boundary and all flags disabled
+        shell: bash
+        run: |
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).hostname)")" = 127.0.0.1
+          test -z "${P2_FROZEN_PRODUCTION_DEMAND_READS_ENABLED:-}"
+          test -z "${P2_FROZEN_PRODUCTION_DEMAND_WRITES_ENABLED:-}"
+          test -z "${P2_FROZEN_PRODUCTION_DEMAND_RELEASES_ENABLED:-}"
+          test -z "${VITE_P2_FROZEN_PRODUCTION_DEMAND_READS_ENABLED:-}"
+          test -z "${VITE_P2_FROZEN_PRODUCTION_DEMAND_WRITES_ENABLED:-}"
+          test -z "${VITE_P2_FROZEN_PRODUCTION_DEMAND_RELEASES_ENABLED:-}"
+      - name: Focused Phase 3-5 server and client contracts
+        run: |
+          npx vitest run --config vitest.config.server.ts server/__tests__/p2ProjectControlledConfigurationFoundation.test.ts server/__tests__/p2WadTravelerAuthorityFoundation.test.ts server/__tests__/p2WadTravelerAuthorityCorrection.test.ts server/__tests__/p2FrozenProductionDemandFoundation.test.ts --reporter=verbose
+          npx vitest run client/src/components/p2/__tests__/P2FrozenProductionDemand.test.tsx --reporter=verbose
+      - name: TypeScript, lint, format and diff hygiene
+        run: |
+          npx tsc --project tsconfig.p2-frozen-demand.json --pretty false
+          npx esbuild server/src/services/p2FrozenProductionDemandService.ts server/src/routes/p2FrozenProductionDemand.ts --platform=node --format=esm --outdir=/tmp/p2-frozen-demand-ts-validation
+          npx eslint server/src/services/p2FrozenProductionDemandCompiler.ts server/src/services/p2FrozenProductionDemandService.ts server/src/routes/p2FrozenProductionDemand.ts client/src/components/p2/P2FrozenProductionDemand.tsx server/__tests__/p2FrozenProductionDemandFoundation.test.ts client/src/components/p2/__tests__/P2FrozenProductionDemand.test.tsx --max-warnings 0
+          npx prettier --check server/src/services/p2FrozenProductionDemandCompiler.ts server/src/services/p2FrozenProductionDemandService.ts server/src/routes/p2FrozenProductionDemand.ts client/src/components/p2/P2FrozenProductionDemand.tsx server/__tests__/p2FrozenProductionDemandFoundation.test.ts client/src/components/p2/__tests__/P2FrozenProductionDemand.test.tsx
+          git diff --check HEAD^ HEAD
+      - name: Create clean application schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
+          npx drizzle-kit push --force --config drizzle.app.config.ts
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql
+      - name: Clean migration and populated historical preservation
+        shell: bash
+        run: |
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/before.txt
+          SELECT 'projects|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM projects t;
+          SELECT 'inventory_items|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_items t;
+          SELECT 'boms|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM boms t;
+          SELECT 'routings|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM part_routings t;
+          SELECT 'wads|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM project_wad_authorizations t;
+          SELECT 'work_orders|'||count(*) FROM production_work_orders;
+          SELECT 'travelers|'||count(*) FROM travelers;
+          SELECT 'transactions|'||count(*) FROM inventory_transactions;
+          SQL
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0300_p2_frozen_production_demand_foundation.sql
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/after.txt
+          SELECT 'projects|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM projects t;
+          SELECT 'inventory_items|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_items t;
+          SELECT 'boms|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM boms t;
+          SELECT 'routings|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM part_routings t;
+          SELECT 'wads|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM project_wad_authorizations t;
+          SELECT 'work_orders|'||count(*) FROM production_work_orders;
+          SELECT 'travelers|'||count(*) FROM travelers;
+          SELECT 'transactions|'||count(*) FROM inventory_transactions;
+          SQL
+          diff -u /tmp/before.txt /tmp/after.txt
+      - name: Rollback, registry, lifecycle and immutability probes
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          ALTER TABLE p2_frozen_production_demand_baselines ADD COLUMN rollback_probe boolean;
+          ROLLBACK;
+          DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='p2_frozen_production_demand_baselines' AND column_name='rollback_probe') THEN RAISE EXCEPTION 'rollback probe persisted'; END IF; END $$;
+          SELECT status,preview_checksum,baseline_checksum,concurrency_version,created_by_employee_id,validated_by_employee_id,released_by_employee_id FROM p2_frozen_production_demand_baselines LIMIT 0;
+          SELECT node_identity,parent_node_identity,assembly_path_identity,required_gross_quantity,node_checksum FROM p2_frozen_production_demand_nodes LIMIT 0;
+          SELECT actor_user_id,actor_employee_id,actor_display_name,actor_role FROM p2_frozen_production_demand_events LIMIT 0;
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_frozen_demand_baseline_immutable') THEN RAISE EXCEPTION 'baseline immutability trigger missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_frozen_demand_node_immutable') THEN RAISE EXCEPTION 'node immutability trigger missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_frozen_demand_event_immutable') THEN RAISE EXCEPTION 'event immutability trigger missing'; END IF;
+          END $$;
+          SQL
+          test "$(grep -c "'0300_p2_frozen_production_demand_foundation.sql'" server/scripts/migrations/runSafeBootMigrations.ts)" = 2
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT count(*) FROM p2_frozen_production_demand_baselines')" = 0
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT count(*) FROM p2_frozen_production_demand_nodes')" = 0

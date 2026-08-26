@@ -152,6 +152,17 @@ export function areP2WadTravelerDecisionWritesEnabled(): boolean {
   return envBool('P2_WAD_TRAVELER_DECISION_WRITES_ENABLED', false);
 }
 
+/** Phase 5 immutable gross-demand foundation; all gates require exact lowercase true. */
+export function areP2FrozenProductionDemandReadsEnabled(): boolean {
+  return envBool('P2_FROZEN_PRODUCTION_DEMAND_READS_ENABLED', false);
+}
+export function areP2FrozenProductionDemandWritesEnabled(): boolean {
+  return envBool('P2_FROZEN_PRODUCTION_DEMAND_WRITES_ENABLED', false);
+}
+export function areP2FrozenProductionDemandReleasesEnabled(): boolean {
+  return envBool('P2_FROZEN_PRODUCTION_DEMAND_RELEASES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

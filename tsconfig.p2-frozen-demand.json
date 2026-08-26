@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server/src/services/p2FrozenProductionDemandCompiler.ts",
+    "client/src/components/p2/P2FrozenProductionDemand.tsx"
+  ],
+  "exclude": ["node_modules", "build", "dist"],
+  "compilerOptions": {
+    "incremental": false,
+    "noEmit": true,
+    "target": "ES2020"
+  }
+}

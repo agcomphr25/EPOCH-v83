@@ -62,6 +62,8 @@ on:
       - 'server/__tests__/projectClosingGate.test.ts'
       - 'client/src/__tests__/P2V2*.component.test.tsx'
       - 'scripts/validate-phase10a-static-manifest.js'
+      - 'scripts/compare-eslint-baseline.mjs'
+      - 'scripts/compare-eslint-baseline.test.mjs'
       - 'scripts/resolve-p2-v2-certification-scope.mjs'
       - 'scripts/resolve-p2-v2-certification-scope.test.mjs'
       - 'package.json'
@@ -120,8 +122,16 @@ jobs:
       - name: Install committed dependencies
         run: npm ci --ignore-scripts
 
+      - name: Share committed dependencies with exact-main baseline
+        run: |
+          ln -s "$GITHUB_WORKSPACE/node_modules" \
+            "/tmp/phase10a-main-baseline/node_modules"
+
       - name: Validate certification scope selection
-        run: node --test scripts/resolve-p2-v2-certification-scope.test.mjs
+        run: |
+          node --test \
+            scripts/compare-eslint-baseline.test.mjs \
+            scripts/resolve-p2-v2-certification-scope.test.mjs
 
       - name: Run bounded full TypeScript certification
         shell: bash
@@ -152,8 +162,6 @@ jobs:
             exit 0
           fi
 
-          ln -s "$GITHUB_WORKSPACE/node_modules" \
-            "/tmp/phase10a-main-baseline/node_modules"
           pushd "/tmp/phase10a-main-baseline"
           start_base=$(date +%s)
           NODE_OPTIONS=--max-old-space-size=6144 "$GITHUB_WORKSPACE/node_modules/.bin/tsc" \
@@ -225,6 +233,7 @@ jobs:
             exit 0
           fi
           set +e
+          head_command="npx eslint --format json ${corrective_files[*]}"
           npx eslint --format json "${corrective_files[@]}" \
             > /tmp/phase10a-head-eslint.json 2>/tmp/phase10a-head-eslint.stderr
           head_eslint_exit=$?
@@ -237,8 +246,11 @@ jobs:
           )
           if [ "${#baseline_files[@]}" -eq 0 ]; then
             printf '[]\n' > /tmp/phase10a-base-eslint.json
+            : > /tmp/phase10a-base-eslint.stderr
             base_eslint_exit=0
+            base_command="eslint --format json (no baseline files)"
           else
+            base_command="eslint --format json ${baseline_files[*]}"
             pushd "/tmp/phase10a-main-baseline"
             "$GITHUB_WORKSPACE/node_modules/.bin/eslint" --format json \
               "${baseline_files[@]}" > /tmp/phase10a-base-eslint.json \
@@ -249,10 +261,16 @@ jobs:
           set -e
           echo "eslint_compare: head_exit=${head_eslint_exit} base_exit=${base_eslint_exit}"
           node scripts/compare-eslint-baseline.mjs \
-            /tmp/phase10a-head-eslint.json \
-            /tmp/phase10a-base-eslint.json \
-            "$GITHUB_WORKSPACE" \
-            /tmp/phase10a-main-baseline
+            --head-report /tmp/phase10a-head-eslint.json \
+            --base-report /tmp/phase10a-base-eslint.json \
+            --head-root "$GITHUB_WORKSPACE" \
+            --base-root /tmp/phase10a-main-baseline \
+            --head-exit "$head_eslint_exit" \
+            --base-exit "$base_eslint_exit" \
+            --head-command "$head_command" \
+            --base-command "$base_command" \
+            --head-stderr /tmp/phase10a-head-eslint.stderr \
+            --base-stderr /tmp/phase10a-base-eslint.stderr
           echo "focused_eslint: manifest_files=${#manifest_files[@]} corrective_files=${#corrective_files[@]} unique_files=${#files[@]} duration_seconds=$(($(date +%s) - start)) exit_code=0 new_errors=0 new_warnings=0"
 
       - name: Run focused Phase 9-10A formatting certification

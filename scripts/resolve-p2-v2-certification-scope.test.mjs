@@ -42,6 +42,13 @@ const requiredP2CertificationPaths = [
   'server/__tests__/p2V2PilotPostgresCertification.test.ts',
 ];
 
+const requiredCertificationHarnessPaths = [
+  'scripts/compare-eslint-baseline.mjs',
+  'scripts/compare-eslint-baseline.test.mjs',
+  'scripts/resolve-p2-v2-certification-scope.mjs',
+  'scripts/resolve-p2-v2-certification-scope.test.mjs',
+];
+
 test('pull requests use only their changed-file scope', () => {
   assert.deepEqual(
     resolveCertificationPaths({
@@ -100,6 +107,17 @@ test('the dispatch manifest includes the P2 PostgreSQL and legacy gates', () => 
     )
   );
   for (const file of requiredP2CertificationPaths)
+    assert.ok(manifest.includes(file), file);
+});
+
+test('the dispatch manifest includes the certification harness and tests', () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(
+      '.github/p2-v2-workflow-dispatch-certification-manifest.json',
+      'utf8'
+    )
+  );
+  for (const file of requiredCertificationHarnessPaths)
     assert.ok(manifest.includes(file), file);
 });
 
@@ -185,4 +203,19 @@ test('ESLint skips changed-file comparison when a pull request has no lintable f
     workflow,
     /No changed ESLint files; changed-file comparison skipped\./
   );
+});
+
+test('workflow shares dependencies before any TypeScript early exit', () => {
+  const workflow = fs.readFileSync(
+    path.resolve('.github/workflows/p2-v2-postgres-certification.yml'),
+    'utf8'
+  );
+  const dependencies = workflow.indexOf(
+    'Share committed dependencies with exact-main baseline'
+  );
+  const typescript = workflow.indexOf(
+    'Run bounded full TypeScript certification'
+  );
+  assert.ok(dependencies >= 0 && dependencies < typescript);
+  assert.match(workflow, /\/tmp\/phase10a-main-baseline\/node_modules/);
 });

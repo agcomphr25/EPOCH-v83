@@ -219,6 +219,11 @@ jobs:
           )
           start=$(date +%s)
           npx eslint --max-warnings 0 "${manifest_files[@]}"
+          if [ "${#corrective_files[@]}" -eq 0 ]; then
+            echo "No changed ESLint files; changed-file comparison skipped."
+            echo "focused_eslint: manifest_files=${#manifest_files[@]} corrective_files=0 unique_files=${#files[@]} duration_seconds=$(($(date +%s) - start)) exit_code=0 new_errors=0 new_warnings=0"
+            exit 0
+          fi
           set +e
           npx eslint --format json "${corrective_files[@]}" \
             > /tmp/phase10a-head-eslint.json 2>/tmp/phase10a-head-eslint.stderr

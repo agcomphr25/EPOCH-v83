@@ -114,13 +114,25 @@ test('an unrelated file is included only when a pull request changes it', () => 
   assert.deepEqual(scope, [unrelated]);
 });
 
-test('an empty scope fails instead of scanning the repository', () => {
+test('a pull request without lintable changes returns an empty scope', () => {
+  assert.deepEqual(
+    resolveCertificationPaths({
+      eventName: 'pull_request',
+      kind: 'eslint',
+      dispatchPaths,
+      changedPaths: ['migrations/0299_phase4_wad_not_valid_status.sql'],
+    }),
+    []
+  );
+});
+
+test('an empty dispatch scope fails instead of scanning the repository', () => {
   assert.throws(
     () =>
       resolveCertificationPaths({
-        eventName: 'pull_request',
+        eventName: 'workflow_dispatch',
         kind: 'eslint',
-        dispatchPaths,
+        dispatchPaths: ['migrations/0299_phase4_wad_not_valid_status.sql'],
         changedPaths: [],
       }),
     /refusing a repository-wide fallback/
@@ -161,4 +173,16 @@ test('bounded TypeScript comparison isolates compiler state and rejects abnormal
   assert.match(workflow, /head_exit" -ne 1.*head_exit" -ne 2/);
   assert.match(workflow, /base_exit" -ne 1.*base_exit" -ne 2/);
   assert.match(workflow, /head_tree" = "\$base_tree/);
+});
+
+test('ESLint skips changed-file comparison when a pull request has no lintable files', () => {
+  const workflow = fs.readFileSync(
+    path.resolve('.github/workflows/p2-v2-postgres-certification.yml'),
+    'utf8'
+  );
+  assert.match(workflow, /if \[ "\$\{#corrective_files\[@\]\}" -eq 0 \]/);
+  assert.match(
+    workflow,
+    /No changed ESLint files; changed-file comparison skipped\./
+  );
 });

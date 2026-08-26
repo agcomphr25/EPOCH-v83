@@ -163,6 +163,17 @@ export function areP2FrozenProductionDemandReleasesEnabled(): boolean {
   return envBool('P2_FROZEN_PRODUCTION_DEMAND_RELEASES_ENABLED', false);
 }
 
+/** Phase 6 P2 manufacturing work-order queues; all gates default off. */
+export function areP2ManufacturingWorkOrderQueueReadsEnabled(): boolean {
+  return envBool('P2_MANUFACTURING_WORK_ORDER_QUEUE_READS_ENABLED', false);
+}
+export function areP2ManufacturingWorkOrderMaterializationEnabled(): boolean {
+  return envBool('P2_MANUFACTURING_WORK_ORDER_MATERIALIZATION_ENABLED', false);
+}
+export function areP2ManufacturingWorkOrderExecutionEnabled(): boolean {
+  return envBool('P2_MANUFACTURING_WORK_ORDER_EXECUTION_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

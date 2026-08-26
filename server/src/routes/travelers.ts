@@ -39,7 +39,10 @@ import {
 import { resolvePacketBarcode } from '../lib/packetResolution';
 import { getActiveRoutingStep } from '../services/routingStepService';
 import { adjustPacketInventoryItem } from '../utils/p1PacketInventory';
-import { laborAllocationsEnabled } from '../lib/featureFlags';
+import {
+  laborAllocationsEnabled,
+  areP2ManufacturingWorkOrderExecutionEnabled,
+} from '../lib/featureFlags';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import { isOvenCureDepartmentName } from '../lib/timerTraceability';
 import * as allocationService from '../services/laborAllocationService';
@@ -47,6 +50,10 @@ import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolv
 import { executeTravelerAutoPunch } from './timeClock';
 import { recordAuditEvent } from '../services/auditLedgerService';
 import { getTravelerProductionExecutionGate } from '../services/projectProductionExecutionService';
+import {
+  assertTravelerP2WorkOrderReady,
+  P2WorkOrderError,
+} from '../services/p2ManufacturingWorkOrderService';
 import { db } from '../../db';
 import {
   insertTravelerSchema,
@@ -2264,6 +2271,27 @@ async function promoteTravelerToInProgress(
   | { ok: false; status: number; body: LegacyTravelerValue }
 > {
   const id = traveler.id;
+  if (
+    traveler.productionWorkOrderId &&
+    areP2ManufacturingWorkOrderExecutionEnabled()
+  ) {
+    try {
+      await assertTravelerP2WorkOrderReady(traveler.productionWorkOrderId);
+    } catch (error) {
+      if (error instanceof P2WorkOrderError) {
+        return {
+          ok: false,
+          status: error.status,
+          body: {
+            error: error.code,
+            message: error.message,
+            details: error.details,
+          },
+        };
+      }
+      throw error;
+    }
+  }
   const v2ExecutionGate = traveler.projectId
     ? await getTravelerProductionExecutionGate(id)
     : null;

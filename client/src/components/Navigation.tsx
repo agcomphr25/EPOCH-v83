@@ -248,6 +248,8 @@ export default function Navigation() {
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] =
     useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
+  const [p2WorkOrderQueueExpanded, setP2WorkOrderQueueExpanded] =
+    useState(false);
   const [centralStorageExpanded, setCentralStorageExpanded] = useState(false);
   const [systemHealthExpanded, setSystemHealthExpanded] = useState(false);
   const [estimatingExpanded, setEstimatingExpanded] = useState(false);
@@ -266,6 +268,7 @@ export default function Navigation() {
     setPurchaseOrdersExpanded(false);
     setProductionSchedulingExpanded(false);
     setDepartmentQueueExpanded(false);
+    setP2WorkOrderQueueExpanded(false);
     setVerifiedModulesExpanded(false);
     setCentralStorageExpanded(false);
     setSystemHealthExpanded(false);
@@ -297,6 +300,8 @@ export default function Navigation() {
           setProductionSchedulingExpanded(false);
         if (dropdownName !== 'departmentQueue')
           setDepartmentQueueExpanded(false);
+        if (dropdownName !== 'p2WorkOrderQueue')
+          setP2WorkOrderQueueExpanded(false);
         if (dropdownName !== 'verifiedModules')
           setVerifiedModulesExpanded(false);
         if (dropdownName !== 'centralStorage')
@@ -1282,6 +1287,7 @@ export default function Navigation() {
     },
   ];
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const userDashboardsItems = [
     {
       path: '/ag-dashboard',
@@ -1744,6 +1750,39 @@ export default function Navigation() {
     () => new Set(navPermissionsData?.permissions ?? []),
     [navPermissionsData],
   );
+  const p2QueueReadsEnabled =
+    import.meta.env.VITE_P2_MANUFACTURING_WORK_ORDER_QUEUE_READS_ENABLED ===
+    'true';
+  const { data: p2QueueDepartments = [] } = useQuery<
+    Array<{
+      id: number;
+      name: string;
+      departmentCode?: string | null;
+      productionEnabled?: boolean;
+      isActive?: boolean;
+    }>
+  >({
+    queryKey: ['/api/shared-departments', 'p2-work-order-queues'],
+    queryFn: () => apiRequest('/api/shared-departments?routingOnly=true'),
+    enabled: p2QueueReadsEnabled && navCapSet.has('p2.work_orders.view'),
+    staleTime: 5 * 60 * 1000,
+  });
+  const p2WorkOrderQueueItems = useMemo(
+    () =>
+      p2QueueDepartments
+        .filter(
+          (department) =>
+            department.isActive !== false &&
+            department.productionEnabled !== false
+        )
+        .map((department) => ({
+          path: `/p2-work-orders/queues/${department.id}`,
+          label: department.name,
+          icon: Factory,
+          description: `${department.name} P2 manufacturing work-order queue`,
+        })),
+    [p2QueueDepartments]
+  );
 
   // Helper function to filter navigation items based on user permissions
   const filterByPermissions = <T extends { path: string }>(
@@ -1925,6 +1964,9 @@ export default function Navigation() {
   );
   const isDepartmentQueueActive = departmentQueueItems.some(
     (item) => location === item.path
+  );
+  const isP2WorkOrderQueueActive = location.startsWith(
+    '/p2-work-orders/queues/'
   );
 
   // Close all dropdowns when navigating to a new page
@@ -2856,6 +2898,57 @@ export default function Navigation() {
                 )}
               </div>
             )}
+
+            {/* P2 manufacturing Work Order queues — separate from legacy P1. */}
+            {p2QueueReadsEnabled &&
+              navCapSet.has('p2.work_orders.view') &&
+              p2WorkOrderQueueItems.length > 0 && (
+                <div className="relative">
+                  <Button
+                    variant={isP2WorkOrderQueueActive ? 'default' : 'ghost'}
+                    className={cn(
+                      'flex items-center gap-2 text-sm',
+                      isP2WorkOrderQueueActive && 'bg-primary text-white'
+                    )}
+                    onClick={() =>
+                      toggleDropdown(
+                        'p2WorkOrderQueue',
+                        p2WorkOrderQueueExpanded,
+                        setP2WorkOrderQueueExpanded
+                      )
+                    }
+                  >
+                    <Factory className="h-4 w-4" />
+                    P2 W/O Queues
+                    {p2WorkOrderQueueExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                  {p2WorkOrderQueueExpanded && (
+                    <div className="absolute top-full left-0 z-50 mt-0 min-w-[250px] rounded-md border border-gray-200 bg-white pt-1 shadow-lg">
+                      {p2WorkOrderQueueItems.map((item) => (
+                        <button
+                          key={item.path}
+                          className={cn(
+                            'flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-100',
+                            location === item.path &&
+                              'bg-primary text-white hover:bg-primary'
+                          )}
+                          onClick={() => {
+                            closeAllDropdowns();
+                            setLocation(item.path);
+                          }}
+                        >
+                          <Factory className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
             {/* Department Manager Dropdown */}
             {filteredDepartmentQueueItems.length > 0 && (

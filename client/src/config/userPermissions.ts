@@ -12,6 +12,7 @@ export interface UserPermissions {
 }
 
 export const CAPABILITY_GATED_ROUTES: Record<string, string | string[]> = {
+  '/p2-work-orders/queues': 'p2.work_orders.view',
   '/pto-command-center': [
     'timekeeping.pto.view_all',
     'timekeeping.pto.approve_supervisor',

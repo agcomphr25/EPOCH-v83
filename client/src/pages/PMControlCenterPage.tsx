@@ -393,6 +393,7 @@ interface MaterialRow {
   qtyRequired: number;
   qtyAllocated: number;
   qtyIssued: number;
+  qtyOnHand: number;
   unitCost: number;
   committedCost: number;
   consumedCost: number;
@@ -553,6 +554,7 @@ const MATERIAL_STATUS_COLORS: Record<string, string> = {
   ON_HOLD: 'bg-orange-100 text-orange-700',
   PARTIAL: 'bg-yellow-100 text-yellow-700',
   ALLOCATED: 'bg-blue-100 text-blue-700',
+  ON_HAND: 'bg-green-100 text-green-700',
   PENDING_PM_ACCEPTANCE: 'bg-blue-100 text-blue-700',
   FULLY_ALLOCATED: 'bg-green-100 text-green-700',
   FULLY_ISSUED: 'bg-green-100 text-green-700',
@@ -577,6 +579,7 @@ const MATERIAL_STATUS_ORDER: Record<string, number> = {
   PARTIAL: 3,
   PENDING_PM_ACCEPTANCE: 4,
   ALLOCATED: 4,
+  ON_HAND: 5,
   FULLY_ALLOCATED: 5,
   FULLY_ISSUED: 6,
   RECEIVED_ACCEPTED: 7,
@@ -1914,7 +1917,7 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
 
 // ── Material Budget Tab ───────────────────────────────────────────────────────
 
-type SortField = 'status' | 'itemCode' | 'qtyRequired' | 'qtyAllocated' | 'qtyIssued' | 'committedCost' | 'consumedCost';
+type SortField = 'status' | 'itemCode' | 'qtyRequired' | 'qtyOnHand' | 'qtyAllocated' | 'qtyIssued' | 'committedCost' | 'consumedCost';
 type SortDir = 'asc' | 'desc';
 
 function MaterialBudgetTab({ projectId }: { projectId: string }) {
@@ -2058,6 +2061,11 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                     </button>
                   </TableHead>
                   <TableHead className="text-right">
+                    <button className="flex items-center ml-auto hover:text-foreground" onClick={() => handleSort('qtyOnHand')}>
+                      On Hand <SortIcon field="qtyOnHand" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">
                     <button className="flex items-center ml-auto hover:text-foreground" onClick={() => handleSort('qtyAllocated')}>
                       Allocated <SortIcon field="qtyAllocated" />
                     </button>
@@ -2103,6 +2111,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                       {!row.lotNumber && !row.internalControlNumber && !row.receiptNumber && !row.receivedUnitBarcode && !row.partsRequestId && '—'}
                     </TableCell>
                     <TableCell className="text-right text-sm">{row.qtyRequired > 0 ? row.qtyRequired : '—'}</TableCell>
+                    <TableCell className="text-right text-sm">{row.qtyOnHand > 0 ? row.qtyOnHand : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.qtyAllocated > 0 ? row.qtyAllocated : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.qtyIssued > 0 ? row.qtyIssued : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.unitCost > 0 ? fmtCurrency(row.unitCost) : '—'}</TableCell>

@@ -1287,6 +1287,7 @@ export default function Navigation() {
     },
   ];
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const userDashboardsItems = [
     {
       path: '/ag-dashboard',
@@ -1892,7 +1893,7 @@ export default function Navigation() {
       icon: Home,
       description: `Personal dashboard for ${currentUser.username}`,
     }];
-  }, [userDashboardsItems, currentUser?.username]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userDashboardsItems, currentUser?.username]);
   const filteredPurchaseOrdersItems = useMemo(
     () => filterByPermissions(purchaseOrdersItems, currentUser?.username, userRole),
     [purchaseOrdersItems, currentUser?.username, userRole, navCapSet]

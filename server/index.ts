@@ -6439,16 +6439,18 @@ async function initializeBackgroundServices() {
           console.log(`🏥 Running scheduled daily health checks at configured time ${scheduledTime}...`);
           
           const results = await runAllEnabledChecks('scheduled');
-          const passed = results.filter(r => r.status === 'pass').length;
-          const failed = results.filter(r => r.status === 'fail').length;
-          const warnings = results.filter(r => r.status === 'warning').length;
+          const passed = results.filter((r) => r.status === 'pass').length;
+          const failed = results.filter((r) => r.status === 'fail').length;
+          const warnings = results.filter((r) => r.status === 'warning').length;
           
           console.log(`✅ Health checks complete: ${passed} passed, ${failed} failed, ${warnings} warnings`);
           
           // Log any failures
-          results.filter(r => r.status === 'fail').forEach(r => {
-            console.error(`  ❌ ${r.checkName}: ${r.message}`);
-          });
+          results
+            .filter((r) => r.status === 'fail')
+            .forEach((r) => {
+              console.error(`  ❌ ${r.checkName}: ${r.message}`);
+            });
         }
       } catch (error) {
         // Only log errors if it's a real failure, not just skipped checks
@@ -8128,11 +8130,13 @@ async function initializeBackgroundServices() {
     // Pre-warm the production simulation cache so the first page load is instant
     try {
       const { runSimulation } = await import('./src/services/productionSimulator');
-      runSimulation().then(() => {
-        console.log('✅ Production simulation cache pre-warmed');
-      }).catch((err) => {
-        console.warn('⚠️ Production simulation cache pre-warm failed:', err);
-      });
+      runSimulation()
+        .then(() => {
+          console.log('✅ Production simulation cache pre-warmed');
+        })
+        .catch((err) => {
+          console.warn('⚠️ Production simulation cache pre-warm failed:', err);
+        });
     } catch (warmErr) {
       console.warn('⚠️ Could not import productionSimulator for pre-warm:', warmErr);
     }

@@ -224,6 +224,7 @@ interface MaterialItemRow {
   qtyRequired: string;
   qtyAllocated: string;
   qtyIssued: string;
+  qtyOnHand: string;
   unitCost: string;
   committedCost: string;
   consumedCost: string;
@@ -2556,54 +2557,88 @@ ${materialBudgetExpression}
     : [{ pendingReceivedCost: '0', acceptedReceivedCost: '0' }];
 
   const rowsRes = await pool.query<MaterialItemRow>(`
-    SELECT
-      ii.id AS "inventoryItemId",
-      ii.ag_part_number AS "itemCode",
-      ii.name AS "itemName",
-      ml.supplier_lot_number AS "lotNumber",
-      ml.internal_control_number AS "internalControlNumber",
-      GREATEST(
-        COALESCE(mlr_agg.qty_reserved, 0),
-        COALESCE(tmc_agg.qty_consumed, 0)
-      ) AS "qtyRequired",
-      COALESCE(mlr_agg.qty_reserved, 0) AS "qtyAllocated",
-      COALESCE(tmc_agg.qty_consumed, 0) AS "qtyIssued",
+    WITH robust_requirements AS (
+      SELECT bl.child_part_ag_number AS ag_part_number,
+             SUM(wo.quantity::numeric * bl.qty_per) AS qty_required
+      FROM production_work_orders wo
+      JOIN boms b ON b.parent_part_ag_number = wo.part_number AND b.is_active = true
+      JOIN LATERAL (
+        SELECT br.id
+        FROM bom_revisions br
+        WHERE br.bom_id = b.id AND br.is_released = true
+          AND (br.effective_from IS NULL OR br.effective_from <= NOW())
+          AND (br.effective_to IS NULL OR br.effective_to > NOW())
+        ORDER BY br.effective_from DESC NULLS LAST, br.created_at DESC
+        LIMIT 1
+      ) active_revision ON true
+      JOIN bom_lines bl ON bl.revision_id = active_revision.id
+      WHERE wo.project_id = $1 AND wo.status <> 'CLOSED'
+      GROUP BY bl.child_part_ag_number
+    ), legacy_requirements AS (
+      SELECT bi.part_name AS ag_part_number,
+             SUM(wo.quantity::numeric * bi.quantity::numeric) AS qty_required
+      FROM production_work_orders wo
+      JOIN bom_definitions bd ON bd.is_active = true
+        AND (bd.sku = wo.part_number OR bd.model_name = wo.part_number)
+      JOIN bom_items bi ON bi.bom_id = bd.id AND bi.is_active = true AND bi.item_type <> 'labor'
+      WHERE wo.project_id = $1 AND wo.status <> 'CLOSED'
+        AND NOT EXISTS (
+          SELECT 1 FROM boms b
+          JOIN bom_revisions br ON br.bom_id = b.id AND br.is_released = true
+          WHERE b.parent_part_ag_number = wo.part_number AND b.is_active = true
+            AND (br.effective_from IS NULL OR br.effective_from <= NOW())
+            AND (br.effective_to IS NULL OR br.effective_to > NOW())
+        )
+      GROUP BY bi.part_name
+    ), requirements AS (
+      SELECT ag_part_number, SUM(qty_required) AS qty_required
+      FROM (
+        SELECT * FROM robust_requirements
+        UNION ALL
+        SELECT * FROM legacy_requirements
+      ) sources
+      GROUP BY ag_part_number
+    ), inventory_stock AS (
+      SELECT ag_part_number, SUM(quantity_on_hand)::numeric AS qty_on_hand
+      FROM inventory_balances GROUP BY ag_part_number
+    ), project_allocations AS (
+      SELECT ml.inventory_item_id, SUM(mlr.quantity_reserved)::numeric AS qty_reserved
+      FROM material_lot_reservations mlr
+      JOIN material_lots ml ON ml.id = mlr.material_lot_id
+      WHERE mlr.traveler_id::text IN (SELECT id::text FROM travelers WHERE project_id = $1)
+      GROUP BY ml.inventory_item_id
+    ), project_consumption AS (
+      SELECT ml.inventory_item_id, SUM(COALESCE(tmc.qty_used, tmc.quantity_used, 0))::numeric AS qty_consumed
+      FROM traveler_material_consumption tmc
+      JOIN material_lots ml ON ml.id = tmc.material_lot_id
+      WHERE tmc.traveler_id::text IN (SELECT id::text FROM travelers WHERE project_id = $1)
+      GROUP BY ml.inventory_item_id
+    )
+    SELECT ii.id AS "inventoryItemId", ii.ag_part_number AS "itemCode", ii.name AS "itemName",
+      NULL::text AS "lotNumber", NULL::text AS "internalControlNumber",
+      requirements.qty_required AS "qtyRequired",
+      COALESCE(project_allocations.qty_reserved, 0) AS "qtyAllocated",
+      COALESCE(project_consumption.qty_consumed, 0) AS "qtyIssued",
+      COALESCE(inventory_stock.qty_on_hand, 0) AS "qtyOnHand",
       COALESCE(ii.unit_cost, 0) AS "unitCost",
-      COALESCE(mlr_agg.qty_reserved * COALESCE(ii.unit_cost, 0), 0) AS "committedCost",
-      COALESCE(tmc_agg.qty_consumed * COALESCE(ii.unit_cost, 0), 0) AS "consumedCost",
+      COALESCE(project_allocations.qty_reserved * COALESCE(ii.unit_cost, 0), 0) AS "committedCost",
+      COALESCE(project_consumption.qty_consumed * COALESCE(ii.unit_cost, 0), 0) AS "consumedCost",
       CASE
-        WHEN COALESCE(tmc_agg.qty_consumed, 0) > COALESCE(mlr_agg.qty_reserved, 0) THEN 'OVER_ISSUED'
-        WHEN COALESCE(tmc_agg.qty_consumed, 0) > 0 AND COALESCE(tmc_agg.qty_consumed, 0) < COALESCE(mlr_agg.qty_reserved, 0) THEN 'PARTIAL'
-        WHEN COALESCE(tmc_agg.qty_consumed, 0) > 0 THEN 'FULLY_ISSUED'
-        WHEN COALESCE(mlr_agg.qty_reserved, 0) > 0 THEN 'ALLOCATED'
+        WHEN COALESCE(project_consumption.qty_consumed, 0) > requirements.qty_required THEN 'OVER_ISSUED'
+        WHEN COALESCE(project_consumption.qty_consumed, 0) >= requirements.qty_required THEN 'FULLY_ISSUED'
+        WHEN COALESCE(inventory_stock.qty_on_hand, 0) >= requirements.qty_required THEN 'ON_HAND'
+        WHEN COALESCE(project_allocations.qty_reserved, 0) >= requirements.qty_required THEN 'ALLOCATED'
+        WHEN COALESCE(project_consumption.qty_consumed, 0) > 0
+          OR COALESCE(project_allocations.qty_reserved, 0) > 0
+          OR COALESCE(inventory_stock.qty_on_hand, 0) > 0 THEN 'PARTIAL'
         ELSE 'SHORT'
       END AS "status"
-    FROM material_lots ml
-    JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-    LEFT JOIN (
-      SELECT material_lot_id, SUM(quantity_reserved) AS qty_reserved
-      FROM material_lot_reservations
-      WHERE traveler_id::text IN (SELECT id::text FROM travelers WHERE project_id = $1)
-      GROUP BY material_lot_id
-    ) mlr_agg ON mlr_agg.material_lot_id = ml.id
-    LEFT JOIN (
-      SELECT material_lot_id, SUM(COALESCE(qty_used, quantity_used, 0)) AS qty_consumed
-      FROM traveler_material_consumption
-      WHERE traveler_id::text IN (SELECT id::text FROM travelers WHERE project_id = $1)
-      GROUP BY material_lot_id
-    ) tmc_agg ON tmc_agg.material_lot_id = ml.id
-    WHERE
-      mlr_agg.material_lot_id IS NOT NULL
-      OR tmc_agg.material_lot_id IS NOT NULL
-    ORDER BY
-      CASE
-        WHEN COALESCE(tmc_agg.qty_consumed, 0) > COALESCE(mlr_agg.qty_reserved, 0) THEN 1
-        WHEN COALESCE(mlr_agg.qty_reserved, 0) = 0 AND COALESCE(tmc_agg.qty_consumed, 0) = 0 THEN 2
-        WHEN COALESCE(tmc_agg.qty_consumed, 0) > 0 AND COALESCE(tmc_agg.qty_consumed, 0) < COALESCE(mlr_agg.qty_reserved, 0) THEN 3
-        WHEN COALESCE(mlr_agg.qty_reserved, 0) > 0 AND COALESCE(tmc_agg.qty_consumed, 0) = 0 THEN 4
-        ELSE 5
-      END ASC,
-      ii.ag_part_number ASC
+    FROM requirements
+    JOIN inventory_items ii ON ii.ag_part_number = requirements.ag_part_number
+    LEFT JOIN inventory_stock ON inventory_stock.ag_part_number = requirements.ag_part_number
+    LEFT JOIN project_allocations ON project_allocations.inventory_item_id = ii.id
+    LEFT JOIN project_consumption ON project_consumption.inventory_item_id = ii.id
+    ORDER BY ii.ag_part_number ASC
   `, [projectId]);
 
   const partsRequestRowsRes = await pool.query<MaterialItemRow>(`
@@ -2626,6 +2661,7 @@ ${materialBudgetExpression}
         WHEN pr.status IN ('RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT') THEN pr.quantity::numeric
         ELSE 0::numeric
       END AS "qtyIssued",
+      0::numeric AS "qtyOnHand",
       COALESCE(pr.estimated_cost, 0)::numeric AS "unitCost",
       CASE
         WHEN pr.status IN ('ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT')
@@ -2656,6 +2692,7 @@ ${materialBudgetExpression}
           prm.quantity::numeric AS "qtyRequired",
           CASE WHEN prm.status IN ('pending_pm_acceptance', 'accepted') THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyAllocated",
           0::numeric AS "qtyIssued",
+          0::numeric AS "qtyOnHand",
           CASE
             WHEN prm.quantity::numeric <> 0 THEN cost.effective_extended_cost / prm.quantity::numeric
             ELSE cost.effective_extended_cost

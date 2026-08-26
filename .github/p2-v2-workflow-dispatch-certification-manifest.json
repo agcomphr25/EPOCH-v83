@@ -17,6 +17,7 @@
   "migrations/0251_design_project_configuration_workspace.sql",
   "migrations/0253_void_duplicate_epoch_validation_packages.sql",
   "scripts/compare-eslint-baseline.mjs",
+  "scripts/compare-eslint-baseline.test.mjs",
   "scripts/resolve-p2-v2-certification-scope.mjs",
   "scripts/resolve-p2-v2-certification-scope.test.mjs",
   "scripts/validate-phase10a-static-manifest.js",

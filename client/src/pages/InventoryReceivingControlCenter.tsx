@@ -5292,8 +5292,8 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
       </div>
 
       {units.length > 1 && (
-        <Button size="sm" className="w-full text-xs" onClick={printBatch}>
-          <Printer className="w-3 h-3 mr-1" /> Batch Print All ({units.length})
+        <Button size="sm" className="w-full text-xs" onClick={printBatch} disabled={totalLabelCount === 0}>
+          <Printer className="w-3 h-3 mr-1" /> Batch Print All ({totalLabelCount} labels)
         </Button>
       )}
 

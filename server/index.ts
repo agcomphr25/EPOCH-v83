@@ -2562,7 +2562,6 @@ async function initializeBackgroundServices() {
       } catch (badgeErr: any) {
         console.warn('⚠️ Badge scan code migration:', badgeErr.message);
       }
-
       // Fix: Remove "table temp" field from Mold Prep department config (belongs on Layup only)
       try {
         const { sql: sqlRoutingFix } = await import('drizzle-orm');
@@ -2572,6 +2571,7 @@ async function initializeBackgroundServices() {
         `);
         if (routingResult.rows.length > 0) {
           const row = routingResult.rows[0] as any;
+          // prettier-ignore
           let deptConfig = typeof row.department_config === 'string' 
             ? JSON.parse(row.department_config) 
             : row.department_config;

@@ -5413,12 +5413,12 @@ function formatAction(action: string): string {
 type ReceivingLabelSize = 'avery-5160' | 'avery-5163' | 'receiving-4x6';
 type ReceivingLabel = {
   agPartNumber?: string | null;
-  barcode?: string | null;
+  barcode: string;
   barcodeImage: string;
   batchNumber?: string | null;
   certReference?: string | null;
   description?: string | null;
-  disposition?: string | null;
+  disposition: string;
   expirationDate?: string | null;
   heatLot?: string | null;
   internalControlNumber?: string | null;

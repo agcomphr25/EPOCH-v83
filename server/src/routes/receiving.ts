@@ -1679,6 +1679,7 @@ router.get('/:id/units/:unitId/label', requireReceivingAccess, async (req: Reque
     }
 
     res.json({
+      unitId: unit.id,
       barcode: unit.barcode,
       barcodeImage,
       agPartNumber: line?.agPartNumber ?? '',
@@ -1730,6 +1731,7 @@ router.post('/:id/labels/batch', requireReceivingAccess, async (req: Request, re
         barcodeImage = await generateBarcodeImage(unit.barcode, { format: 'CODE128', width: 3, height: 12 });
       } catch (_) {}
       return {
+        unitId: unit.id,
         barcode: unit.barcode,
         barcodeImage,
         agPartNumber: line?.agPartNumber ?? '',

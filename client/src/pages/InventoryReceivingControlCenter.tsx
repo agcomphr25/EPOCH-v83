@@ -3663,6 +3663,7 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
   const units = receipt.units ?? [];
   const [barcodeImages, setBarcodeImages] = useState<Record<number, string>>({});
   const [loadingImages, setLoadingImages] = useState<Record<number, boolean>>({});
+  const [labelSize, setLabelSize] = useState<ReceivingLabelSize>('avery-5160');
 
   // Pre-fetch barcode images for all units when the tab renders
   useEffect(() => {
@@ -3684,7 +3685,7 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
   const printLabel = async (unitId: number) => {
     try {
       const labelData = await apiRequest(`/api/receipts/${receipt.id}/units/${unitId}/label`);
-      await printLabelPDF([labelData], `Label ${labelData.barcode}`);
+      await printLabelPDF([labelData], `Label ${labelData.barcode}`, labelSize);
     } catch {
       toast.error('Failed to fetch label data');
     }
@@ -3693,7 +3694,7 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
   const printBatch = async () => {
     try {
       const labels = await apiRequest(`/api/receipts/${receipt.id}/labels/batch`, { method: 'POST' });
-      await printLabelPDF(labels, `Batch Labels - ${receipt.receiptNumber}`);
+      await printLabelPDF(labels, `Batch Labels - ${receipt.receiptNumber}`, labelSize);
     } catch {
       toast.error('Failed to fetch batch labels');
     }
@@ -3701,6 +3702,23 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
 
   return (
     <div className="space-y-3">
+      <div className="rounded-lg border p-2">
+        <Label htmlFor="receiving-label-size" className="text-xs">Label Size</Label>
+        <Select value={labelSize} onValueChange={value => setLabelSize(value as ReceivingLabelSize)}>
+          <SelectTrigger id="receiving-label-size" className="h-7 text-xs mt-1" data-testid="select-receiving-label-size">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="avery-5160">Avery 5160 — 2⅝ × 1 in</SelectItem>
+            <SelectItem value="avery-5163">Avery 5163 — 4 × 2 in</SelectItem>
+            <SelectItem value="receiving-4x6">Receiving — 4 × 6 in</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="mt-1 text-[11px] text-gray-500">
+          Every size includes the AG part number and description.
+        </div>
+      </div>
+
       {units.length > 1 && (
         <Button size="sm" className="w-full text-xs" onClick={printBatch}>
           <Printer className="w-3 h-3 mr-1" /> Batch Print All ({units.length})
@@ -3786,52 +3804,111 @@ function formatAction(action: string): string {
 
 // ── Label PDF Generation ───────────────────────────────────────────────────────
 
-async function printLabelPDF(labels: any[], title: string) {
+type ReceivingLabelSize = 'avery-5160' | 'avery-5163' | 'receiving-4x6';
+
+const RECEIVING_LABEL_DIMENSIONS: Record<ReceivingLabelSize, { width: number; height: number }> = {
+  'avery-5160': { width: 2.625, height: 1 },
+  'avery-5163': { width: 4, height: 2 },
+  'receiving-4x6': { width: 4, height: 6 },
+};
+
+async function printLabelPDF(labels: any[], title: string, labelSize: ReceivingLabelSize) {
   if (!labels || labels.length === 0) {
     toast.error('No labels to print');
     return;
   }
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: [4, 6] });
+  const dimensions = RECEIVING_LABEL_DIMENSIONS[labelSize];
+  const isCompact = labelSize !== 'receiving-4x6';
+  const margin = isCompact ? 0.08 : 0.2;
+  const pdf = new jsPDF({
+    orientation: dimensions.width >= dimensions.height ? 'landscape' : 'portrait',
+    unit: 'in',
+    format: [dimensions.width, dimensions.height],
+  });
 
   for (let idx = 0; idx < labels.length; idx++) {
     const label = labels[idx];
-    if (idx > 0) pdf.addPage([4, 6]);
+    if (idx > 0) pdf.addPage([dimensions.width, dimensions.height]);
 
-    pdf.setFontSize(7);
+    if (isCompact) {
+      const partNumber = String(label.agPartNumber ?? '').trim() || 'Not assigned';
+      const description = String(label.description ?? '').trim() || 'No description';
+      const descriptionLines = pdf.splitTextToSize(
+        `Description: ${description}`,
+        dimensions.width - (margin * 2),
+      ).slice(0, labelSize === 'avery-5160' ? 1 : 2);
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(labelSize === 'avery-5160' ? 7 : 10);
+      pdf.text(`AG Part #: ${partNumber}`, margin, labelSize === 'avery-5160' ? 0.15 : 0.22);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(labelSize === 'avery-5160' ? 5.5 : 8);
+      pdf.text(descriptionLines, margin, labelSize === 'avery-5160' ? 0.28 : 0.42);
+
+      const barcodeY = labelSize === 'avery-5160' ? 0.38 : 0.78;
+      const barcodeHeight = labelSize === 'avery-5160' ? 0.35 : 0.65;
+      if (label.barcodeImage) {
+        try {
+          pdf.addImage(label.barcodeImage, 'PNG', margin, barcodeY, dimensions.width - (margin * 2), barcodeHeight);
+        } catch (_) {
+          pdf.setFont('courier', 'normal');
+          pdf.text(`| ${label.barcode} |`, dimensions.width / 2, barcodeY + 0.2, { align: 'center' });
+        }
+      }
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(labelSize === 'avery-5160' ? 5.5 : 7);
+      pdf.text(String(label.barcode ?? ''), dimensions.width / 2, barcodeY + barcodeHeight + 0.1, { align: 'center' });
+      if (labelSize === 'avery-5163') {
+        pdf.text(`Qty: ${label.quantity ?? ''} ${label.uom ?? ''}`, margin, 1.72);
+        if (label.lotNumber) pdf.text(`Lot: ${label.lotNumber}`, dimensions.width - margin, 1.72, { align: 'right' });
+      }
+      continue;
+    }
+
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
 
-    // Part number + description
-    pdf.text(`${label.agPartNumber ?? ''}  ${(label.description ?? '').slice(0, 40)}`, 0.2, 0.35);
+    // Keep the two primary item identifiers explicit and readable.
+    pdf.text(`AG Part #: ${String(label.agPartNumber ?? '').trim() || 'Not assigned'}`, 0.2, 0.3);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7);
+    const descriptionLines = pdf.splitTextToSize(
+      `Description: ${String(label.description ?? '').trim() || 'No description'}`,
+      3.6,
+    ).slice(0, 2);
+    pdf.text(descriptionLines, 0.2, 0.48);
 
     // Vendor name
     if (label.vendorName) {
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(6);
-      pdf.text(label.vendorName, 0.2, 0.55);
+      pdf.text(label.vendorName, 0.2, 0.78);
     }
 
     // CODE128 barcode image (base64 PNG from server via bwip-js)
     if (label.barcodeImage) {
       try {
-        pdf.addImage(label.barcodeImage, 'PNG', 0.5, 0.65, 3.0, 0.7);
+        pdf.addImage(label.barcodeImage, 'PNG', 0.5, 0.88, 3.0, 0.7);
       } catch (_) {
         // Fallback: text representation
         pdf.setFontSize(10);
         pdf.setFont('courier', 'normal');
-        pdf.text(`| ${label.barcode} |`, 2, 1.0, { align: 'center' });
+        pdf.text(`| ${label.barcode} |`, 2, 1.23, { align: 'center' });
       }
     } else {
       pdf.setFontSize(10);
       pdf.setFont('courier', 'normal');
-      pdf.text(`| ${label.barcode} |`, 2, 1.0, { align: 'center' });
+      pdf.text(`| ${label.barcode} |`, 2, 1.23, { align: 'center' });
     }
 
     // Barcode text below image
     pdf.setFontSize(7);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(label.barcode, 2, 1.45, { align: 'center' });
+    pdf.text(label.barcode, 2, 1.68, { align: 'center' });
 
-    let y = 1.7;
+    let y = 1.93;
     const row = (key: string, val: any) => {
       if (!val && val !== 0) return;
       pdf.setFont('helvetica', 'bold');

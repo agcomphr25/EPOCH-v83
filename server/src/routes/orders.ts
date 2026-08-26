@@ -3093,10 +3093,6 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       }
     }
 
-    // Special handling for orders with no stock model - they bypass manufacturing and go to Shipping QC
-    const hasNoStockModel =
-      !existingOrder.modelId || existingOrder.modelId.trim() === '';
-
     // Special handling for flat top orders - they bypass CNC and go directly to Finish
     const isFlatTop = existingOrder.isFlattop || false;
 
@@ -3119,16 +3115,6 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
         targetDepartment = 'Shipping Management';
         console.log(
           `📦 Order ${orderId} completing Shipping - will be marked as FULFILLED in Shipping Management`
-        );
-      }
-      // Orders with no stock model should skip manufacturing departments
-      else if (
-        hasNoStockModel &&
-        existingOrder.currentDepartment === 'P1 Production Queue'
-      ) {
-        targetDepartment = 'Shipping QC';
-        console.log(
-          `🚀 Order ${orderId} has no stock model - routing directly to Shipping QC`
         );
       }
       // Flat top orders skip CNC and go directly to Finish after Layup/Plugging
@@ -3166,6 +3152,24 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
             });
         }
       }
+    }
+
+    // Shipping QC is a downstream manufacturing gate. A missing stock model,
+    // migration, or explicit API target must never bypass the manufacturing
+    // route. Normal progression reaches this gate from Paint; Finish QC is
+    // retained for approved no-paint routings.
+    if (
+      targetDepartment === 'Shipping QC' &&
+      existingOrder.currentDepartment !== 'Paint' &&
+      existingOrder.currentDepartment !== 'Finish QC'
+    ) {
+      return res.status(409).json({
+        error: 'Shipping QC requires completed manufacturing',
+        code: 'SHIPPING_QC_MANUFACTURING_EVIDENCE_REQUIRED',
+        orderId,
+        currentDepartment: existingOrder.currentDepartment,
+        allowedPriorDepartments: ['Paint', 'Finish QC'],
+      });
     }
 
     console.log(`🎯 Target department: ${targetDepartment}`);
@@ -3307,6 +3311,32 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
           fieldDiff,
         });
 
+        if (!shouldMarkFulfilled && targetDepartment) {
+          await tx.execute(sql`
+            UPDATE order_department_transitions
+            SET exited_at = ${now},
+                duration_minutes = GREATEST(FLOOR(EXTRACT(EPOCH FROM (${now} - entered_at)) / 60)::integer, 0),
+                exit_reason = 'NORMAL_PROGRESSION'
+            WHERE entity_type = 'p1_order'
+              AND entity_id = ${orderId}
+              AND exited_at IS NULL
+          `);
+          await tx.execute(sql`
+            INSERT INTO order_department_transitions (
+              entity_type, entity_id, department, entered_at,
+              entered_by_user_id, metadata
+            ) VALUES (
+              'p1_order', ${orderId}, ${targetDepartment}, ${now},
+              ${canonicalActorId},
+              ${JSON.stringify({
+                source: 'department-transition',
+                fromDepartment: existingOrder.currentDepartment,
+                progressedBy,
+              })}::jsonb
+            )
+          `);
+        }
+
         return after;
       });
 
@@ -3355,17 +3385,20 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
         );
       }
 
-      // Record department transition for timing tracking
-      await auditService.recordDepartmentEntry({
-        entityType: 'p1_order',
-        entityId: orderId,
-        department: targetDepartment,
-        enteredByUserId: (req as any).user?.id,
-        metadata: {
-          fromDepartment: existingOrder.currentDepartment,
-          progressedBy: progressedBy,
-        },
-      });
+      // Finalized orders record the transition in the same transaction as the
+      // canonical state. Draft paths retain the legacy audit-service write.
+      if (!isFinalized) {
+        await auditService.recordDepartmentEntry({
+          entityType: 'p1_order',
+          entityId: orderId,
+          department: targetDepartment,
+          enteredByUserId: (req as any).user?.id,
+          metadata: {
+            fromDepartment: existingOrder.currentDepartment,
+            progressedBy: progressedBy,
+          },
+        });
+      }
     }
 
     res.json({ success: true, order: updatedOrder });

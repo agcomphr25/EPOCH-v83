@@ -307,13 +307,11 @@ export const safeMigrationFiles = [
   '0250_epoch_validation_wizard_phase1.sql',
   '0251_design_project_configuration_workspace.sql',
   '0252_potential_order_duplicate_reviews.sql',
-  // 0253_void_duplicate_epoch_validation_packages.sql is intentionally
-  // excluded. It is a one-off controlled data correction certified by the
-  // dedicated migration-0253 workflow, not a recurring safe-boot migration.
+  // 0253 and 0257 are one-time controlled data corrections intentionally
+  // excluded from recurring safe boot; see scripts/sync-safe-migrations.js.
   '0254_controlled_document_reconciliation_certification_controls.sql',
   '0255_p2_v2_definition_v3_handoff.sql',
   '0256_controlled_document_atomic_approval_release.sql',
-  '0257_restore_shipping_qc_after_0171_replay.sql',
   '0258_design_control_structured_lifecycle.sql',
   '0259_design_control_form_template_database_artifacts.sql',
   '0260_controlled_document_source_recovery.sql',
@@ -323,13 +321,7 @@ export const safeMigrationFiles = [
   '0264_p2_recursive_production_demand_foundation.sql',
   '0265_p2_demand_planning_foundation.sql',
   '0266_p2_production_launch_persistence.sql',
-  // 0267_reconcile_p18380_persisted_shipment.sql is intentionally excluded.
-  // It is a one-off row-level data repair (no DDL) whose fail-closed guard
-  // raises an exception when the target order is not in the exact legacy
-  // mismatch state it was authored against, blocking boot once the order
-  // state changes.  Excluded from sync-safe-migrations.js via
-  // INTENTIONALLY_EXCLUDED.  Idempotency key:
-  // migration.0267_reconcile_p18380_persisted_shipment
+  // 0267 is a guarded one-time row repair intentionally excluded from boot.
   '0268_replit_p2_demand_composite_fk_repair.sql',
   '0269_repair_composite_po_item_demand_fks.sql',
   '0270_certification_authorization_matrix.sql',
@@ -343,7 +335,8 @@ export const safeMigrationFiles = [
   '0278_p2_component_traveler_provisioning.sql',
   '0279_vendor_international_contact_fields.sql',
   '0280_move_forward.sql',
-  '0281_contain_shipped_p1_auto_populate_regression.sql',
+  // 0281 and 0301 are one-time order-state reconciliations intentionally
+  // excluded from recurring safe boot; see scripts/sync-safe-migrations.js.
   '0282_car_form_data.sql',
   '0283_remove_legacy_rma_change_control_projections.sql',
   '0284_p2_customer_contacts.sql',
@@ -447,7 +440,6 @@ export const criticalMigrationFiles = new Set([
   '0277_routing_document_controlled_link.sql',
   '0278_p2_component_traveler_provisioning.sql',
   '0279_vendor_international_contact_fields.sql',
-  '0281_contain_shipped_p1_auto_populate_regression.sql',
   '0282_car_form_data.sql',
   '0283_remove_legacy_rma_change_control_projections.sql',
   '0285_p2_material_deposits_and_payment_settlements.sql',

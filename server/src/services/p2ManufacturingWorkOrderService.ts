@@ -353,8 +353,8 @@ export async function materializeP2ManufacturingWorkOrders(
         const requirements = jsonRecord(traceability.requirements);
         const requiresAcceptance = Boolean(
           requirements.outputSerializationRequired ??
-          requirements.lotScanRequired ??
-          requirements.batchScanRequired
+            requirements.lotScanRequired ??
+            requirements.batchScanRequired
         );
         await client.query(
           `INSERT INTO p2_manufacturing_work_order_dependencies

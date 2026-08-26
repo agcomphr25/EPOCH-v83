@@ -11,6 +11,7 @@ import { Link, useRoute } from 'wouter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { usePermissions } from '@/hooks/usePermissions';
 import { apiRequest } from '@/lib/queryClient';
 
 type Blocker = {
@@ -38,6 +39,14 @@ type QueueWorkOrder = {
   currentDepartmentName: string;
   travelerRequirement: 'REQUIRED' | 'NOT_REQUIRED_APPROVED';
   travelerId?: string;
+  travelerCoveredQuantity: number;
+  travelerRemainingQuantity: number;
+  travelerCoverage: Array<{
+    travelerId: string;
+    travelerType: string;
+    coverageQuantity: number;
+    outputIdentity: string;
+  }>;
   parentAuthorityId?: string;
   concurrencyVersion: number;
   readiness: string;
@@ -50,6 +59,8 @@ const queueReadsEnabled =
   'true';
 const executionEnabled =
   import.meta.env.VITE_P2_MANUFACTURING_WORK_ORDER_EXECUTION_ENABLED === 'true';
+const provisioningEnabled =
+  import.meta.env.VITE_P2_TRAVELER_PROVISIONING_WRITES_ENABLED === 'true';
 
 const label = (readiness: string) =>
   readiness
@@ -61,6 +72,7 @@ export default function P2WorkOrderQueuePage() {
   const [, params] = useRoute('/p2-work-orders/queues/:departmentId');
   const departmentId = params?.departmentId ?? '';
   const queryClient = useQueryClient();
+  const { can } = usePermissions();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const queryKey = ['/api/p2-work-orders/queues', departmentId];
   const queue = useQuery<QueueResponse>({
@@ -76,6 +88,20 @@ export default function P2WorkOrderQueuePage() {
           expectedConcurrencyVersion: Number(workOrder.concurrencyVersion),
         }),
       }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+  });
+  const provision = useMutation({
+    mutationFn: (workOrder: QueueWorkOrder) =>
+      apiRequest(
+        `/api/p2-work-orders/${workOrder.authorityId}/travelers/provision`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedConcurrencyVersion: Number(workOrder.concurrencyVersion),
+            idempotencyKey: crypto.randomUUID(),
+          }),
+        }
+      ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey }),
   });
   const completeOperation = useMutation({
@@ -158,7 +184,27 @@ export default function P2WorkOrderQueuePage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                {workOrder.travelerId ? (
+                {workOrder.travelerRequirement === 'REQUIRED' &&
+                  workOrder.travelerRemainingQuantity > 0 &&
+                  can('p2.travelers.provision') && (
+                    <Button
+                      variant="outline"
+                      disabled={!provisioningEnabled || provision.isPending}
+                      onClick={() => provision.mutate(workOrder)}
+                    >
+                      Provision Traveler Coverage (
+                      {workOrder.travelerRemainingQuantity} remaining)
+                    </Button>
+                  )}
+                {workOrder.travelerCoverage?.map((coverage) => (
+                  <Button key={coverage.travelerId} asChild variant="outline">
+                    <Link href={`/travelers/${coverage.travelerId}/execute`}>
+                      Open {coverage.travelerType} Traveler · Qty{' '}
+                      {coverage.coverageQuantity}
+                    </Link>
+                  </Button>
+                ))}
+                {workOrder.travelerId && !workOrder.travelerCoverage?.length ? (
                   <Button asChild>
                     <Link href={`/travelers/${workOrder.travelerId}/execute`}>
                       Open Traveler

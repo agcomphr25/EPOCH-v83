@@ -8,6 +8,7 @@ import {
   areP2ManufacturingWorkOrderExecutionEnabled,
   areP2ManufacturingWorkOrderMaterializationEnabled,
   areP2ManufacturingWorkOrderQueueReadsEnabled,
+  areP2TravelerProvisioningWritesEnabled,
 } from '../lib/featureFlags';
 import {
   acceptP2WorkOrderOutput,
@@ -18,6 +19,7 @@ import {
   P2WorkOrderError,
   startP2WorkOrder,
 } from '../services/p2ManufacturingWorkOrderService';
+import { provisionP2Travelers } from '../services/p2TravelerProvisioningService';
 
 const router = Router();
 const materializeBody = z.object({
@@ -31,6 +33,10 @@ const startBody = z.object({
 const acceptanceBody = startBody.extend({
   acceptedQuantity: z.number().nonnegative(),
   signatureMeaning: z.string().trim().min(1).max(1000),
+});
+const provisionBody = startBody.extend({
+  idempotencyKey: z.string().trim().min(1).max(200),
+  batchQuantity: z.number().int().positive().optional(),
 });
 const enabled = (value: boolean) => {
   if (!value)
@@ -115,6 +121,34 @@ router.post(
           await materializeP2ManufacturingWorkOrders(
             req.params.projectId,
             req.params.baselineId,
+            body,
+            await actor(req)
+          )
+        );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-work-orders/:authorityId/travelers/provision',
+  authenticateToken,
+  requirePermission('p2.travelers.provision'),
+  async (req, res) => {
+    try {
+      if (!areP2TravelerProvisioningWritesEnabled())
+        throw new P2WorkOrderError(
+          'FEATURE_DISABLED',
+          'P2 traveler provisioning is disabled.',
+          404
+        );
+      const body = provisionBody.parse(req.body);
+      res
+        .status(201)
+        .json(
+          await provisionP2Travelers(
+            req.params.authorityId,
             body,
             await actor(req)
           )

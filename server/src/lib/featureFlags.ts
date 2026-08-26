@@ -174,6 +174,11 @@ export function areP2ManufacturingWorkOrderExecutionEnabled(): boolean {
   return envBool('P2_MANUFACTURING_WORK_ORDER_EXECUTION_ENABLED', false);
 }
 
+/** Phase 7 traveler provisioning and coverage ledger; defaults off. */
+export function areP2TravelerProvisioningWritesEnabled(): boolean {
+  return envBool('P2_TRAVELER_PROVISIONING_WRITES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

@@ -31,6 +31,10 @@ describe('P2 W/O Queues client surface', () => {
     expect(page).toContain(
       "VITE_P2_MANUFACTURING_WORK_ORDER_EXECUTION_ENABLED === 'true'"
     );
+    expect(page).toContain(
+      "VITE_P2_TRAVELER_PROVISIONING_WRITES_ENABLED === 'true'"
+    );
+    expect(page).toContain("can('p2.travelers.provision')");
     expect(page).toContain('P2 W/O Queues are disabled');
   });
 

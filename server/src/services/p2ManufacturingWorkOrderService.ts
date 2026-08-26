@@ -353,8 +353,8 @@ export async function materializeP2ManufacturingWorkOrders(
         const requirements = jsonRecord(traceability.requirements);
         const requiresAcceptance = Boolean(
           requirements.outputSerializationRequired ??
-            requirements.lotScanRequired ??
-            requirements.batchScanRequired
+          requirements.lotScanRequired ??
+          requirements.batchScanRequired
         );
         await client.query(
           `INSERT INTO p2_manufacturing_work_order_dependencies
@@ -457,7 +457,16 @@ export async function evaluateP2WorkOrderReadiness(
         'shortageQuantity',GREATEST(m.required_quantity-LEAST(m.accepted_quantity,m.issued_quantity),0))
       ) FROM p2_manufacturing_work_order_material_requirements m
       WHERE m.successor_authority_id=a.id AND m.status='OPEN'
-        AND LEAST(m.accepted_quantity,m.issued_quantity)<m.required_quantity),'[]'::jsonb) material_blockers
+        AND LEAST(m.accepted_quantity,m.issued_quantity)<m.required_quantity),'[]'::jsonb) material_blockers,
+      COALESCE((SELECT count(*) FROM p2_traveler_coverage_units u
+        JOIN p2_traveler_provisioning_authorities pa ON pa.id=u.provisioning_authority_id
+        WHERE u.work_order_authority_id=a.id AND pa.status='ACTIVE'),0)::int traveler_covered_quantity,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'travelerId',pa.traveler_id,'travelerType',pa.traveler_type,
+        'coverageQuantity',pa.coverage_quantity,'outputIdentity',pa.output_identity,
+        'barcodeValue',pa.barcode_value) ORDER BY pa.coverage_start_ordinal)
+        FROM p2_traveler_provisioning_authorities pa
+        WHERE pa.work_order_authority_id=a.id AND pa.status='ACTIVE'),'[]'::jsonb) traveler_coverage
      FROM p2_manufacturing_work_order_authorities a
      JOIN production_work_orders pwo ON pwo.id=a.production_work_order_id
      JOIN projects p ON p.id=a.project_id
@@ -483,7 +492,10 @@ export async function evaluateP2WorkOrderReadiness(
   else if (row.status === 'HOLD') readiness = 'BLOCKED_HOLD';
   else if (childBlockers.length) readiness = 'BLOCKED_CHILD';
   else if (materialBlockers.length) readiness = 'BLOCKED_MATERIAL';
-  else if (row.traveler_requirement === 'REQUIRED' && !row.traveler_id)
+  else if (
+    row.traveler_requirement === 'REQUIRED' &&
+    Number(row.traveler_covered_quantity) !== Number(row.required_quantity)
+  )
     readiness = 'BLOCKED_TRAVELER';
   return {
     authorityId: row.id,
@@ -501,6 +513,10 @@ export async function evaluateP2WorkOrderReadiness(
     currentDepartmentName: row.current_department_name_snapshot,
     travelerRequirement: row.traveler_requirement,
     travelerId: row.traveler_id,
+    travelerCoveredQuantity: row.traveler_covered_quantity,
+    travelerRemainingQuantity:
+      Number(row.required_quantity) - Number(row.traveler_covered_quantity),
+    travelerCoverage: row.traveler_coverage,
     parentAuthorityId: row.parent_authority_id,
     concurrencyVersion: row.concurrency_version,
     readiness,

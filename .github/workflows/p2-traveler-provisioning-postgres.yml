@@ -1,0 +1,97 @@
+name: P2 Traveler Provisioning PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/p2-traveler-provisioning-coverage-ledger]
+  pull_request:
+    paths:
+      - 'migrations/0302_p2_traveler_provisioning_coverage_ledger.sql'
+      - 'server/src/services/p2TravelerCoveragePlanner.ts'
+      - 'server/src/services/p2TravelerProvisioningService.ts'
+      - 'server/src/services/p2ManufacturingWorkOrderService.ts'
+      - 'server/src/routes/p2ManufacturingWorkOrders.ts'
+      - 'client/src/pages/P2WorkOrderQueuePage.tsx'
+      - '.github/workflows/p2-traveler-provisioning-postgres.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase7_cert
+          POSTGRES_PASSWORD: disposable_phase7_password
+          POSTGRES_DB: epoch_phase7_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase7_cert -d epoch_phase7_certification"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://phase7_cert:disposable_phase7_password@127.0.0.1:5432/epoch_phase7_certification
+      NODE_ENV: test
+      SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Prove disposable boundary and disabled flags
+        shell: bash
+        run: |
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).hostname)")" = 127.0.0.1
+          test -z "${P2_TRAVELER_PROVISIONING_WRITES_ENABLED:-}"
+          test -z "${VITE_P2_TRAVELER_PROVISIONING_WRITES_ENABLED:-}"
+      - name: Focused Phase 5-7 contracts
+        run: |
+          npx vitest run --config vitest.config.server.ts server/__tests__/p2FrozenProductionDemandFoundation.test.ts server/__tests__/p2ManufacturingWorkOrderQueueFoundation.test.ts server/__tests__/p2TravelerProvisioningCoverageLedger.test.ts --reporter=verbose
+          npx vitest run client/src/__tests__/p2ManufacturingWorkOrderQueues.client.test.tsx --reporter=verbose
+      - name: Lint, format, and diff hygiene
+        run: |
+          npx esbuild server/src/services/p2TravelerCoveragePlanner.ts server/src/services/p2TravelerProvisioningService.ts server/src/routes/p2ManufacturingWorkOrders.ts --platform=node --format=esm --outdir=/tmp/p2-phase7-ts-validation
+          npx eslint server/src/services/p2TravelerCoveragePlanner.ts server/src/services/p2TravelerProvisioningService.ts server/src/services/p2ManufacturingWorkOrderService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/__tests__/p2TravelerProvisioningCoverageLedger.test.ts client/src/pages/P2WorkOrderQueuePage.tsx client/src/__tests__/p2ManufacturingWorkOrderQueues.client.test.tsx --max-warnings 0
+          npx prettier --check server/src/services/p2TravelerCoveragePlanner.ts server/src/services/p2TravelerProvisioningService.ts server/src/services/p2ManufacturingWorkOrderService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/__tests__/p2TravelerProvisioningCoverageLedger.test.ts client/src/pages/P2WorkOrderQueuePage.tsx client/src/__tests__/p2ManufacturingWorkOrderQueues.client.test.tsx
+          git diff --check HEAD^ HEAD
+      - name: Create clean application schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
+          npx drizzle-kit push --force --config drizzle.app.config.ts
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql
+      - name: Clean migration, populated preservation, replay, and rollback
+        shell: bash
+        run: |
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/before.txt
+          SELECT 'travelers|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM travelers t;
+          SELECT 'work_orders|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM production_work_orders t;
+          SELECT 'inventory_transactions|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_transactions t;
+          SELECT 'p1_orders|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM orders t;
+          SQL
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0302_p2_traveler_provisioning_coverage_ledger.sql
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/after.txt
+          SELECT 'travelers|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM travelers t;
+          SELECT 'work_orders|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM production_work_orders t;
+          SELECT 'inventory_transactions|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_transactions t;
+          SELECT 'p1_orders|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM orders t;
+          SQL
+          diff -u /tmp/before.txt /tmp/after.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          ALTER TABLE p2_traveler_coverage_units ADD COLUMN rollback_probe boolean;
+          ROLLBACK;
+          DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='p2_traveler_coverage_units' AND column_name='rollback_probe') THEN RAISE EXCEPTION 'rollback probe persisted'; END IF; END $$;
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_tpa_immutable') THEN RAISE EXCEPTION 'traveler authority immutability missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_tcu_immutable') THEN RAISE EXCEPTION 'coverage immutability missing'; END IF;
+          END $$;
+          SQL
+          test "$(grep -c "'0302_p2_traveler_provisioning_coverage_ledger.sql'" server/scripts/migrations/runSafeBootMigrations.ts)" = 2
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT count(*) FROM p2_traveler_provisioning_authorities')" = 0
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT count(*) FROM p2_traveler_coverage_units')" = 0

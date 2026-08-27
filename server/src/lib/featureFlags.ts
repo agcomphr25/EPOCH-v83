@@ -184,6 +184,14 @@ export function areP2ReceivingBarcodeIdentitiesEnabled(): boolean {
   return envBool('P2_RECEIVING_BARCODE_IDENTITIES_ENABLED', false);
 }
 
+/** Phase 9 controlled material scanning and consumption; both gates default off. */
+export function areP2MaterialConsumptionReadsEnabled(): boolean {
+  return envBool('P2_MATERIAL_CONSUMPTION_READS_ENABLED', false);
+}
+export function areP2MaterialConsumptionWritesEnabled(): boolean {
+  return envBool('P2_MATERIAL_CONSUMPTION_WRITES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

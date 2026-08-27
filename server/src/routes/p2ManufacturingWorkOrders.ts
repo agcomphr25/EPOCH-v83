@@ -8,6 +8,8 @@ import {
   areP2ManufacturingWorkOrderExecutionEnabled,
   areP2ManufacturingWorkOrderMaterializationEnabled,
   areP2ManufacturingWorkOrderQueueReadsEnabled,
+  areP2MaterialConsumptionWritesEnabled,
+  areP2MaterialConsumptionReadsEnabled,
   areP2TravelerProvisioningWritesEnabled,
 } from '../lib/featureFlags';
 import {
@@ -20,6 +22,12 @@ import {
   startP2WorkOrder,
 } from '../services/p2ManufacturingWorkOrderService';
 import { provisionP2Travelers } from '../services/p2TravelerProvisioningService';
+import {
+  consumeP2ScannedMaterial,
+  P2MaterialConsumptionError,
+  reverseP2MaterialConsumption,
+  resolveP2MaterialScan,
+} from '../services/p2MaterialConsumptionService';
 
 const router = Router();
 const materializeBody = z.object({
@@ -37,6 +45,25 @@ const acceptanceBody = startBody.extend({
 const provisionBody = startBody.extend({
   idempotencyKey: z.string().trim().min(1).max(200),
   batchQuantity: z.number().int().positive().optional(),
+});
+const materialConsumptionBody = z.object({
+  travelerBarcode: z.string().trim().min(1).max(255),
+  materialBarcode: z.string().trim().min(1).max(255),
+  travelerStepId: z.string().trim().min(1).max(255),
+  quantity: z.number().positive(),
+  idempotencyKey: z.string().trim().min(1).max(200),
+  operatorSessionToken: z.string().trim().min(1).max(2000),
+  materialRequirementId: z.string().uuid(),
+});
+const materialResolveBody = materialConsumptionBody.pick({
+  travelerBarcode: true,
+  materialBarcode: true,
+  travelerStepId: true,
+});
+const materialReversalBody = z.object({
+  reasonCode: z.string().trim().min(1).max(100),
+  reasonText: z.string().trim().min(10).max(2000),
+  idempotencyKey: z.string().trim().min(1).max(200),
 });
 const enabled = (value: boolean) => {
   if (!value)
@@ -67,6 +94,12 @@ const fail = (res: Response, error: unknown) => {
       .status(400)
       .json({ error: 'INVALID_INPUT', details: error.flatten() });
   if (error instanceof P2WorkOrderError)
+    return res.status(error.status).json({
+      error: error.code,
+      message: error.message,
+      details: error.details,
+    });
+  if (error instanceof P2MaterialConsumptionError)
     return res.status(error.status).json({
       error: error.code,
       message: error.message,
@@ -150,6 +183,86 @@ router.post(
           await provisionP2Travelers(
             req.params.authorityId,
             body,
+            await actor(req)
+          )
+        );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-material-consumption/resolve',
+  authenticateToken,
+  requirePermission('p2.material_consumption.record'),
+  async (req, res) => {
+    try {
+      if (!areP2MaterialConsumptionReadsEnabled())
+        throw new P2MaterialConsumptionError(
+          'FEATURE_DISABLED',
+          'P2 controlled material consumption is disabled.',
+          404
+        );
+      res.json(
+        await resolveP2MaterialScan(materialResolveBody.parse(req.body))
+      );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-material-consumption/consume',
+  authenticateToken,
+  requirePermission('p2.material_consumption.record'),
+  async (req, res) => {
+    try {
+      if (
+        !areP2MaterialConsumptionReadsEnabled() ||
+        !areP2MaterialConsumptionWritesEnabled()
+      )
+        throw new P2MaterialConsumptionError(
+          'FEATURE_DISABLED',
+          'P2 controlled material consumption is disabled.',
+          404
+        );
+      res
+        .status(201)
+        .json(
+          await consumeP2ScannedMaterial(
+            materialConsumptionBody.parse(req.body),
+            await actor(req)
+          )
+        );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-material-consumption/:eventId/reverse',
+  authenticateToken,
+  requirePermission('p2.material_consumption.reverse'),
+  async (req, res) => {
+    try {
+      if (
+        !areP2MaterialConsumptionReadsEnabled() ||
+        !areP2MaterialConsumptionWritesEnabled()
+      )
+        throw new P2MaterialConsumptionError(
+          'FEATURE_DISABLED',
+          'P2 controlled material consumption is disabled.',
+          404
+        );
+      res
+        .status(201)
+        .json(
+          await reverseP2MaterialConsumption(
+            req.params.eventId,
+            materialReversalBody.parse(req.body),
             await actor(req)
           )
         );

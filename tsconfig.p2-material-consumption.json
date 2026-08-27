@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true,
+    "incremental": false,
+    "target": "ES2020"
+  },
+  "include": [
+    "client/src/components/MaterialScanner.tsx",
+    "client/src/pages/TravelerExecution.tsx",
+    "server/src/services/p2MaterialConsumptionService.ts",
+    "server/src/routes/p2ManufacturingWorkOrders.ts"
+  ],
+  "exclude": ["node_modules", "build", "dist"]
+}

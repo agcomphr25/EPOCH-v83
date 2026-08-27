@@ -31,7 +31,7 @@ describe('Phase 12 Quality and shipment-release authority', () => {
 
   it('requires released output and its exact available custody', () => {
     expect(service).toContain('RELEASED_OUTPUT_REQUIRED');
-    expect(service).toContain("o.status='RELEASED'");
+    expect(service).toContain("row.status !== 'RELEASED'");
     expect(service).toContain('c.output_authority_id=o.id');
     expect(service).toContain('SHIPMENT_RELEASE_BLOCKED');
     expect(service).toContain('QUALITY_CUSTODY_BLOCKED');
@@ -46,7 +46,7 @@ describe('Phase 12 Quality and shipment-release authority', () => {
   it('enforces independent Quality and shipment-release authority', () => {
     expect(service).toContain('INDEPENDENT_QUALITY_REQUIRED');
     expect(service).toContain('INDEPENDENT_SHIPMENT_RELEASE_REQUIRED');
-    expect(service).toContain('quality.accepted_by_user_id === actor.userId');
+    expect(service).toContain('row.accepted_by_user_id === actor.userId');
     expect(migration).toContain('accepted_by_employee_id INTEGER NOT NULL');
     expect(migration).toContain('released_by_employee_id INTEGER NOT NULL');
   });

@@ -101,11 +101,9 @@ CREATE TRIGGER p2_component_issue_reversal_immutable BEFORE UPDATE OR DELETE ON 
   FOR EACH ROW EXECUTE FUNCTION p2_component_genealogy_immutable();
 
 CREATE UNIQUE INDEX IF NOT EXISTS inventory_ledger_p2_component_issue_uidx
-  ON inventory_transaction_ledger ((metadata->>'p2ManufacturedComponentIssueKey'))
-  WHERE metadata->>'p2ManufacturedComponentIssueKey' IS NOT NULL;
+  ON inventory_transaction_ledger ((metadata->>'p2ManufacturedComponentIssueKey'));
 CREATE UNIQUE INDEX IF NOT EXISTS inventory_ledger_p2_component_issue_reversal_uidx
-  ON inventory_transaction_ledger ((metadata->>'p2ManufacturedComponentIssueReversalKey'))
-  WHERE metadata->>'p2ManufacturedComponentIssueReversalKey' IS NOT NULL;
+  ON inventory_transaction_ledger ((metadata->>'p2ManufacturedComponentIssueReversalKey'));
 
 INSERT INTO perm_capabilities(key,description,category) VALUES
  ('p2.manufactured_component.issue','Issue controlled manufactured output to an authorized parent work order','inventory'),

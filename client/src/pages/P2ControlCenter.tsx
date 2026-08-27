@@ -124,15 +124,29 @@ export default function P2ControlCenter() {
   const wadProjectId = urlParams.get('projectId') || '';
   const wadProjectName = urlParams.get('projectName') || '';
   const wadPoId = urlParams.get('poId') || '';
+  type ProductionMapView = 'overview' | 'tree' | 'swimlane';
+  const resolveProductionMapView = (tab: string | null): ProductionMapView => {
+    if (tab === 'assembly-tree') return 'tree';
+    if (tab === 'swimlane') return 'swimlane';
+    return 'overview';
+  };
   const resolveControlCenterTab = (tab: string | null) => {
-    return tab === 'pos' || tab === 'customers' ? 'status' : tab || 'status';
+    if (tab === 'pos' || tab === 'customers') return 'status';
+    if (tab === 'program' || tab === 'assembly-tree' || tab === 'swimlane') return 'production-map';
+    return tab || 'status';
   };
   const [activeTab, setActiveTab] = useState(resolveControlCenterTab(tabFromUrl));
+  const [productionMapView, setProductionMapView] = useState<ProductionMapView>(resolveProductionMapView(tabFromUrl));
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
-    if (tab) setActiveTab(resolveControlCenterTab(tab));
+    if (tab) {
+      setActiveTab(resolveControlCenterTab(tab));
+      if (tab === 'program' || tab === 'assembly-tree' || tab === 'swimlane') {
+        setProductionMapView(resolveProductionMapView(tab));
+      }
+    }
   }, [location]);
 
   const [showPOWizard, setShowPOWizard] = useState(false);
@@ -822,21 +836,13 @@ export default function P2ControlCenter() {
             <Factory className="h-4 w-4" />
             Production
           </TabsTrigger>
-          <TabsTrigger value="program" className="flex items-center gap-2" data-testid="tab-program-overview">
+          <TabsTrigger value="production-map" className="flex items-center gap-2" data-testid="tab-production-map">
             <Layers className="h-4 w-4" />
-            Program
-          </TabsTrigger>
-          <TabsTrigger value="assembly-tree" className="flex items-center gap-2" data-testid="tab-assembly-tree">
-            <Route className="h-4 w-4" />
-            Assembly Tree
+            Production Map
           </TabsTrigger>
           <TabsTrigger value="frozen-demand" className="flex items-center gap-2" data-testid="tab-frozen-demand">
             <Lock className="h-4 w-4" />
             Frozen Demand
-          </TabsTrigger>
-          <TabsTrigger value="swimlane" className="flex items-center gap-2" data-testid="tab-swimlane">
-            <BarChart3 className="h-4 w-4" />
-            Swimlane
           </TabsTrigger>
           <TabsTrigger value="shipping" className="flex items-center gap-2" data-testid="tab-shipping">
             <Truck className="h-4 w-4" />
@@ -941,20 +947,56 @@ export default function P2ControlCenter() {
           <P2ProductionQueue selectedPONumbers={selectedPONumbers} />
         </TabsContent>
 
-        <TabsContent value="program">
-          <ProgramManufacturingOrchestration mode="overview" projectId={programProjectId} />
-        </TabsContent>
+        <TabsContent value="production-map" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>Production Map</CardTitle>
+                  <CardDescription>
+                    One PO shown as a program summary, assembly hierarchy, or production swimlane.
+                  </CardDescription>
+                </div>
+                <Tabs
+                  value={productionMapView}
+                  onValueChange={(value) => setProductionMapView(value as ProductionMapView)}
+                >
+                  <TabsList aria-label="Production Map view">
+                    <TabsTrigger value="overview" className="gap-2" data-testid="production-map-view-program">
+                      <Layers className="h-4 w-4" />
+                      Program
+                    </TabsTrigger>
+                    <TabsTrigger value="tree" className="gap-2" data-testid="production-map-view-assembly">
+                      <Route className="h-4 w-4" />
+                      Assembly
+                    </TabsTrigger>
+                    <TabsTrigger value="swimlane" className="gap-2" data-testid="production-map-view-swimlane">
+                      <BarChart3 className="h-4 w-4" />
+                      Swimlane
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </CardHeader>
+          </Card>
 
-        <TabsContent value="assembly-tree">
-          <ProgramManufacturingOrchestration mode="tree" projectId={programProjectId} />
+          {programProjectId ? (
+            <ProgramManufacturingOrchestration mode={productionMapView} projectId={programProjectId} />
+          ) : (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Layers className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                <p className="font-medium">Select one PO to view its Production Map</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Program, Assembly, and Swimlane are interchangeable views of the same selected PO.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="frozen-demand">
           <P2FrozenProductionDemand projectId={programProjectId} />
-        </TabsContent>
-
-        <TabsContent value="swimlane">
-          <ProgramManufacturingOrchestration mode="swimlane" projectId={programProjectId} />
         </TabsContent>
 
         <TabsContent value="shipping" className="space-y-4">

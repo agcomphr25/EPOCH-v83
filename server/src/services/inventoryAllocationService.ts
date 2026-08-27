@@ -1,6 +1,7 @@
 import { db } from '../../db';
-import { inventoryBalances, inventoryTransactions, allocationRequirements } from '../../schema';
+import { inventoryBalances, inventoryTransactions, allocationRequirements, inventoryItems } from '../../schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { isInventoryBalanceEligible } from '@shared/inventoryBalanceEligibility';
 import { evaluateQueueReadiness } from './queueReadinessService';
 import { recordInventoryBalanceLedgerChange } from './inventoryTransactionLedgerService';
 
@@ -70,6 +71,18 @@ export async function allocateInventory(
   }
 
   const run = async (runner: DbTransaction): Promise<AllocationResult> => {
+    const [item] = await runner
+      .select({
+        utilizedInNonInventory: inventoryItems.utilizedInNonInventory,
+        utilizedInServices: inventoryItems.utilizedInServices,
+        type: inventoryItems.type,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, agPartNumber))
+      .limit(1);
+    if (!isInventoryBalanceEligible(item)) {
+      throw new Error(`allocateInventory: part ${agPartNumber} is not eligible for inventory allocation`);
+    }
     // Lock the row for update to prevent concurrent over-allocation
     const [row] = await runner
       .select()

@@ -34,18 +34,16 @@ import {
   travelers,
   inventoryDepartments,
 } from '@shared/schema';
+import {
+  isInventoryBalanceEligible,
+  inventoryBalanceIneligibilityReason,
+} from '@shared/inventoryBalanceEligibility';
 
 function withSupplySourceDashboard(item: InventoryItem) {
   return {
     ...item,
     supplySourceDashboard: getSupplySourceDashboard(item.manufacturedCategory as ManufacturedCategory),
   };
-}
-
-function isServiceInventoryItem(item: InventoryItem | undefined): boolean {
-  if (!item) return false;
-  const looseType = (item.type || '').trim().toLowerCase();
-  return item.utilizedInServices === true || looseType === 'service' || looseType === 'services';
 }
 
 import { storage } from '../../storage';
@@ -63,6 +61,35 @@ import {
 } from '../services/sharedDepartmentService';
 
 const router = Router();
+
+async function assertSafeNonInventoryTransition(
+  existingItem: InventoryItem | undefined,
+  updates: Partial<InventoryItem>
+) {
+  if (!existingItem || existingItem.utilizedInNonInventory === true || updates.utilizedInNonInventory !== true) return;
+
+  const evidence = await db.execute(sql`
+    SELECT
+      EXISTS (SELECT 1 FROM inventory_balances WHERE ag_part_number = ${existingItem.agPartNumber}) AS has_balances,
+      EXISTS (SELECT 1 FROM inventory_transactions WHERE ag_part_number = ${existingItem.agPartNumber}) AS has_transactions,
+      EXISTS (SELECT 1 FROM inventory_transaction_ledger WHERE ag_part_number = ${existingItem.agPartNumber}) AS has_ledger,
+      EXISTS (SELECT 1 FROM material_lots WHERE material_part_number = ${existingItem.agPartNumber}) AS has_lots,
+      EXISTS (
+        SELECT 1 FROM material_lot_reservations mlr
+        JOIN material_lots ml ON ml.id = mlr.material_lot_id
+        WHERE ml.material_part_number = ${existingItem.agPartNumber}
+      ) AS has_reservations,
+      EXISTS (SELECT 1 FROM allocation_requirements WHERE required_part_number = ${existingItem.agPartNumber}) AS has_demand,
+      EXISTS (SELECT 1 FROM p2_frozen_production_demand_nodes WHERE inventory_item_id = ${existingItem.id}) AS has_p2_frozen_demand
+  `);
+  const row = evidence.rows?.[0] as Record<string, boolean> | undefined;
+  const blockers = Object.entries(row || {}).filter(([, present]) => present).map(([name]) => name.replace(/^has_/, ''));
+  if (blockers.length > 0) {
+    throw new Error(
+      `Cannot mark ${existingItem.agPartNumber} as Non-Inventory while custody or demand evidence exists (${blockers.join(', ')}). Resolve it through a controlled transition; no records were changed.`
+    );
+  }
+}
 
 async function prepareProspectiveDefaultDepartment(data: any, effectiveType?: string | null) {
   if (!areSharedInventoryDepartmentWritesEnabled()) {
@@ -625,6 +652,7 @@ router.put('/inventory/items/:id', requirePermission('inventory.adjust'), handle
 
     // Strip assignedDepartments from JSONB write — junction table is authoritative
     const { assignedDepartments: deptNames, ...storageUpdates } = updates as any;
+    await assertSafeNonInventoryTransition(existingItem, storageUpdates);
     const updatedItem = await storage.updateInventoryItem(itemId, storageUpdates);
     
     if (deptNames && Array.isArray(deptNames)) {
@@ -778,6 +806,7 @@ router.put('/:id', requirePermission('inventory.adjust'), handleInventoryPdfUplo
       updates,
       updates.itemType ?? existingForDefault?.itemType
     );
+    await assertSafeNonInventoryTransition(existingForDefault, updates);
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
@@ -1004,6 +1033,7 @@ router.put('/items/:id', requirePermission('inventory.adjust'), handleInventoryP
     );
     // Strip assignedDepartments from JSONB write — junction table is authoritative
     const { assignedDepartments: deptNames, ...storageUpdates } = updates as any;
+    await assertSafeNonInventoryTransition(existingItem, storageUpdates);
     const updatedItem = await storage.updateInventoryItem(itemId, storageUpdates);
     
     if (deptNames && Array.isArray(deptNames)) {
@@ -1291,8 +1321,18 @@ router.post('/items/bulk-update-utilized', async (req: Request, res: Response) =
     if ('utilizedInServices' in utilizedFields) {
       updates.utilizedInServices = Boolean(utilizedFields.utilizedInServices);
     }
+    if ('utilizedInNonInventory' in utilizedFields) {
+      updates.utilizedInNonInventory = Boolean(utilizedFields.utilizedInNonInventory);
+    }
+    if ('utilizedInCustomerSupplied' in utilizedFields) {
+      updates.utilizedInCustomerSupplied = Boolean(utilizedFields.utilizedInCustomerSupplied);
+    }
 
-    // Update each item with the new utilized fields
+    // Preflight every selected item before changing any of them.
+    for (const itemId of itemIds) {
+      const existingItem = await storage.getInventoryItem(Number(itemId));
+      await assertSafeNonInventoryTransition(existingItem, updates);
+    }
     for (const itemId of itemIds) {
       await storage.updateInventoryItem(itemId, updates);
     }
@@ -3986,6 +4026,8 @@ function parseUtilizedColumn(value: string): {
   utilizedInFacilities: boolean;
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
+  utilizedInNonInventory: boolean;
+  utilizedInCustomerSupplied: boolean;
 } {
   const valueLower = value.toLowerCase();
   return {
@@ -3995,6 +4037,8 @@ function parseUtilizedColumn(value: string): {
     utilizedInFacilities: valueLower.includes('facilities'),
     utilizedInAdmin: valueLower.includes('admin'),
     utilizedInServices: valueLower.includes('services'),
+    utilizedInNonInventory: valueLower.includes('non-inventory'),
+    utilizedInCustomerSupplied: valueLower.includes('customer-supplied'),
   };
 }
 
@@ -4053,6 +4097,8 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
           utilizedInFacilities: false,
           utilizedInAdmin: false,
           utilizedInServices: false,
+          utilizedInNonInventory: false,
+          utilizedInCustomerSupplied: false,
           isStockItem: false,
         };
 
@@ -4350,6 +4396,8 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
       if (item.utilizedInFacilities) utilized.push('Facilities');
       if (item.utilizedInAdmin) utilized.push('Admin');
       if (item.utilizedInServices) utilized.push('Services');
+      if (item.utilizedInNonInventory) utilized.push('Non-Inventory');
+      if (item.utilizedInCustomerSupplied) utilized.push('Customer-Supplied');
       return utilized.join(', ');
     };
 
@@ -4488,7 +4536,7 @@ router.get('/inventory/balances', async (req: Request, res: Response) => {
     const balances = await storage.getAllInventoryBalances();
     const items = await storage.getAllInventoryItems();
     const itemMap = new Map(items.map((item) => [item.agPartNumber, item]));
-    const nonServiceBalances = balances.filter((balance) => !isServiceInventoryItem(itemMap.get(balance.agPartNumber)));
+    const eligibleBalances = balances.filter((balance) => isInventoryBalanceEligible(itemMap.get(balance.agPartNumber)));
 
     const ncrInventorySerialRows = await db
       .select({
@@ -4537,7 +4585,7 @@ router.get('/inventory/balances', async (req: Request, res: Response) => {
     }
     
     // Enrich balances with department metadata
-    const enrichedBalances: EnrichedInventoryBalance[] = nonServiceBalances.map((balance) => {
+    const enrichedBalances: EnrichedInventoryBalance[] = eligibleBalances.map((balance) => {
       const deptInfo = DEPARTMENT_LOCATION_MAP[balance.locationId];
       const item = itemMap.get(balance.agPartNumber);
       return {
@@ -4633,6 +4681,18 @@ router.get('/inventory/balances/:id', async (req: Request, res: Response) => {
 router.post('/inventory/balances', requirePermission('inventory.adjust'), async (req: Request, res: Response) => {
   try {
     const data = insertInventoryBalanceSchema.parse(req.body);
+    const item = (await storage.getAllInventoryItems()).find(candidate => candidate.agPartNumber === data.agPartNumber);
+    const reason = inventoryBalanceIneligibilityReason(item);
+    if (reason) {
+      return res.status(422).json({
+        error: reason === 'NON_INVENTORY'
+          ? 'Non-Inventory items do not use inventory balances.'
+          : reason === 'SERVICE'
+            ? 'Service items do not use inventory balances.'
+            : 'Inventory item not found.',
+        code: `INVENTORY_BALANCE_${reason}`,
+      });
+    }
     const balance = await storage.createInventoryBalance(data);
     res.status(201).json(balance);
   } catch (error) {

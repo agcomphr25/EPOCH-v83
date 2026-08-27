@@ -39,6 +39,7 @@ import {
 } from '../lib/p2ControlCenterReconciliation';
 import { softAuth, authenticateToken, sessionAwareAuth, requireAdminOrOwner } from '../../middleware/auth';
 import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
+import { isInventoryBalanceEligible } from '@shared/inventoryBalanceEligibility';
 import employeesRoutes from './employees';
 import operatorAuthRoutes from './operatorAuth';
 import employeeQualificationsRoutes from './employeeQualifications';
@@ -719,6 +720,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                 })
                 .returning()
                 .then(([r]) => r);
+
+              if (effectiveInvItem && !isInventoryBalanceEligible(effectiveInvItem)) {
+                return res.status(422).json({
+                  error: `Item ${item.partNumber} is not eligible for ordinary inventory balance custody.`,
+                  code: 'INVENTORY_BALANCE_INELIGIBLE',
+                });
+              }
 
               if (effectiveInvItem) {
                 // Upsert inventory balance in WAREHOUSE-MAIN location

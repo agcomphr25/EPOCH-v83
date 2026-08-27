@@ -107,6 +107,11 @@ export async function calculateMaterialDemand(
       AND bi.is_active = true
       AND bi.item_type = 'material'
       AND bi.quantity  > 0
+    JOIN inventory_items ii
+      ON ii.ag_part_number = bi.part_name
+      AND COALESCE(ii.utilized_in_non_inventory, false) = false
+      AND COALESCE(ii.utilized_in_services, false) = false
+      AND lower(trim(COALESCE(ii.type, ''))) NOT IN ('service', 'services')
     WHERE 1=1 ${skuWhere}
     GROUP BY bi.part_name
     ORDER BY total_required DESC, bi.part_name
@@ -225,6 +230,11 @@ export async function calculateBuildCapacity(sku: string): Promise<{
       AND bi.is_active = true
       AND bi.item_type = 'material'
       AND bi.quantity  > 0
+    JOIN inventory_items ii
+      ON ii.ag_part_number = bi.part_name
+      AND COALESCE(ii.utilized_in_non_inventory, false) = false
+      AND COALESCE(ii.utilized_in_services, false) = false
+      AND lower(trim(COALESCE(ii.type, ''))) NOT IN ('service', 'services')
     LEFT JOIN inventory_balances ib
       ON ib.ag_part_number = bi.part_name
     WHERE bd.sku       = $1

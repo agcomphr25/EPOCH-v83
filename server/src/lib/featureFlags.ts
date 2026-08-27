@@ -209,6 +209,15 @@ export function areP2ManufacturedOutputCustodyWritesEnabled(): boolean {
   return envBool('P2_MANUFACTURED_OUTPUT_CUSTODY_WRITES_ENABLED', false);
 }
 
+/** Phase 11 manufactured-component issue and parent genealogy; disabled by default. */
+export function areP2ManufacturedComponentIssueReadsEnabled(): boolean {
+  return envBool('P2_MANUFACTURED_COMPONENT_ISSUE_READS_ENABLED', false);
+}
+
+export function areP2ManufacturedComponentIssueWritesEnabled(): boolean {
+  return envBool('P2_MANUFACTURED_COMPONENT_ISSUE_WRITES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

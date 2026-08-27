@@ -28,4 +28,12 @@ describe('PM dashboard material requirements', () => {
     expect(routeSource).toContain('AS "qtyOnHand"');
     expect(pageSource).toContain('On Hand <SortIcon field="qtyOnHand" />');
   });
+
+  it('returns lead time and exposes expandable request selection details', () => {
+    expect(routeSource).toContain('ii.lead_time_days AS "leadTimeDays"');
+    expect(pageSource).toContain('Uncovered demand');
+    expect(pageSource).toContain('row.leadTimeDays == null');
+    expect(pageSource).toContain('Create parts request for ${shortage}');
+    expect(pageSource).toContain("apiRequest('/api/inventory/parts-requests'");
+  });
 });

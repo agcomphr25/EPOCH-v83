@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, Link } from 'wouter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -27,11 +28,12 @@ import { Label } from '@/components/ui/label';
 import {
   CheckCircle, Clock, AlertCircle, Package, TrendingUp, Calendar,
   Briefcase, Users, ShieldCheck, ShieldAlert, ShieldOff, HelpCircle,
-  ChevronUp, ChevronDown, ArrowUpDown, LayoutDashboard, XCircle, Filter,
+  ChevronUp, ChevronDown, ChevronRight, ArrowUpDown, LayoutDashboard, XCircle, Filter,
   Plus,
 } from 'lucide-react';
 import { format, differenceInBusinessDays, parseISO } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 async function safeFetch<T>(url: string): Promise<T> {
   return apiRequest(url) as Promise<T>;
@@ -394,6 +396,7 @@ interface MaterialRow {
   qtyAllocated: number;
   qtyIssued: number;
   qtyOnHand: number;
+  leadTimeDays: number | null;
   unitCost: number;
   committedCost: number;
   consumedCost: number;
@@ -403,6 +406,13 @@ interface MaterialRow {
 interface MaterialData {
   summary: MaterialSummary;
   rows: MaterialRow[];
+}
+
+interface MaterialSessionUser {
+  username: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  employeeName?: string | null;
 }
 
 interface ProgramAssemblyWidgetRow {
@@ -1920,11 +1930,25 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
 type SortField = 'status' | 'itemCode' | 'qtyRequired' | 'qtyOnHand' | 'qtyAllocated' | 'qtyIssued' | 'committedCost' | 'consumedCost';
 type SortDir = 'asc' | 'desc';
 
+function getOpenPartsRequestQuantity(rows: MaterialRow[], itemCode: string) {
+  return rows
+    .filter((row) => row.partsRequestId && row.itemCode === itemCode)
+    .reduce((total, row) => total + row.qtyRequired, 0);
+}
+
 function MaterialBudgetTab({ projectId }: { projectId: string }) {
   const [, navTo] = useLocation();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [sortField, setSortField] = useState<SortField>('status');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
+
+  const { data: sessionUser } = useQuery<MaterialSessionUser | null>({
+    queryKey: ['/api/auth/session'],
+    queryFn: () => safeFetch<MaterialSessionUser | null>('/api/auth/session'),
+  });
 
   const { data, isLoading, isError } = useQuery<MaterialData>({
     queryKey: ['/api/pm-dashboard', projectId, 'materials'],
@@ -1948,6 +1972,55 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'materials'] });
       queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'summary'] });
+    },
+  });
+
+  const createPartsRequestsMutation = useMutation({
+    mutationFn: async () => {
+      const selectedRows = (data?.rows ?? []).filter((row) => selectedRequestIds.has(row.inventoryItemId));
+      const requestedBy = sessionUser?.employeeName?.trim()
+        || sessionUser?.username?.trim()
+        || [sessionUser?.firstName, sessionUser?.lastName].filter(Boolean).join(' ').trim();
+
+      if (!requestedBy) throw new Error('Unable to identify the current user.');
+      if (selectedRows.length === 0) throw new Error('Select at least one material item.');
+
+      return Promise.all(selectedRows.map((row) => {
+        const openRequestQuantity = getOpenPartsRequestQuantity(data?.rows ?? [], row.itemCode);
+        const shortage = Math.max(row.qtyRequired - row.qtyOnHand - openRequestQuantity, 0);
+        if (shortage <= 0) throw new Error(`${row.itemCode} has no uncovered demand.`);
+        return apiRequest('/api/inventory/parts-requests', {
+          method: 'POST',
+          body: {
+            agPartNumber: row.itemCode,
+            partNumber: row.itemCode,
+            partName: row.itemName,
+            requestedBy,
+            productionLine: 'P2',
+            projectId,
+            quantity: shortage,
+            urgency: 'MEDIUM',
+            estimatedCost: row.unitCost > 0 ? row.unitCost : null,
+            reason: `Uncovered P2 project demand: ${row.qtyRequired} required, ${row.qtyOnHand} on hand, ${openRequestQuantity} already requested.`,
+          },
+        });
+      }));
+    },
+    onSuccess: (created) => {
+      setSelectedRequestIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'materials'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      toast({
+        title: 'Parts requests created',
+        description: `${created.length} project material request${created.length === 1 ? '' : 's'} submitted.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Parts requests were not created',
+        description: error instanceof Error ? error.message : 'The request failed.',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -1989,15 +2062,34 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
     return sortDir === 'asc' ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />;
   };
 
+  const setRequestSelected = (rowId: string, checked: boolean) => {
+    setSelectedRequestIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(rowId);
+      else next.delete(rowId);
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
         <Button
           size="sm"
-          onClick={() => navTo(`/inventory/parts-request?projectId=${encodeURIComponent(projectId)}&create=1`)}
+          className="mr-2"
+          disabled={selectedRequestIds.size === 0 || createPartsRequestsMutation.isPending}
+          onClick={() => createPartsRequestsMutation.mutate()}
         >
           <Plus className="h-4 w-4 mr-2" />
-          New Parts Request
+          Create Parts Request{selectedRequestIds.size === 1 ? '' : 's'}
+          {selectedRequestIds.size > 0 ? ` (${selectedRequestIds.size})` : ''}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => navTo(`/inventory/parts-request?projectId=${encodeURIComponent(projectId)}&create=1`)}
+        >
+          Manual Request
         </Button>
       </div>
 
@@ -2043,6 +2135,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10"><span className="sr-only">Details</span></TableHead>
                   <TableHead>
                     <button className="flex items-center hover:text-foreground" onClick={() => handleSort('status')}>
                       Status <SortIcon field="status" />
@@ -2090,8 +2183,30 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sorted.map((row, idx) => (
-                  <TableRow key={`${row.inventoryItemId}-${idx}`}>
+                {sorted.map((row, idx) => {
+                  const rowKey = `${row.inventoryItemId}-${idx}`;
+                  const isExpanded = expandedRowId === rowKey;
+                  const isRequirement = !row.partsRequestId && !row.projectReceivedMaterialId;
+                  const openRequestQuantity = isRequirement
+                    ? getOpenPartsRequestQuantity(rows, row.itemCode)
+                    : 0;
+                  const shortage = Math.max(row.qtyRequired - row.qtyOnHand - openRequestQuantity, 0);
+                  return (
+                  <Fragment key={rowKey}>
+                  <TableRow>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        aria-label={`${isExpanded ? 'Hide' : 'Show'} material details for ${row.itemCode}`}
+                        aria-expanded={isExpanded}
+                        onClick={() => setExpandedRowId(isExpanded ? null : rowKey)}
+                      >
+                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </Button>
+                    </TableCell>
                     <TableCell>
                       <Badge className={MATERIAL_STATUS_COLORS[row.status] ?? 'bg-gray-100 text-gray-600'}>
                         {materialStatusLabel(row.status)}
@@ -2146,7 +2261,56 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
+                  {isExpanded && (
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableCell colSpan={13} className="p-4">
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                          <div className="rounded-md border bg-background p-3">
+                            <div className="text-xs text-muted-foreground">Demand</div>
+                            <div className="text-lg font-semibold">{row.qtyRequired}</div>
+                          </div>
+                          <div className="rounded-md border bg-background p-3">
+                            <div className="text-xs text-muted-foreground">On hand</div>
+                            <div className="text-lg font-semibold">{row.qtyOnHand}</div>
+                          </div>
+                          <div className="rounded-md border bg-background p-3">
+                            <div className="text-xs text-muted-foreground">Open parts requests</div>
+                            <div className="text-lg font-semibold">{openRequestQuantity}</div>
+                          </div>
+                          <div className="rounded-md border bg-background p-3">
+                            <div className="text-xs text-muted-foreground">Uncovered demand</div>
+                            <div className="text-lg font-semibold">{shortage}</div>
+                          </div>
+                          <div className="rounded-md border bg-background p-3">
+                            <div className="text-xs text-muted-foreground">Lead time</div>
+                            <div className="text-lg font-semibold">
+                              {row.leadTimeDays == null ? 'Not set' : `${row.leadTimeDays} day${row.leadTimeDays === 1 ? '' : 's'}`}
+                            </div>
+                          </div>
+                          <div className="flex items-center rounded-md border bg-background p-3">
+                            {isRequirement ? (
+                              <div className="flex items-start gap-3">
+                                <Checkbox
+                                  id={`request-${rowKey}`}
+                                  checked={selectedRequestIds.has(row.inventoryItemId)}
+                                  disabled={shortage <= 0 || createPartsRequestsMutation.isPending}
+                                  onCheckedChange={(checked) => setRequestSelected(row.inventoryItemId, checked === true)}
+                                />
+                                <Label htmlFor={`request-${rowKey}`} className="leading-tight">
+                                  {shortage > 0 ? `Create parts request for ${shortage}` : 'Demand covered by on-hand inventory or open requests'}
+                                </Label>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">This row records an existing request or receipt.</span>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

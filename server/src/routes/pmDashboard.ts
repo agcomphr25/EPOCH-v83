@@ -225,6 +225,7 @@ interface MaterialItemRow {
   qtyAllocated: string;
   qtyIssued: string;
   qtyOnHand: string;
+  leadTimeDays: number | null;
   unitCost: string;
   committedCost: string;
   consumedCost: string;
@@ -2620,6 +2621,7 @@ ${materialBudgetExpression}
       COALESCE(project_allocations.qty_reserved, 0) AS "qtyAllocated",
       COALESCE(project_consumption.qty_consumed, 0) AS "qtyIssued",
       COALESCE(inventory_stock.qty_on_hand, 0) AS "qtyOnHand",
+      ii.lead_time_days AS "leadTimeDays",
       COALESCE(ii.unit_cost, 0) AS "unitCost",
       COALESCE(project_allocations.qty_reserved * COALESCE(ii.unit_cost, 0), 0) AS "committedCost",
       COALESCE(project_consumption.qty_consumed * COALESCE(ii.unit_cost, 0), 0) AS "consumedCost",
@@ -2662,6 +2664,7 @@ ${materialBudgetExpression}
         ELSE 0::numeric
       END AS "qtyIssued",
       0::numeric AS "qtyOnHand",
+      NULL::integer AS "leadTimeDays",
       COALESCE(pr.estimated_cost, 0)::numeric AS "unitCost",
       CASE
         WHEN pr.status IN ('ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT')
@@ -2693,6 +2696,7 @@ ${materialBudgetExpression}
           CASE WHEN prm.status IN ('pending_pm_acceptance', 'accepted') THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyAllocated",
           0::numeric AS "qtyIssued",
           0::numeric AS "qtyOnHand",
+          ii.lead_time_days AS "leadTimeDays",
           CASE
             WHEN prm.quantity::numeric <> 0 THEN cost.effective_extended_cost / prm.quantity::numeric
             ELSE cost.effective_extended_cost

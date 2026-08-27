@@ -14,6 +14,8 @@ import {
   areP2ManufacturedOutputWritesEnabled,
   areP2ManufacturedOutputCustodyReadsEnabled,
   areP2ManufacturedOutputCustodyWritesEnabled,
+  areP2ManufacturedComponentIssueReadsEnabled,
+  areP2ManufacturedComponentIssueWritesEnabled,
   areP2TravelerProvisioningWritesEnabled,
 } from '../lib/featureFlags';
 import {
@@ -43,6 +45,12 @@ import {
   P2ManufacturedOutputCustodyError,
   reverseP2ManufacturedOutputCustody,
 } from '../services/p2ManufacturedOutputCustodyService';
+import {
+  getP2ManufacturedComponentGenealogy,
+  issueP2ManufacturedComponent,
+  P2ManufacturedComponentIssueError,
+  reverseP2ManufacturedComponentIssue,
+} from '../services/p2ManufacturedComponentIssueService';
 
 const router = Router();
 const materializeBody = z.object({
@@ -91,6 +99,17 @@ const custodyReversalBody = z.object({
   reasonText: z.string().trim().min(10).max(2000),
   idempotencyKey: z.string().trim().min(1).max(200),
 });
+const manufacturedComponentIssueBody = z.object({
+  custodyId: z.string().uuid(),
+  materialRequirementId: z.string().uuid(),
+  quantity: z.number().positive(),
+  idempotencyKey: z.string().trim().min(1).max(200),
+});
+const manufacturedComponentIssueReversalBody = z.object({
+  reasonCode: z.string().trim().min(1).max(100),
+  reasonText: z.string().trim().min(10).max(2000),
+  idempotencyKey: z.string().trim().min(1).max(200),
+});
 const enabled = (value: boolean) => {
   if (!value)
     throw new P2WorkOrderError(
@@ -132,6 +151,11 @@ const fail = (res: Response, error: unknown) => {
       details: error.details,
     });
   if (error instanceof P2ManufacturedOutputCustodyError)
+    return res.status(error.status).json({
+      error: error.code,
+      message: error.message,
+    });
+  if (error instanceof P2ManufacturedComponentIssueError)
     return res.status(error.status).json({
       error: error.code,
       message: error.message,
@@ -441,6 +465,67 @@ router.post(
           await actor(req)
         )
       );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-work-orders/:authorityId/manufactured-components/issues',
+  authenticateToken,
+  requirePermission('p2.manufactured_component.issue'),
+  async (req, res) => {
+    try {
+      enabled(areP2ManufacturedComponentIssueWritesEnabled());
+      res
+        .status(201)
+        .json(
+          await issueP2ManufacturedComponent(
+            req.params.authorityId,
+            manufacturedComponentIssueBody.parse(req.body),
+            await actor(req)
+          )
+        );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-work-orders/:authorityId/manufactured-components/issues/:issueId/reverse',
+  authenticateToken,
+  requirePermission('p2.manufactured_component.issue_reverse'),
+  async (req, res) => {
+    try {
+      enabled(areP2ManufacturedComponentIssueWritesEnabled());
+      res.json(
+        await reverseP2ManufacturedComponentIssue(
+          req.params.authorityId,
+          req.params.issueId,
+          manufacturedComponentIssueReversalBody.parse(req.body),
+          await actor(req)
+        )
+      );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.get(
+  '/p2-work-orders/:authorityId/manufactured-components/genealogy',
+  authenticateToken,
+  requirePermission('p2.work_orders.view'),
+  async (req, res) => {
+    try {
+      enabled(areP2ManufacturedComponentIssueReadsEnabled());
+      res.json({
+        edges: await getP2ManufacturedComponentGenealogy(
+          req.params.authorityId
+        ),
+      });
     } catch (error) {
       fail(res, error);
     }

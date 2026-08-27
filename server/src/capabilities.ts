@@ -38,6 +38,8 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   'p2.manufactured_output.release',
   'p2.manufactured_output.custody_receive',
   'p2.manufactured_output.custody_reverse',
+  'p2.manufactured_component.issue',
+  'p2.manufactured_component.issue_reverse',
 
   // Traveler lifecycle
   'travelers.start',

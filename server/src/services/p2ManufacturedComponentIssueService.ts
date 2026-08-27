@@ -216,7 +216,6 @@ export async function issueP2ManufacturedComponent(
       metadata: {
         p2ManufacturedComponentIssueKey: input.idempotencyKey,
         p2ManufacturedComponentIssueHash: requestHash,
-        custodyId: row.id,
         ...snapshot,
       },
     });

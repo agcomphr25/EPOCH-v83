@@ -2526,6 +2526,8 @@ ${materialBudgetExpression}
   `, [projectId]);
 
   const hasProjectReceivedMaterials = await canReadProjectReceivedMaterials();
+  const hasProductionDemandLedger = await publicTableExists('project_production_demands')
+    && await publicTableExists('project_production_launches');
   const projectReceivedSummaryRes = hasProjectReceivedMaterials
     ? await pool.query<ProjectReceivedMaterialSummaryRow>(`
         WITH received_costs AS (
@@ -2558,9 +2560,24 @@ ${materialBudgetExpression}
     : [{ pendingReceivedCost: '0', acceptedReceivedCost: '0' }];
 
   const rowsRes = await pool.query<MaterialItemRow>(`
-    WITH robust_requirements AS (
+    WITH launched_requirements AS (
+      ${hasProductionDemandLedger ? `
+      SELECT d.part_number AS ag_part_number,
+             SUM(d.gross_required_quantity::numeric) AS qty_required
+      FROM project_production_demands d
+      JOIN project_production_launches pl ON pl.id = d.production_launch_id
+      WHERE d.project_id = $1
+        AND pl.project_id = d.project_id
+        AND pl.status = 'COMPLETE'
+        AND d.disposition = 'BUY'
+      GROUP BY d.part_number
+      ` : `
+      SELECT NULL::text AS ag_part_number, 0::numeric AS qty_required
+      WHERE false
+      `}
+    ), robust_requirements AS (
       SELECT bl.child_part_ag_number AS ag_part_number,
-             SUM(wo.quantity::numeric * bl.qty_per) AS qty_required
+             SUM(wo.quantity::numeric * bl.qty_per::numeric) AS qty_required
       FROM production_work_orders wo
       JOIN boms b ON b.parent_part_ag_number = wo.part_number AND b.is_active = true
       JOIN LATERAL (
@@ -2574,6 +2591,7 @@ ${materialBudgetExpression}
       ) active_revision ON true
       JOIN bom_lines bl ON bl.revision_id = active_revision.id
       WHERE wo.project_id = $1 AND wo.status <> 'CLOSED'
+        AND NOT EXISTS (SELECT 1 FROM launched_requirements)
       GROUP BY bl.child_part_ag_number
     ), legacy_requirements AS (
       SELECT bi.part_name AS ag_part_number,
@@ -2583,6 +2601,7 @@ ${materialBudgetExpression}
         AND (bd.sku = wo.part_number OR bd.model_name = wo.part_number)
       JOIN bom_items bi ON bi.bom_id = bd.id AND bi.is_active = true AND bi.item_type <> 'labor'
       WHERE wo.project_id = $1 AND wo.status <> 'CLOSED'
+        AND NOT EXISTS (SELECT 1 FROM launched_requirements)
         AND NOT EXISTS (
           SELECT 1 FROM boms b
           JOIN bom_revisions br ON br.bom_id = b.id AND br.is_released = true
@@ -2594,6 +2613,8 @@ ${materialBudgetExpression}
     ), requirements AS (
       SELECT ag_part_number, SUM(qty_required) AS qty_required
       FROM (
+        SELECT * FROM launched_requirements
+        UNION ALL
         SELECT * FROM robust_requirements
         UNION ALL
         SELECT * FROM legacy_requirements

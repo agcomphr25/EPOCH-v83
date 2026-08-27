@@ -50,7 +50,7 @@ jobs:
           npx esbuild server/src/services/p2ManufacturedOutputGenealogyService.ts server/src/services/p2ManufacturingWorkOrderService.ts server/src/routes/p2ManufacturingWorkOrders.ts --platform=node --format=esm --outdir=/tmp/p2-phase10-ts
           npx eslint server/src/services/p2ManufacturedOutputGenealogyService.ts server/__tests__/p2ManufacturedOutputGenealogyFoundation.test.ts client/src/__tests__/p2ManufacturedOutputGenealogy.client.test.tsx --max-warnings 0
           npx prettier --check server/src/services/p2ManufacturedOutputGenealogyService.ts server/__tests__/p2ManufacturedOutputGenealogyFoundation.test.ts client/src/pages/P2WorkOrderQueuePage.tsx client/src/__tests__/p2ManufacturedOutputGenealogy.client.test.tsx
-          git diff --check HEAD^ HEAD
+          git diff --check
       - name: Clean schema and safe-boot replay
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"

@@ -32,6 +32,8 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   'p2.work_orders.execute',
   'p2.work_orders.complete_operation',
   'p2.work_orders.accept',
+  'p2.material_consumption.record',
+  'p2.material_consumption.reverse',
 
   // Traveler lifecycle
   'travelers.start',

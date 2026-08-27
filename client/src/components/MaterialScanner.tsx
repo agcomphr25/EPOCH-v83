@@ -34,8 +34,10 @@ import {
   Info,
   FileText,
   QrCode,
+  Lock,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface MaterialLot {
   id: string;
@@ -91,6 +93,13 @@ interface ValidationResult {
   requiresOverride?: boolean;
   packet?: BuiltPacket;
   fabricRolls?: FabricRoll[];
+  p2Candidates?: Array<{
+    materialRequirementId: string;
+    assemblyPathIdentity: string;
+    partNumber: string;
+    outstandingQuantity: number;
+    unitOfMeasure: string;
+  }>;
 }
 
 interface MaterialScannerProps {
@@ -101,6 +110,7 @@ interface MaterialScannerProps {
   onMaterialConsumed?: (consumption: any) => void;
   onClose?: () => void;
   allowFreeTextEntry?: boolean; // Allow entering control numbers without validation
+  p2TravelerBarcode?: string | null;
 }
 
 export default function MaterialScanner({
@@ -111,6 +121,7 @@ export default function MaterialScanner({
   onMaterialConsumed,
   onClose,
   allowFreeTextEntry = false,
+  p2TravelerBarcode,
 }: MaterialScannerProps) {
   const [scanInput, setScanInput] = useState('');
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
@@ -123,7 +134,15 @@ export default function MaterialScanner({
   const [icnSuggestions, setIcnSuggestions] = useState<any[]>([]);
   const [icnMatch, setIcnMatch] = useState<any | null>(null);
   const [icnSearching, setIcnSearching] = useState(false);
+  const [p2MaterialRequirementId, setP2MaterialRequirementId] = useState('');
   const queryClient = useQueryClient();
+  const { can } = usePermissions();
+  const p2WritesEnabled =
+    import.meta.env.VITE_P2_MATERIAL_CONSUMPTION_WRITES_ENABLED === 'true';
+  const p2ReadsEnabled =
+    import.meta.env.VITE_P2_MATERIAL_CONSUMPTION_READS_ENABLED === 'true';
+  const isP2Traveler = Boolean(p2TravelerBarcode?.startsWith('P2TRV:'));
+  const isP2Controlled = p2ReadsEnabled && p2WritesEnabled && isP2Traveler;
 
   const lookupIcn = useCallback(async (icn: string) => {
     if (icn.length < 2) {
@@ -160,6 +179,35 @@ export default function MaterialScanner({
 
   const validateMutation = useMutation({
     mutationFn: async (icn: string) => {
+      if (isP2Controlled) {
+        if (!icn.startsWith('P2RCV:'))
+          throw new Error('A controlled P2 Receiving barcode is required.');
+        const resolved = await apiRequest('/api/p2-material-consumption/resolve', {
+          method: 'POST',
+          body: JSON.stringify({
+            travelerBarcode: p2TravelerBarcode,
+            materialBarcode: icn,
+            travelerStepId,
+          }),
+        }) as { candidates: ValidationResult['p2Candidates'] };
+        if (!resolved.candidates?.length)
+          throw new Error('The scan does not match any outstanding released BOM demand for this traveler.');
+        const first = resolved.candidates[0];
+        return {
+          valid: true,
+          lot: {
+            id: icn,
+            internalControlNumber: icn,
+            materialPartNumber: first.partNumber,
+            materialName: 'Controlled P2 material',
+            supplier: 'Resolved from Receiving identity',
+            remainingQty: first.outstandingQuantity.toString(),
+            unitOfMeasure: first.unitOfMeasure,
+            status: 'ACCEPTED',
+          },
+          p2Candidates: resolved.candidates,
+        } satisfies ValidationResult;
+      }
       const params = new URLSearchParams();
       if (requiredPartNumber) params.set('partNumber', requiredPartNumber);
       if (requiredQty) params.set('qtyNeeded', requiredQty.toString());
@@ -223,6 +271,9 @@ export default function MaterialScanner({
 
       setValidationResult(result);
       if (result.lot) {
+        if (isP2Controlled && result.p2Candidates?.length) {
+          setP2MaterialRequirementId(result.p2Candidates[0].materialRequirementId);
+        }
         if (requiredQty) {
           setQtyToUse(requiredQty.toString());
         } else {
@@ -252,6 +303,25 @@ export default function MaterialScanner({
       overrideApprovedBy?: string;
     }) => {
       if (!validationResult?.lot) throw new Error('No material selected');
+      if (isP2Controlled) {
+        if (!p2MaterialRequirementId)
+          throw new Error('Select the exact released BOM demand path.');
+        const operatorSessionToken = window.sessionStorage.getItem('epoch.operatorAuth.token');
+        if (!operatorSessionToken)
+          throw new Error('Operator badge or PIN authentication is required.');
+        return apiRequest('/api/p2-material-consumption/consume', {
+          method: 'POST',
+          body: JSON.stringify({
+            travelerBarcode: p2TravelerBarcode,
+            materialBarcode: validationResult.lot.internalControlNumber,
+            travelerStepId,
+            quantity: Number(data.qtyUsed),
+            idempotencyKey: crypto.randomUUID(),
+            operatorSessionToken,
+            materialRequirementId: p2MaterialRequirementId,
+          }),
+        });
+      }
       const res = await apiRequest('/api/material-lots/consume', {
         method: 'POST',
         body: JSON.stringify({
@@ -345,6 +415,7 @@ export default function MaterialScanner({
     setFreeTextControlNumber('');
     setIcnSuggestions([]);
     setIcnMatch(null);
+    setP2MaterialRequirementId('');
   };
 
   const selectIcnMatch = (item: any) => {
@@ -410,6 +481,28 @@ export default function MaterialScanner({
     }
   };
 
+  if (isP2Traveler && !isP2Controlled)
+    return (
+      <Alert>
+        <Lock className="h-4 w-4" />
+        <AlertTitle>P2 controlled material consumption is disabled</AlertTitle>
+        <AlertDescription>
+          Both certified client gates must be enabled before this traveler can consume material.
+        </AlertDescription>
+      </Alert>
+    );
+
+  if (isP2Controlled && !can('p2.material_consumption.record'))
+    return (
+      <Alert>
+        <Lock className="h-4 w-4" />
+        <AlertTitle>Controlled material consumption unavailable</AlertTitle>
+        <AlertDescription>
+          Your role does not have permission to record P2 material consumption.
+        </AlertDescription>
+      </Alert>
+    );
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -418,11 +511,13 @@ export default function MaterialScanner({
           Material Traceability Scanner
         </CardTitle>
         <CardDescription>
-          Scan material ICN barcode to record consumption and maintain AS9100 traceability
+          {isP2Controlled
+            ? 'Scan the controlled Receiving barcode. The server validates the released BOM, traceability, custody, quantity, project, traveler, and operation authorities.'
+            : 'Scan material ICN barcode to record consumption and maintain AS9100 traceability'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {allowFreeTextEntry && (
+        {allowFreeTextEntry && !isP2Controlled && (
           <Tabs value={entryMode} onValueChange={(v) => setEntryMode(v as 'scan' | 'manual')} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="scan" className="flex items-center gap-2" data-testid="tab-scan-barcode">
@@ -656,6 +751,35 @@ export default function MaterialScanner({
 
             {(validationResult.valid || validationResult.requiresOverride) && validationResult.lot && (
               <div className="space-y-4 pt-4 border-t">
+                {isP2Controlled && validationResult.p2Candidates && (
+                  <div className="space-y-2">
+                    <Label htmlFor="p2-material-requirement">Released BOM demand path</Label>
+                    <select
+                      id="p2-material-requirement"
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      value={p2MaterialRequirementId}
+                      onChange={(event) => {
+                        const id = event.target.value;
+                        setP2MaterialRequirementId(id);
+                        const selected = validationResult.p2Candidates?.find(
+                          (candidate) => candidate.materialRequirementId === id
+                        );
+                        if (selected)
+                          setQtyToUse(selected.outstandingQuantity.toString());
+                      }}
+                    >
+                      {validationResult.p2Candidates.map((candidate) => (
+                        <option
+                          key={candidate.materialRequirementId}
+                          value={candidate.materialRequirementId}
+                        >
+                          {candidate.assemblyPathIdentity} — {candidate.partNumber} — {candidate.outstandingQuantity}{' '}
+                          {candidate.unitOfMeasure} outstanding
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="qtyToUse">Quantity to Consume</Label>
                   <div className="flex gap-2 items-center">

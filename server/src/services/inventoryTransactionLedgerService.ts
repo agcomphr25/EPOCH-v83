@@ -252,6 +252,13 @@ export async function reverseInventoryLedgerEntry(params: {
   approvedByUserId?: number | null;
   approvedByDisplayName?: string | null;
   digitalSignatureId?: string | null;
+  /** Phase 9 only: atomically restore the exact material lot and Receiving custody unit. */
+  restoreMaterialCustody?: {
+    materialLotId: string;
+    receivedUnitId: number;
+    quantity: number;
+    materialRequirementId: string;
+  };
 }): Promise<InventoryTransactionLedger> {
   return db.transaction(async (tx) => {
     const [original] = await tx
@@ -287,6 +294,56 @@ export async function reverseInventoryLedgerEntry(params: {
 
     const currentQuantity = balance?.quantityOnHand ?? Number(original.quantityAfter);
     const reversalDelta = -Number(original.quantityDelta);
+
+    if (params.restoreMaterialCustody) {
+      const custody = params.restoreMaterialCustody;
+      if (
+        original.lotId !== custody.materialLotId ||
+        reversalDelta !== custody.quantity ||
+        reversalDelta <= 0
+      )
+        throw new Error('INVENTORY LEDGER: material custody reversal does not match the original transaction');
+      const lotResult = await tx.execute(sql`
+        SELECT id, internal_control_number, remaining_qty, status
+        FROM material_lots WHERE id=${custody.materialLotId} FOR UPDATE
+      `);
+      const lot = lotResult.rows[0];
+      if (!lot) throw new Error('INVENTORY LEDGER: material lot for reversal was not found');
+      const unitResult = await tx.execute(sql`
+        SELECT id, quantity FROM received_units
+        WHERE id=${custody.receivedUnitId} AND material_lot_id=${custody.materialLotId}
+        FOR UPDATE
+      `);
+      const unit = unitResult.rows[0];
+      if (!unit) throw new Error('INVENTORY LEDGER: Receiving custody unit for reversal was not found');
+      const lotBefore = Number(lot.remaining_qty);
+      const lotAfter = lotBefore + custody.quantity;
+      await tx.execute(sql`
+        UPDATE material_lots SET remaining_qty=${lotAfter},status=${original.statusBefore ?? 'ACCEPTED'},updated_at=now()
+        WHERE id=${custody.materialLotId}
+      `);
+      await tx.execute(sql`
+        UPDATE received_units SET quantity=${Number(unit.quantity) + custody.quantity},updated_at=now()
+        WHERE id=${custody.receivedUnitId}
+      `);
+      const requirementResult = await tx.execute(sql`
+        SELECT issued_quantity FROM p2_manufacturing_work_order_material_requirements
+        WHERE id=${custody.materialRequirementId} FOR UPDATE
+      `);
+      const requirement = requirementResult.rows[0];
+      if (!requirement || Number(requirement.issued_quantity) < custody.quantity)
+        throw new Error('INVENTORY LEDGER: released BOM demand cannot accept this reversal');
+      await tx.execute(sql`
+        UPDATE p2_manufacturing_work_order_material_requirements
+        SET issued_quantity=${Number(requirement.issued_quantity) - custody.quantity},status='OPEN',updated_at=now()
+        WHERE id=${custody.materialRequirementId}
+      `);
+      await tx.execute(sql`
+        INSERT INTO material_lot_transactions
+          (material_lot_id,internal_control_number,transaction_type,qty_before,qty_change,qty_after,reference_type,reference_id,performed_by,reason,notes)
+        VALUES (${custody.materialLotId},${String(lot.internal_control_number)},'RETURN',${lotBefore},${custody.quantity},${lotAfter},'P2_CONSUMPTION_REVERSAL',${original.id},${params.performedByDisplayName},${params.reasonCode},${params.notes ?? null})
+      `);
+    }
 
     return recordInventoryLedgerEntry({
       transactionType: 'REVERSAL',

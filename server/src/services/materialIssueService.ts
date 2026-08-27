@@ -36,7 +36,7 @@
  *   - Traceability viewer; reads only — no new writers.
  */
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { storage } from '../../storage';
 import {
@@ -45,6 +45,7 @@ import {
   materialLotReservations,
   materialLotTransactions,
   materialLots,
+  receivedUnits,
 } from '../../schema';
 import {
   recordInventoryLedgerEntry,
@@ -140,6 +141,13 @@ export interface MaterialIssueOperatorAuth {
 export interface MaterialIssueRequest {
   /** Which logical action is being performed; routes the gate chain and ledger txn type. */
   action: MaterialIssueAction;
+  /** Optional Phase 9 retry identity, enforced by a prospective unique ledger index. */
+  p2MaterialConsumptionRequestKey?: string | null;
+  p2MaterialConsumptionRequestHash?: string | null;
+  /** Optional Phase 9 physical custody unit, decremented in the same transaction. */
+  p2ReceivedUnitId?: number | null;
+  /** Exact released BOM demand locked and incremented atomically for Phase 9. */
+  p2MaterialRequirementId?: string | null;
   /**
    * Per-request cache for `getActiveRoutingStep`. Optional; when omitted a
    * fresh cache is created internally. Pass one when batching many draws
@@ -905,6 +913,33 @@ export async function executeMaterialIssue(
       req.action === 'issue' ||
       req.action === 'transferToJob'
     ) {
+      if (req.p2MaterialRequirementId) {
+        const requirementResult = await tx.execute(sql`
+          SELECT required_quantity,issued_quantity,status
+          FROM p2_manufacturing_work_order_material_requirements
+          WHERE id=${req.p2MaterialRequirementId} FOR UPDATE
+        `);
+        const requirement = requirementResult.rows[0];
+        const nextIssued =
+          Number(requirement?.issued_quantity ?? 0) + req.quantity;
+        if (
+          !requirement ||
+          requirement.status === 'CANCELLED' ||
+          nextIssued > Number(requirement.required_quantity)
+        )
+          throw new MaterialIssueRaceError({
+            code: 'ALLOCATION_EXCEEDED',
+            message: 'The released BOM demand no longer has enough outstanding quantity.',
+            blockingField: 'allocation',
+          });
+        await tx.execute(sql`
+          UPDATE p2_manufacturing_work_order_material_requirements
+          SET issued_quantity=${nextIssued},
+              status=CASE WHEN ${nextIssued}>=required_quantity THEN 'SATISFIED' ELSE 'OPEN' END,
+              updated_at=now()
+          WHERE id=${req.p2MaterialRequirementId}
+        `);
+      }
       // Re-read the lot under FOR UPDATE so the transaction sees the
       // latest remainingQty and another concurrent draw cannot race past
       // the allocation check.
@@ -945,6 +980,34 @@ export async function executeMaterialIssue(
           updatedAt: new Date(),
         })
         .where(eq(materialLots.id, lot.id));
+
+      if (req.p2ReceivedUnitId != null) {
+        const [physicalUnit] = await tx
+          .select()
+          .from(receivedUnits)
+          .where(
+            and(
+              eq(receivedUnits.id, req.p2ReceivedUnitId),
+              eq(receivedUnits.materialLotId, lot.id),
+            ),
+          )
+          .for('update');
+        const physicalQuantity = Number(physicalUnit?.quantity ?? 0);
+        if (!physicalUnit || physicalQuantity < req.quantity) {
+          throw new MaterialIssueRaceError({
+            code: 'LOT_INSUFFICIENT_QTY',
+            message: 'The accepted Receiving unit no longer has enough physical custody quantity.',
+            blockingField: 'quantity',
+          });
+        }
+        await tx
+          .update(receivedUnits)
+          .set({
+            quantity: (physicalQuantity - req.quantity).toString(),
+            updatedAt: new Date(),
+          })
+          .where(eq(receivedUnits.id, req.p2ReceivedUnitId));
+      }
 
       await tx.insert(materialLotTransactions).values({
         materialLotId: lot.id,
@@ -1069,6 +1132,12 @@ export async function executeMaterialIssue(
         sourceRecordId: req.materialLotId,
         metadata: {
           action: req.action,
+          p2MaterialConsumptionRequestKey:
+            req.p2MaterialConsumptionRequestKey ?? null,
+          p2MaterialConsumptionRequestHash:
+            req.p2MaterialConsumptionRequestHash ?? null,
+          p2ReceivedUnitId: req.p2ReceivedUnitId ?? null,
+          p2MaterialRequirementId: req.p2MaterialRequirementId ?? null,
           requestedQty: req.quantity,
           reservationId: createdReservationId,
           digitalSignatureId: req.digitalSignature?.signatureId ?? null,

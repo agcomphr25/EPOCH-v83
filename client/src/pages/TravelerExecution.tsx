@@ -2902,6 +2902,7 @@ export default function TravelerExecution() {
                                             <MaterialScanner
                                               travelerId={traveler.id}
                                               travelerStepId={currentStep.id}
+                                              p2TravelerBarcode={traveler.internalControlNumber}
                                               allowFreeTextEntry={true}
                                               onMaterialConsumed={(result) => {
                                               const taskFieldKeys = new Set(

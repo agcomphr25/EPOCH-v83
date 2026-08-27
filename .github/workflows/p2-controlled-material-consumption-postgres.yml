@@ -1,0 +1,101 @@
+name: P2 Controlled Material Consumption PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/p2-controlled-material-scan-consumption]
+  pull_request:
+    paths:
+      - 'migrations/0304_p2_controlled_material_scan_consumption.sql'
+      - 'server/src/services/p2MaterialConsumptionService.ts'
+      - 'server/src/services/materialIssueService.ts'
+      - 'server/src/services/inventoryTransactionLedgerService.ts'
+      - 'server/src/routes/p2ManufacturingWorkOrders.ts'
+      - 'client/src/components/MaterialScanner.tsx'
+      - '.github/workflows/p2-controlled-material-consumption-postgres.yml'
+
+permissions: { contents: read }
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase9_cert
+          POSTGRES_PASSWORD: disposable_phase9_password
+          POSTGRES_DB: epoch_phase9_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase9_cert -d epoch_phase9_certification"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://phase9_cert:disposable_phase9_password@127.0.0.1:5432/epoch_phase9_certification
+      NODE_ENV: test
+      SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Prove isolation and disabled flags
+        shell: bash
+        run: |
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).hostname)")" = 127.0.0.1
+          test -z "${P2_MATERIAL_CONSUMPTION_READS_ENABLED:-}"
+          test -z "${P2_MATERIAL_CONSUMPTION_WRITES_ENABLED:-}"
+          test -z "${VITE_P2_MATERIAL_CONSUMPTION_READS_ENABLED:-}"
+          test -z "${VITE_P2_MATERIAL_CONSUMPTION_WRITES_ENABLED:-}"
+      - name: Focused Phase 6-9 contracts
+        run: |
+          npx vitest run --config vitest.config.server.ts server/__tests__/p2ManufacturingWorkOrderQueueFoundation.test.ts server/__tests__/p2TravelerProvisioningCoverageLedger.test.ts server/__tests__/p2ReceivingBarcodeIdentities.test.ts server/__tests__/p2ControlledMaterialScanConsumption.test.ts --reporter=verbose
+          npx vitest run --config vitest.config.client.ts client/src/__tests__/p2ManufacturingWorkOrderQueues.client.test.tsx client/src/__tests__/p2ControlledMaterialConsumption.client.test.tsx --reporter=verbose
+      - name: Syntax, focused lint, format, and diff hygiene
+        run: |
+          npx esbuild server/src/services/p2MaterialConsumptionService.ts server/src/services/materialIssueService.ts server/src/services/inventoryTransactionLedgerService.ts server/src/routes/p2ManufacturingWorkOrders.ts --platform=node --format=esm --outdir=/tmp/p2-phase9-ts-validation
+          npx eslint server/src/services/p2MaterialConsumptionService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/__tests__/p2ControlledMaterialScanConsumption.test.ts client/src/__tests__/p2ControlledMaterialConsumption.client.test.tsx --max-warnings 0
+          npx prettier --check server/src/services/p2MaterialConsumptionService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/__tests__/p2ControlledMaterialScanConsumption.test.ts client/src/__tests__/p2ControlledMaterialConsumption.client.test.tsx tsconfig.p2-material-consumption.json
+          git diff --check HEAD^ HEAD
+      - name: Create clean application schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
+          npx drizzle-kit push --force --config drizzle.app.config.ts
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql
+      - name: Safe migration, populated preservation, replay, and rollback
+        shell: bash
+        run: |
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/before.txt
+          SELECT 'inventory_items|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_items t;
+          SELECT 'material_lots|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM material_lots t;
+          SELECT 'received_units|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM received_units t;
+          SELECT 'travelers|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM travelers t;
+          SELECT 'ledger|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_transaction_ledger t;
+          SQL
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0304_p2_controlled_material_scan_consumption.sql
+          npm run maintenance:safe-migrations
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 <<'SQL' > /tmp/after.txt
+          SELECT 'inventory_items|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_items t;
+          SELECT 'material_lots|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM material_lots t;
+          SELECT 'received_units|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM received_units t;
+          SELECT 'travelers|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM travelers t;
+          SELECT 'ledger|'||count(*)||'|'||md5(COALESCE(string_agg(md5(row_to_json(t)::text),'' ORDER BY md5(row_to_json(t)::text)),'')) FROM inventory_transaction_ledger t;
+          SQL
+          diff -u /tmp/before.txt /tmp/after.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          ALTER TABLE p2_material_consumption_events ADD COLUMN rollback_probe boolean;
+          ROLLBACK;
+          DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='p2_material_consumption_events' AND column_name='rollback_probe') THEN RAISE EXCEPTION 'rollback probe persisted'; END IF; END $$;
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_material_consumption_event_immutable') THEN RAISE EXCEPTION 'consumption immutability missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='p2_material_consumption_reversal_valid') THEN RAISE EXCEPTION 'reversal authority validation missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='p2_material_consumption_single_reversal_uidx') THEN RAISE EXCEPTION 'single reversal protection missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='inventory_ledger_p2_material_consumption_request_uidx') THEN RAISE EXCEPTION 'ledger retry protection missing'; END IF;
+          END $$;
+          SQL
+          test "$(grep -c "'0304_p2_controlled_material_scan_consumption.sql'" server/scripts/migrations/runSafeBootMigrations.ts)" = 2
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT count(*) FROM p2_material_consumption_events')" = 0

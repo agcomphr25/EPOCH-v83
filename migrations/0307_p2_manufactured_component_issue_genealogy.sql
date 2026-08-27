@@ -26,8 +26,7 @@ CREATE TABLE IF NOT EXISTS p2_manufactured_component_issues (
   actor_role TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   reversed_at TIMESTAMPTZ,
-  CHECK (traceability_mode <> 'SERIAL' OR quantity = 1),
-  UNIQUE(custody_id,parent_material_requirement_id)
+  CHECK (traceability_mode <> 'SERIAL' OR quantity = 1)
 );
 CREATE INDEX IF NOT EXISTS p2_component_issue_parent_idx
   ON p2_manufactured_component_issues(parent_work_order_authority_id,status);

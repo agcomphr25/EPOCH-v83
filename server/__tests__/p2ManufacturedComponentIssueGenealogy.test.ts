@@ -45,6 +45,9 @@ describe('Phase 11 manufactured-component issue genealogy', () => {
     expect(migration).toContain(
       "traceability_mode <> 'SERIAL' OR quantity = 1"
     );
+    expect(migration).not.toContain(
+      'UNIQUE(custody_id,parent_material_requirement_id)'
+    );
   });
 
   it('uses the inventory ledger and immutable multilevel-capable genealogy edges', () => {

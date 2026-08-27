@@ -16,6 +16,8 @@ import {
   areP2ManufacturedOutputCustodyWritesEnabled,
   areP2ManufacturedComponentIssueReadsEnabled,
   areP2ManufacturedComponentIssueWritesEnabled,
+  areP2QualityShipmentReleaseReadsEnabled,
+  areP2QualityShipmentReleaseWritesEnabled,
   areP2TravelerProvisioningWritesEnabled,
 } from '../lib/featureFlags';
 import {
@@ -51,6 +53,12 @@ import {
   P2ManufacturedComponentIssueError,
   reverseP2ManufacturedComponentIssue,
 } from '../services/p2ManufacturedComponentIssueService';
+import {
+  getP2OutputQualityShipmentAuthority,
+  P2QualityShipmentReleaseError,
+  recordP2OutputQualityDisposition,
+  releaseP2OutputForShipment,
+} from '../services/p2QualityShipmentReleaseService';
 
 const router = Router();
 const materializeBody = z.object({
@@ -110,6 +118,19 @@ const manufacturedComponentIssueReversalBody = z.object({
   reasonText: z.string().trim().min(10).max(2000),
   idempotencyKey: z.string().trim().min(1).max(200),
 });
+const qualityDispositionBody = z.object({
+  custodyId: z.string().uuid(),
+  disposition: z.enum(['ACCEPTED', 'REJECTED']),
+  inspectionReference: z.string().trim().min(1).max(255),
+  reasonText: z.string().trim().min(10).max(2000),
+  idempotencyKey: z.string().trim().min(1).max(200),
+});
+const shipmentReleaseBody = z.object({
+  custodyId: z.string().uuid(),
+  qualityAcceptanceId: z.string().uuid(),
+  releaseReference: z.string().trim().min(1).max(255),
+  idempotencyKey: z.string().trim().min(1).max(200),
+});
 const enabled = (value: boolean) => {
   if (!value)
     throw new P2WorkOrderError(
@@ -156,6 +177,11 @@ const fail = (res: Response, error: unknown) => {
       message: error.message,
     });
   if (error instanceof P2ManufacturedComponentIssueError)
+    return res.status(error.status).json({
+      error: error.code,
+      message: error.message,
+    });
+  if (error instanceof P2QualityShipmentReleaseError)
     return res.status(error.status).json({
       error: error.code,
       message: error.message,
@@ -463,6 +489,71 @@ router.post(
           req.params.custodyId,
           custodyReversalBody.parse(req.body),
           await actor(req)
+        )
+      );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-work-orders/:authorityId/manufactured-outputs/:outputId/quality-disposition',
+  authenticateToken,
+  requirePermission('p2.manufactured_output.quality_accept'),
+  async (req, res) => {
+    try {
+      enabled(areP2QualityShipmentReleaseWritesEnabled());
+      res
+        .status(201)
+        .json(
+          await recordP2OutputQualityDisposition(
+            req.params.authorityId,
+            req.params.outputId,
+            qualityDispositionBody.parse(req.body),
+            await actor(req)
+          )
+        );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-work-orders/:authorityId/manufactured-outputs/:outputId/shipment-release',
+  authenticateToken,
+  requirePermission('p2.manufactured_output.shipment_release'),
+  async (req, res) => {
+    try {
+      enabled(areP2QualityShipmentReleaseWritesEnabled());
+      res
+        .status(201)
+        .json(
+          await releaseP2OutputForShipment(
+            req.params.authorityId,
+            req.params.outputId,
+            shipmentReleaseBody.parse(req.body),
+            await actor(req)
+          )
+        );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.get(
+  '/p2-work-orders/:authorityId/manufactured-outputs/:outputId/quality-shipment-authority',
+  authenticateToken,
+  requirePermission('p2.work_orders.view'),
+  async (req, res) => {
+    try {
+      enabled(areP2QualityShipmentReleaseReadsEnabled());
+      res.json(
+        await getP2OutputQualityShipmentAuthority(
+          req.params.authorityId,
+          req.params.outputId
         )
       );
     } catch (error) {

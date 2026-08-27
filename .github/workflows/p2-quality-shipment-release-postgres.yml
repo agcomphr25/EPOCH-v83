@@ -1,0 +1,78 @@
+name: P2 Quality Shipment Release PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'migrations/0309_p2_quality_shipment_release_foundation.sql'
+      - 'server/src/services/p2QualityShipmentReleaseService.ts'
+      - 'server/src/routes/p2ManufacturingWorkOrders.ts'
+      - 'server/__tests__/p2QualityShipmentReleaseFoundation.test.ts'
+      - '.github/workflows/p2-quality-shipment-release-postgres.yml'
+  push:
+    branches: [codex/p2-quality-shipment-release-foundation]
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase12_cert
+          POSTGRES_PASSWORD: disposable_phase12_password
+          POSTGRES_DB: epoch_phase12_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase12_cert -d epoch_phase12_certification"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://phase12_cert:disposable_phase12_password@127.0.0.1:5432/epoch_phase12_certification
+      NODE_ENV: test
+      SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Prove isolation and disabled gates
+        run: |
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).hostname)")" = 127.0.0.1
+          test -z "${P2_QUALITY_SHIPMENT_RELEASE_READS_ENABLED:-}"
+          test -z "${P2_QUALITY_SHIPMENT_RELEASE_WRITES_ENABLED:-}"
+      - name: Focused Phase 10-12 contracts
+        run: |
+          npx vitest run --config vitest.config.server.ts server/__tests__/p2ManufacturedOutputGenealogyFoundation.test.ts server/__tests__/p2ManufacturedOutputCustodyFoundation.test.ts server/__tests__/p2ManufacturedComponentIssueGenealogy.test.ts server/__tests__/p2QualityShipmentReleaseFoundation.test.ts
+      - name: Syntax and hygiene
+        run: |
+          npx esbuild server/src/services/p2QualityShipmentReleaseService.ts server/src/routes/p2ManufacturingWorkOrders.ts --platform=node --format=esm --outdir=/tmp/p2-phase12-ts
+          npx eslint server/src/services/p2QualityShipmentReleaseService.ts server/__tests__/p2QualityShipmentReleaseFoundation.test.ts --max-warnings 0
+          npx prettier --check server/src/services/p2QualityShipmentReleaseService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/__tests__/p2QualityShipmentReleaseFoundation.test.ts
+          git diff --check
+      - name: Clean, populated-compatible, replay-safe, immutable migration
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE TABLE p2_manufactured_output_authorities(id uuid PRIMARY KEY);
+          CREATE TABLE p2_manufactured_output_custodies(id uuid PRIMARY KEY,output_authority_id uuid REFERENCES p2_manufactured_output_authorities(id));
+          CREATE TABLE perm_capabilities(id serial PRIMARY KEY,key text UNIQUE,description text,category text);
+          CREATE TABLE perm_roles(id serial PRIMARY KEY,name text UNIQUE);
+          CREATE TABLE perm_role_capabilities(role_id integer,capability_id integer,UNIQUE(role_id,capability_id));
+          INSERT INTO perm_roles(name) VALUES ('ADMIN'),('OWNER'),('MANAGER'),('INVENTORY_MANAGER');
+          CREATE TABLE historical_marker(id integer PRIMARY KEY,payload text);
+          INSERT INTO historical_marker VALUES (1,'preserve-me');
+          SQL
+          before="$(psql "$DATABASE_URL" -Atc "SELECT count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM historical_marker")"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0309_p2_quality_shipment_release_foundation.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0309_p2_quality_shipment_release_foundation.sql
+          after="$(psql "$DATABASE_URL" -Atc "SELECT count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM historical_marker")"
+          test "$before" = "$after"
+          test "$(psql "$DATABASE_URL" -Atc "SELECT count(*) FROM perm_role_capabilities prc JOIN perm_roles r ON r.id=prc.role_id WHERE r.name IN ('MANAGER','INVENTORY_MANAGER')")" = 0
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO p2_manufactured_output_authorities(id) VALUES ('00000000-0000-0000-0000-000000000001'); INSERT INTO p2_manufactured_output_custodies(id,output_authority_id) VALUES ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001');"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO p2_manufactured_output_quality_acceptances(output_authority_id,custody_id,disposition,inspection_reference,reason_text,authority_snapshot,authority_checksum,request_key,request_hash,accepted_by_user_id,accepted_by_employee_id,accepted_by_display_name,accepted_by_role) VALUES ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','ACCEPTED','INSPECT-1','Accepted evidence','{}','checksum','quality-1','hash',1,1,'Quality','ADMIN');"
+          if psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "UPDATE p2_manufactured_output_quality_acceptances SET disposition='REJECTED'"; then exit 1; fi
+      - name: Rollback proof
+        run: |
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges > /tmp/phase12-schema.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP TABLE p2_manufactured_output_shipment_releases; DROP TABLE p2_manufactured_output_quality_acceptances;"
+          test "$(psql "$DATABASE_URL" -Atc "SELECT payload FROM historical_marker WHERE id=1")" = preserve-me

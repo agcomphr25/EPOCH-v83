@@ -359,6 +359,7 @@ export const safeMigrationFiles = [
   '0306_p2_manufactured_output_custody_foundation.sql',
   '0307_inventory_utilized_in_balance_eligibility.sql',
   '0308_p2_manufactured_component_issue_genealogy.sql',
+  '0309_p2_quality_shipment_release_foundation.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -468,6 +469,7 @@ export const criticalMigrationFiles = new Set([
   '0306_p2_manufactured_output_custody_foundation.sql',
   '0307_inventory_utilized_in_balance_eligibility.sql',
   '0308_p2_manufactured_component_issue_genealogy.sql',
+  '0309_p2_quality_shipment_release_foundation.sql',
 ]);
 
 export async function runSafeBootMigrations() {

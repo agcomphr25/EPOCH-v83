@@ -69,6 +69,10 @@ const label = (readiness: string) =>
     .toUpperCase();
 
 export default function P2WorkOrderQueuePage() {
+  const manufacturedOutputReadsEnabled =
+    import.meta.env.VITE_P2_MANUFACTURED_OUTPUT_READS_ENABLED === 'true';
+  const manufacturedOutputWritesEnabled =
+    import.meta.env.VITE_P2_MANUFACTURED_OUTPUT_WRITES_ENABLED === 'true';
   const [, params] = useRoute('/p2-work-orders/queues/:departmentId');
   const departmentId = params?.departmentId ?? '';
   const queryClient = useQueryClient();
@@ -134,7 +138,12 @@ export default function P2WorkOrderQueuePage() {
     );
 
   return (
-    <div className="space-y-4 p-6" data-testid="p2-work-order-queue">
+    <div
+      className="space-y-4 p-6"
+      data-testid="p2-work-order-queue"
+      data-manufactured-output-reads={manufacturedOutputReadsEnabled}
+      data-manufactured-output-writes={manufacturedOutputWritesEnabled}
+    >
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold">
           <Factory className="h-6 w-6" /> P2 W/O Queue

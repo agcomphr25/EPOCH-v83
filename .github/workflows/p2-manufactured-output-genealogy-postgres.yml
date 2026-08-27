@@ -1,0 +1,65 @@
+name: P2 Manufactured Output Genealogy PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'migrations/0305_p2_manufactured_output_genealogy_foundation.sql'
+      - 'server/src/services/p2ManufacturedOutputGenealogyService.ts'
+      - 'server/src/routes/p2ManufacturingWorkOrders.ts'
+      - 'server/__tests__/p2ManufacturedOutputGenealogyFoundation.test.ts'
+  push:
+    branches: [codex/p2-manufactured-output-genealogy-foundation]
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase10_cert
+          POSTGRES_PASSWORD: disposable_phase10_password
+          POSTGRES_DB: epoch_phase10_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase10_cert -d epoch_phase10_certification"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://phase10_cert:disposable_phase10_password@127.0.0.1:5432/epoch_phase10_certification
+      NODE_ENV: test
+      SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Prove disposable isolation and disabled gates
+        run: |
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).hostname)")" = 127.0.0.1
+          test -z "${P2_MANUFACTURED_OUTPUT_READS_ENABLED:-}"
+          test -z "${P2_MANUFACTURED_OUTPUT_WRITES_ENABLED:-}"
+          test -z "${VITE_P2_MANUFACTURED_OUTPUT_READS_ENABLED:-}"
+          test -z "${VITE_P2_MANUFACTURED_OUTPUT_WRITES_ENABLED:-}"
+      - name: Focused Phase 6-10 contracts
+        run: |
+          npx vitest run --config vitest.config.server.ts server/__tests__/p2ManufacturingWorkOrderQueueFoundation.test.ts server/__tests__/p2TravelerProvisioningCoverageLedger.test.ts server/__tests__/p2ReceivingBarcodeIdentities.test.ts server/__tests__/p2ControlledMaterialScanConsumption.test.ts server/__tests__/p2ManufacturedOutputGenealogyFoundation.test.ts
+          npx vitest run --config vitest.config.client.ts client/src/__tests__/p2ManufacturingWorkOrderQueues.client.test.tsx client/src/__tests__/p2ControlledMaterialConsumption.client.test.tsx client/src/__tests__/p2ManufacturedOutputGenealogy.client.test.tsx
+      - name: Syntax and hygiene
+        run: |
+          npx esbuild server/src/services/p2ManufacturedOutputGenealogyService.ts server/src/services/p2ManufacturingWorkOrderService.ts server/src/routes/p2ManufacturingWorkOrders.ts --platform=node --format=esm --outdir=/tmp/p2-phase10-ts
+          npx eslint server/src/services/p2ManufacturedOutputGenealogyService.ts server/__tests__/p2ManufacturedOutputGenealogyFoundation.test.ts client/src/__tests__/p2ManufacturedOutputGenealogy.client.test.tsx --max-warnings 0
+          npx prettier --check server/src/services/p2ManufacturedOutputGenealogyService.ts server/__tests__/p2ManufacturedOutputGenealogyFoundation.test.ts client/src/pages/P2WorkOrderQueuePage.tsx client/src/__tests__/p2ManufacturedOutputGenealogy.client.test.tsx
+          git diff --check HEAD^ HEAD
+      - name: Clean schema and safe-boot replay
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
+          npx drizzle-kit push --force --config drizzle.app.config.ts
+          npm run db:migrate:safe
+          npm run db:migrate:safe
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT to_regclass('p2_manufactured_output_authorities'),to_regclass('p2_material_genealogy_edges')"
+      - name: Rollback and replay Phase 10 migration
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP TABLE p2_material_genealogy_edges; DROP TABLE p2_manufactured_output_authorities CASCADE;"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0305_p2_manufactured_output_genealogy_foundation.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0305_p2_manufactured_output_genealogy_foundation.sql

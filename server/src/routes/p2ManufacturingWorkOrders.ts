@@ -10,6 +10,8 @@ import {
   areP2ManufacturingWorkOrderQueueReadsEnabled,
   areP2MaterialConsumptionWritesEnabled,
   areP2MaterialConsumptionReadsEnabled,
+  areP2ManufacturedOutputReadsEnabled,
+  areP2ManufacturedOutputWritesEnabled,
   areP2TravelerProvisioningWritesEnabled,
 } from '../lib/featureFlags';
 import {
@@ -28,6 +30,12 @@ import {
   reverseP2MaterialConsumption,
   resolveP2MaterialScan,
 } from '../services/p2MaterialConsumptionService';
+import {
+  createP2ManufacturedOutput,
+  getP2ManufacturedOutputGenealogy,
+  P2ManufacturedOutputError,
+  releaseP2ManufacturedOutput,
+} from '../services/p2ManufacturedOutputGenealogyService';
 
 const router = Router();
 const materializeBody = z.object({
@@ -63,6 +71,11 @@ const materialResolveBody = materialConsumptionBody.pick({
 const materialReversalBody = z.object({
   reasonCode: z.string().trim().min(1).max(100),
   reasonText: z.string().trim().min(10).max(2000),
+  idempotencyKey: z.string().trim().min(1).max(200),
+});
+const manufacturedOutputBody = z.object({
+  outputIdentity: z.string().trim().min(1).max(255),
+  outputQuantity: z.number().positive(),
   idempotencyKey: z.string().trim().min(1).max(200),
 });
 const enabled = (value: boolean) => {
@@ -105,6 +118,10 @@ const fail = (res: Response, error: unknown) => {
       message: error.message,
       details: error.details,
     });
+  if (error instanceof P2ManufacturedOutputError)
+    return res
+      .status(error.status)
+      .json({ error: error.code, message: error.message });
   console.error('[p2-manufacturing-work-orders]', error);
   return res.status(500).json({ error: 'P2_WORK_ORDER_FAILED' });
 };
@@ -305,6 +322,62 @@ router.post(
         await acceptP2WorkOrderOutput(
           req.params.authorityId,
           body,
+          await actor(req)
+        )
+      );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.get(
+  '/p2-work-orders/:authorityId/manufactured-outputs',
+  authenticateToken,
+  requirePermission('p2.work_orders.view'),
+  async (req, res) => {
+    try {
+      enabled(areP2ManufacturedOutputReadsEnabled());
+      res.json(await getP2ManufacturedOutputGenealogy(req.params.authorityId));
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-work-orders/:authorityId/manufactured-outputs',
+  authenticateToken,
+  requirePermission('p2.manufactured_output.record'),
+  async (req, res) => {
+    try {
+      enabled(areP2ManufacturedOutputWritesEnabled());
+      res
+        .status(201)
+        .json(
+          await createP2ManufacturedOutput(
+            req.params.authorityId,
+            manufacturedOutputBody.parse(req.body),
+            await actor(req)
+          )
+        );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-work-orders/:authorityId/manufactured-outputs/:outputId/release',
+  authenticateToken,
+  requirePermission('p2.manufactured_output.release'),
+  async (req, res) => {
+    try {
+      enabled(areP2ManufacturedOutputWritesEnabled());
+      res.json(
+        await releaseP2ManufacturedOutput(
+          req.params.outputId,
+          startBody.parse(req.body).expectedConcurrencyVersion,
           await actor(req)
         )
       );

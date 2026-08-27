@@ -12,6 +12,8 @@ import {
   areP2MaterialConsumptionReadsEnabled,
   areP2ManufacturedOutputReadsEnabled,
   areP2ManufacturedOutputWritesEnabled,
+  areP2ManufacturedOutputCustodyReadsEnabled,
+  areP2ManufacturedOutputCustodyWritesEnabled,
   areP2TravelerProvisioningWritesEnabled,
 } from '../lib/featureFlags';
 import {
@@ -36,6 +38,11 @@ import {
   P2ManufacturedOutputError,
   releaseP2ManufacturedOutput,
 } from '../services/p2ManufacturedOutputGenealogyService';
+import {
+  getP2ManufacturedOutputCustody,
+  P2ManufacturedOutputCustodyError,
+  reverseP2ManufacturedOutputCustody,
+} from '../services/p2ManufacturedOutputCustodyService';
 
 const router = Router();
 const materializeBody = z.object({
@@ -78,6 +85,12 @@ const manufacturedOutputBody = z.object({
   outputQuantity: z.number().positive(),
   idempotencyKey: z.string().trim().min(1).max(200),
 });
+const custodyReversalBody = z.object({
+  quantity: z.number().positive(),
+  reasonCode: z.string().trim().min(1).max(100),
+  reasonText: z.string().trim().min(10).max(2000),
+  idempotencyKey: z.string().trim().min(1).max(200),
+});
 const enabled = (value: boolean) => {
   if (!value)
     throw new P2WorkOrderError(
@@ -117,6 +130,11 @@ const fail = (res: Response, error: unknown) => {
       error: error.code,
       message: error.message,
       details: error.details,
+    });
+  if (error instanceof P2ManufacturedOutputCustodyError)
+    return res.status(error.status).json({
+      error: error.code,
+      message: error.message,
     });
   if (error instanceof P2ManufacturedOutputError)
     return res
@@ -371,6 +389,7 @@ router.post(
   '/p2-work-orders/:authorityId/manufactured-outputs/:outputId/release',
   authenticateToken,
   requirePermission('p2.manufactured_output.release'),
+  requirePermission('p2.manufactured_output.custody_receive'),
   async (req, res) => {
     try {
       enabled(areP2ManufacturedOutputWritesEnabled());
@@ -378,6 +397,47 @@ router.post(
         await releaseP2ManufacturedOutput(
           req.params.outputId,
           startBody.parse(req.body).expectedConcurrencyVersion,
+          await actor(req)
+        )
+      );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.get(
+  '/p2-work-orders/:authorityId/manufactured-outputs/:outputId/custody',
+  authenticateToken,
+  requirePermission('p2.work_orders.view'),
+  async (req, res) => {
+    try {
+      enabled(areP2ManufacturedOutputCustodyReadsEnabled());
+      res.json({
+        custody: await getP2ManufacturedOutputCustody(
+          req.params.authorityId,
+          req.params.outputId
+        ),
+      });
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/p2-work-orders/:authorityId/manufactured-outputs/:outputId/custody/:custodyId/reverse',
+  authenticateToken,
+  requirePermission('p2.manufactured_output.custody_reverse'),
+  async (req, res) => {
+    try {
+      enabled(areP2ManufacturedOutputCustodyWritesEnabled());
+      res.json(
+        await reverseP2ManufacturedOutputCustody(
+          req.params.authorityId,
+          req.params.outputId,
+          req.params.custodyId,
+          custodyReversalBody.parse(req.body),
           await actor(req)
         )
       );

@@ -360,6 +360,7 @@ export const safeMigrationFiles = [
   '0303_p2_receiving_barcode_identities.sql',
   '0304_p2_controlled_material_scan_consumption.sql',
   '0305_p2_manufactured_output_genealogy_foundation.sql',
+  '0306_p2_manufactured_output_custody_foundation.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -466,6 +467,7 @@ export const criticalMigrationFiles = new Set([
   '0303_p2_receiving_barcode_identities.sql',
   '0304_p2_controlled_material_scan_consumption.sql',
   '0305_p2_manufactured_output_genealogy_foundation.sql',
+  '0306_p2_manufactured_output_custody_foundation.sql',
 ]);
 
 export async function runSafeBootMigrations() {

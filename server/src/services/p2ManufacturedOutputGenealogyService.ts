@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 
 import { pool } from '../../db';
+import { areP2ManufacturedOutputCustodyWritesEnabled } from '../lib/featureFlags';
+import { receiveP2ManufacturedOutputCustodyInTransaction } from './p2ManufacturedOutputCustodyService';
 import type { P2WorkOrderActor } from './p2ManufacturingWorkOrderService';
 
 const digest = (value: unknown) =>
@@ -137,6 +139,12 @@ export async function releaseP2ManufacturedOutput(
       );
     const output = found.rows[0];
     if (output.status === 'RELEASED') {
+      if (areP2ManufacturedOutputCustodyWritesEnabled())
+        await receiveP2ManufacturedOutputCustodyInTransaction(
+          client,
+          output.id,
+          actor
+        );
       await client.query('COMMIT');
       return output;
     }
@@ -198,6 +206,12 @@ export async function releaseP2ManufacturedOutput(
        released_by_role=$5,released_at=now() WHERE id=$1 RETURNING *`,
       [outputId, actor.userId, employeeId, actor.displayName, actor.role]
     );
+    if (areP2ManufacturedOutputCustodyWritesEnabled())
+      await receiveP2ManufacturedOutputCustodyInTransaction(
+        client,
+        output.id,
+        actor
+      );
     await client.query('COMMIT');
     return released.rows[0];
   } catch (error) {

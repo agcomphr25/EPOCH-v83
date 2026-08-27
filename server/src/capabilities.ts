@@ -36,6 +36,8 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   'p2.material_consumption.reverse',
   'p2.manufactured_output.record',
   'p2.manufactured_output.release',
+  'p2.manufactured_output.custody_receive',
+  'p2.manufactured_output.custody_reverse',
 
   // Traveler lifecycle
   'travelers.start',

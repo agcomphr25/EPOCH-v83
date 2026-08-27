@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 
 import { pool } from '../../db';
+import { areP2ManufacturedOutputWritesEnabled } from '../lib/featureFlags';
 
 export type P2WorkOrderActor = {
   userId: number;
@@ -795,6 +796,22 @@ export async function acceptP2WorkOrderOutput(
         'Accepted quantity cannot exceed controlled completed quantity.',
         400
       );
+    if (areP2ManufacturedOutputWritesEnabled()) {
+      const releasedOutput = await client.query(
+        `SELECT COALESCE(SUM(output_quantity),0) released_quantity
+         FROM p2_manufactured_output_authorities
+         WHERE work_order_authority_id=$1 AND status='RELEASED'`,
+        [authorityId]
+      );
+      if (
+        Number(releasedOutput.rows[0].released_quantity) <
+        input.acceptedQuantity
+      )
+        throw new P2WorkOrderError(
+          'RELEASED_OUTPUT_GENEALOGY_REQUIRED',
+          'Quality acceptance cannot exceed independently released output with immutable material Genealogy.'
+        );
+    }
     await client.query(
       `UPDATE p2_manufacturing_work_order_authorities
        SET accepted_quantity=$2,concurrency_version=concurrency_version+1,

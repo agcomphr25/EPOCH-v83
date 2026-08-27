@@ -192,6 +192,14 @@ export function areP2MaterialConsumptionWritesEnabled(): boolean {
   return envBool('P2_MATERIAL_CONSUMPTION_WRITES_ENABLED', false);
 }
 
+export function areP2ManufacturedOutputReadsEnabled(): boolean {
+  return envBool('P2_MANUFACTURED_OUTPUT_READS_ENABLED', false);
+}
+
+export function areP2ManufacturedOutputWritesEnabled(): boolean {
+  return envBool('P2_MANUFACTURED_OUTPUT_WRITES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

@@ -828,6 +828,8 @@ export const inventoryItems = pgTable('inventory_items', {
   utilizedInFacilities: boolean('utilized_in_facilities').default(false), // Used in Facilities
   utilizedInAdmin: boolean('utilized_in_admin').default(false), // Used in Admin
   utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
+  utilizedInNonInventory: boolean('utilized_in_non_inventory').notNull().default(false), // Purchased/physical item not tracked in ordinary balances
+  utilizedInCustomerSupplied: boolean('utilized_in_customer_supplied').notNull().default(false), // Customer-owned material; custody tracking remains enabled
   isPacket: boolean('is_packet').default(false), // Packet item for cutting table BOM
   isPacketPart: boolean('is_packet_part').default(false), // Part of cutting table packet
   isFabric: boolean('is_fabric').default(false), // Fabric for cutting table

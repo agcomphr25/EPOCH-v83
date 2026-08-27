@@ -708,6 +708,7 @@ import {
   type LocalCalendarEvent,
   type InsertLocalCalendarEvent,
 } from './schema';
+import { isInventoryBalanceEligible, inventoryBalanceIneligibilityReason } from '@shared/inventoryBalanceEligibility';
 import { db, pool, rawSql } from './db';
 import { recordAuditEvent } from './src/services/auditLedgerService';
 import { recordInventoryLedgerEntry } from './src/services/inventoryTransactionLedgerService';
@@ -11033,7 +11034,7 @@ export class DatabaseStorage implements IStorage {
           `[vendor-po/receive] Auto-created inventory_items placeholder for ag_part_number="${poLineItem.agPartNumber}" (poLineItemId=${poLineItemId}) so ledger row could be written. Edit Parts Management to fill metadata.`,
         );
       }
-      if (inventoryItem) {
+      if (inventoryItem && isInventoryBalanceEligible(inventoryItem)) {
         const ledgerSourceModule = 'receiving:vendor-po';
 
         // Resolve receiver display name from users table (fall back to
@@ -12181,6 +12182,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryBalance(data: InsertInventoryBalance): Promise<InventoryBalance> {
+    const [item] = await db
+      .select({
+        utilizedInNonInventory: inventoryItems.utilizedInNonInventory,
+        utilizedInServices: inventoryItems.utilizedInServices,
+        type: inventoryItems.type,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, data.agPartNumber))
+      .limit(1);
+    if (!isInventoryBalanceEligible(item)) {
+      const reason = inventoryBalanceIneligibilityReason(item);
+      throw new Error(`Inventory balance is not allowed for ${reason === 'NON_INVENTORY' ? 'Non-Inventory' : reason === 'SERVICE' ? 'Service' : 'missing'} item ${data.agPartNumber}`);
+    }
     const [balance] = await db.insert(inventoryBalances).values(data).returning();
     return balance;
   }

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'migrations/0307_p2_manufactured_component_issue_genealogy.sql'
+      - 'migrations/0308_p2_manufactured_component_issue_genealogy.sql'
       - 'server/src/services/p2ManufacturedComponentIssueService.ts'
       - 'server/src/routes/p2ManufacturingWorkOrders.ts'
       - 'server/__tests__/p2ManufacturedComponentIssueGenealogy.test.ts'
@@ -72,8 +72,8 @@ jobs:
           INSERT INTO historical_marker VALUES (1,'preserve-me');
           SQL
           before="$(psql "$DATABASE_URL" -Atc "SELECT count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM historical_marker")"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0307_p2_manufactured_component_issue_genealogy.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0307_p2_manufactured_component_issue_genealogy.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0308_p2_manufactured_component_issue_genealogy.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0308_p2_manufactured_component_issue_genealogy.sql
           after="$(psql "$DATABASE_URL" -Atc "SELECT count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM historical_marker")"
           test "$before" = "$after"
           test "$(psql "$DATABASE_URL" -Atc "SELECT count(*) FROM perm_role_capabilities prc JOIN perm_roles r ON r.id=prc.role_id WHERE r.name IN ('MANAGER','INVENTORY_MANAGER')")" = 0

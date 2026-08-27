@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) =>
   readFileSync(resolve(process.cwd(), path), 'utf8');
 const migration = read(
-  'migrations/0307_p2_manufactured_component_issue_genealogy.sql'
+  'migrations/0308_p2_manufactured_component_issue_genealogy.sql'
 );
 const service = read(
   'server/src/services/p2ManufacturedComponentIssueService.ts'
@@ -22,9 +22,9 @@ describe('Phase 11 manufactured-component issue genealogy', () => {
     );
     expect(migration).not.toMatch(/^\s*(UPDATE|DELETE)\s+/im);
     expect(
-      boot.indexOf('0307_p2_manufactured_component_issue_genealogy.sql')
+      boot.indexOf('0308_p2_manufactured_component_issue_genealogy.sql')
     ).toBeGreaterThan(
-      boot.indexOf('0306_p2_manufactured_output_custody_foundation.sql')
+      boot.indexOf('0307_inventory_utilized_in_balance_eligibility.sql')
     );
   });
 

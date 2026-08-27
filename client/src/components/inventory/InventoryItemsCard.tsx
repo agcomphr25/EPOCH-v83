@@ -393,6 +393,8 @@ interface InventoryFormData {
   utilizedInFacilities: boolean;
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
+  utilizedInNonInventory: boolean;
+  utilizedInCustomerSupplied: boolean;
   isPacket: boolean;
   isFabric: boolean;
   hasSds: boolean;
@@ -620,14 +622,16 @@ const InventoryForm = ({
     }
   }, [formData.agPartNumber, editingItem, checkDuplicate]);
 
-  type UtilizedKey = 'utilizedInPL1' | 'utilizedInPL2' | 'utilizedInPL3' | 'utilizedInFacilities' | 'utilizedInAdmin' | 'utilizedInServices';
-  const utilizedOptions: { key: UtilizedKey; label: string }[] = [
+  type UtilizedKey = 'utilizedInPL1' | 'utilizedInPL2' | 'utilizedInPL3' | 'utilizedInFacilities' | 'utilizedInAdmin' | 'utilizedInServices' | 'utilizedInNonInventory' | 'utilizedInCustomerSupplied';
+  const utilizedOptions: { key: UtilizedKey; label: string; help?: string }[] = [
     { key: 'utilizedInPL1', label: 'PL1' },
     { key: 'utilizedInPL2', label: 'PL2' },
     { key: 'utilizedInPL3', label: 'PL3' },
     { key: 'utilizedInFacilities', label: 'Facilities' },
     { key: 'utilizedInAdmin', label: 'Admin' },
     { key: 'utilizedInServices', label: 'Services' },
+    { key: 'utilizedInNonInventory', label: 'Non-Inventory', help: 'Physical or purchasable item that does not require an inventory balance.' },
+    { key: 'utilizedInCustomerSupplied', label: 'Customer-Supplied', help: 'Material or item supplied by a customer and controlled separately from company-owned inventory.' },
   ];
   const selectedUtilizedLabels = utilizedOptions.filter(o => formData[o.key]).map(o => o.label);
 
@@ -887,16 +891,19 @@ const InventoryForm = ({
                 <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-48 p-2" align="start">
-              {utilizedOptions.map(({ key, label }) => (
-                <div key={key} className="flex items-center space-x-2 py-1.5 px-1 rounded hover:bg-accent cursor-pointer" onClick={() => onCheckboxChange(key, !formData[key])}>
+            <PopoverContent className="w-80 p-2" align="start">
+              {utilizedOptions.map(({ key, label, help }) => (
+                <div key={key} className="flex items-start space-x-2 py-1.5 px-1 rounded hover:bg-accent cursor-pointer" onClick={() => onCheckboxChange(key, !formData[key])}>
                   <Checkbox
                     id={key}
                     checked={formData[key]}
                     onCheckedChange={(checked) => onCheckboxChange(key, checked as boolean)}
                     data-testid={`checkbox-${key}`}
                   />
-                  <Label htmlFor={key} className="cursor-pointer text-sm font-normal">{label}</Label>
+                  <div>
+                    <Label htmlFor={key} className="cursor-pointer text-sm font-normal">{label}</Label>
+                    {help && <p className="text-xs text-muted-foreground mt-0.5">{help}</p>}
+                  </div>
                 </div>
               ))}
             </PopoverContent>
@@ -1822,6 +1829,10 @@ function inventoryItemMatchesUtilizedFilter(item: InventoryItem, utilizedFilter:
       return item.utilizedInAdmin;
     case 'services':
       return item.utilizedInServices;
+    case 'non-inventory':
+      return item.utilizedInNonInventory;
+    case 'customer-supplied':
+      return item.utilizedInCustomerSupplied;
     default:
       return true;
   }
@@ -1867,6 +1878,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     utilizedInFacilities: false,
     utilizedInAdmin: false,
     utilizedInServices: false,
+    utilizedInNonInventory: false,
+    utilizedInCustomerSupplied: false,
   });
 
   const [formData, setFormData] = useState<InventoryFormData>({
@@ -1913,6 +1926,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     utilizedInFacilities: false,
     utilizedInAdmin: false,
     utilizedInServices: false,
+    utilizedInNonInventory: false,
+    utilizedInCustomerSupplied: false,
     isPacket: false,
     isFabric: false,
     hasSds: false,
@@ -2605,6 +2620,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInFacilities: false,
       utilizedInAdmin: false,
       utilizedInServices: false,
+      utilizedInNonInventory: false,
+      utilizedInCustomerSupplied: false,
       isPacket: false,
       isFabric: false,
       hasSds: false,
@@ -2759,6 +2776,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInFacilities: item.utilizedInFacilities || false,
       utilizedInAdmin: item.utilizedInAdmin || false,
       utilizedInServices: item.utilizedInServices || false,
+      utilizedInNonInventory: (item as any).utilizedInNonInventory || false,
+      utilizedInCustomerSupplied: (item as any).utilizedInCustomerSupplied || false,
       isPacket: (item as any).isPacket || false,
       isFabric: item.isFabric || false,
       hasSds: item.hasSds || false,
@@ -2849,6 +2868,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         utilizedInFacilities: formData.utilizedInFacilities,
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
+        utilizedInNonInventory: formData.utilizedInNonInventory,
+        utilizedInCustomerSupplied: formData.utilizedInCustomerSupplied,
         isFabric: formData.isFabric,
         hasSds: formData.hasSds,
         hasTds: formData.hasTds,
@@ -3046,6 +3067,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         utilizedInFacilities: false,
         utilizedInAdmin: false,
         utilizedInServices: false,
+        utilizedInNonInventory: false,
+        utilizedInCustomerSupplied: false,
       });
       setSelectedItems(new Set());
       queryClient.invalidateQueries({
@@ -3073,6 +3096,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInFacilities: bulkUtilizedFields.utilizedInFacilities,
       utilizedInAdmin: bulkUtilizedFields.utilizedInAdmin,
       utilizedInServices: bulkUtilizedFields.utilizedInServices,
+      utilizedInNonInventory: bulkUtilizedFields.utilizedInNonInventory,
+      utilizedInCustomerSupplied: bulkUtilizedFields.utilizedInCustomerSupplied,
     };
 
     bulkUpdateUtilizedMutation.mutate({
@@ -3329,6 +3354,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 <SelectItem value="facilities">Facilities Only</SelectItem>
                 <SelectItem value="admin">Admin Only</SelectItem>
                 <SelectItem value="services">Services Only</SelectItem>
+                <SelectItem value="non-inventory">Non-Inventory Only</SelectItem>
+                <SelectItem value="customer-supplied">Customer-Supplied Only</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -3723,12 +3750,20 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                             Services
                           </span>
                         )}
+                        {item.utilizedInNonInventory && (
+                          <span className="px-2 py-1 text-xs bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-100 rounded">Non-Inventory</span>
+                        )}
+                        {item.utilizedInCustomerSupplied && (
+                          <span className="px-2 py-1 text-xs bg-cyan-100 dark:bg-cyan-900 text-cyan-800 dark:text-cyan-100 rounded">Customer-Supplied</span>
+                        )}
                         {!item.utilizedInPL1 &&
                           !item.utilizedInPL2 &&
                           !item.utilizedInPL3 &&
                           !item.utilizedInFacilities &&
                           !item.utilizedInAdmin &&
                           !item.utilizedInServices &&
+                          !item.utilizedInNonInventory &&
+                          !item.utilizedInCustomerSupplied &&
                           '-'}
                       </div>
                     </td>
@@ -3842,6 +3877,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     <SelectItem value="facilities">Facilities Only</SelectItem>
                     <SelectItem value="admin">Admin Only</SelectItem>
                     <SelectItem value="services">Services Only</SelectItem>
+                    <SelectItem value="non-inventory">Non-Inventory Only</SelectItem>
+                    <SelectItem value="customer-supplied">Customer-Supplied Only</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -3942,7 +3979,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                                       {item.utilizedInFacilities && <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-100 rounded">Facilities</span>}
                                       {item.utilizedInAdmin && <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded">Admin</span>}
                                       {item.utilizedInServices && <span className="px-2 py-0.5 text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 rounded">Services</span>}
-                                      {!item.utilizedInPL1 && !item.utilizedInPL2 && !item.utilizedInPL3 && !item.utilizedInFacilities && !item.utilizedInAdmin && !item.utilizedInServices && '—'}
+                                      {item.utilizedInNonInventory && <span className="px-2 py-0.5 text-xs bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-100 rounded">Non-Inventory</span>}
+                                      {item.utilizedInCustomerSupplied && <span className="px-2 py-0.5 text-xs bg-cyan-100 dark:bg-cyan-900 text-cyan-800 dark:text-cyan-100 rounded">Customer-Supplied</span>}
+                                      {!item.utilizedInPL1 && !item.utilizedInPL2 && !item.utilizedInPL3 && !item.utilizedInFacilities && !item.utilizedInAdmin && !item.utilizedInServices && !item.utilizedInNonInventory && !item.utilizedInCustomerSupplied && '—'}
                                     </div>
                                   </td>
                                   <td className="px-4 py-2">
@@ -4615,6 +4654,30 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     Services
                   </Label>
                 </div>
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="bulk-utilizedInNonInventory"
+                    checked={bulkUtilizedFields.utilizedInNonInventory}
+                    onCheckedChange={(checked) => setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInNonInventory: checked as boolean })}
+                    data-testid="checkbox-bulk-utilizedInNonInventory"
+                  />
+                  <div>
+                    <Label htmlFor="bulk-utilizedInNonInventory" className="cursor-pointer">Non-Inventory</Label>
+                    <p className="text-xs text-muted-foreground">Physical or purchasable item that does not require an inventory balance.</p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="bulk-utilizedInCustomerSupplied"
+                    checked={bulkUtilizedFields.utilizedInCustomerSupplied}
+                    onCheckedChange={(checked) => setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInCustomerSupplied: checked as boolean })}
+                    data-testid="checkbox-bulk-utilizedInCustomerSupplied"
+                  />
+                  <div>
+                    <Label htmlFor="bulk-utilizedInCustomerSupplied" className="cursor-pointer">Customer-Supplied</Label>
+                    <p className="text-xs text-muted-foreground">Material or item supplied by a customer and controlled separately from company-owned inventory.</p>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="text-sm text-muted-foreground">
@@ -4634,6 +4697,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   utilizedInFacilities: false,
                   utilizedInAdmin: false,
                   utilizedInServices: false,
+                  utilizedInNonInventory: false,
+                  utilizedInCustomerSupplied: false,
                 });
               }}
               data-testid="button-cancel-bulk-utilized"

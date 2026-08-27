@@ -24,11 +24,11 @@ describe('Phase 9 controlled material scanner client gate', () => {
     expect(scanner).toContain("can('p2.material_consumption.record')");
     expect(scanner).toContain("icn.startsWith('P2RCV:')");
     expect(scanner).toContain("p2TravelerBarcode?.startsWith('P2TRV:')");
-    expect(scanner).toContain(
-      "window.sessionStorage.getItem('epoch.operatorAuth.token')"
+    expect(scanner).toMatch(
+      /window\.sessionStorage\.getItem\(\s*'epoch\.operatorAuth\.token'\s*\)/
     );
-    expect(scanner).toContain(
-      "apiRequest('/api/p2-material-consumption/resolve'"
+    expect(scanner).toMatch(
+      /apiRequest\(\s*'\/api\/p2-material-consumption\/resolve'/
     );
     expect(scanner).toContain('Released BOM demand path');
     expect(scanner).toContain('materialRequirementId: p2MaterialRequirementId');

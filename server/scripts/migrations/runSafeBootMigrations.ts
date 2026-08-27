@@ -357,6 +357,7 @@ export const safeMigrationFiles = [
   '0300_p2_frozen_production_demand_foundation.sql',
   '0301_p2_manufacturing_work_order_queue_foundation.sql',
   '0302_p2_traveler_provisioning_coverage_ledger.sql',
+  '0303_p2_receiving_barcode_identities.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -460,6 +461,7 @@ export const criticalMigrationFiles = new Set([
   '0300_p2_frozen_production_demand_foundation.sql',
   '0301_p2_manufacturing_work_order_queue_foundation.sql',
   '0302_p2_traveler_provisioning_coverage_ledger.sql',
+  '0303_p2_receiving_barcode_identities.sql',
 ]);
 
 export async function runSafeBootMigrations() {

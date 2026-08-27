@@ -2900,9 +2900,8 @@ export default function TravelerExecution() {
                                         {(task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') && !fieldInputDisabled ? (
                                           <div className="space-y-3">
                                             <MaterialScanner
-                                              travelerId={traveler.id}
+                                              travelerId={traveler.id} p2TravelerBarcode={traveler.internalControlNumber}
                                               travelerStepId={currentStep.id}
-                                              p2TravelerBarcode={traveler.internalControlNumber}
                                               allowFreeTextEntry={true}
                                               onMaterialConsumed={(result) => {
                                               const taskFieldKeys = new Set(

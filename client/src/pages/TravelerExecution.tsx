@@ -116,8 +116,18 @@ interface TravelerTask {
   signatureRole: string | null;
   requiresCertification: boolean;
   instructionPack: {
-    workInstructionRefs?: { documentId: string; title?: string; pageRange?: string; anchor?: string }[];
-    aiSnippets?: { title: string; bullets: string[]; sourceDocumentId?: string; confidence?: number }[];
+    workInstructionRefs?: {
+      documentId: string;
+      title?: string;
+      pageRange?: string;
+      anchor?: string;
+    }[];
+    aiSnippets?: {
+      title: string;
+      bullets: string[];
+      sourceDocumentId?: string;
+      confidence?: number;
+    }[];
     specialNotes?: string;
     media?: { type: 'image' | 'pdf'; documentId: string; caption?: string }[];
   } | null;
@@ -205,19 +215,37 @@ const firstTraceValue = (...values: Array<string | undefined | null>) =>
 
 const addGeneratedTraceFieldAliases = (values: Record<string, string>) => {
   const supplier = firstTraceValue(values.supplier, values.material_supplier);
-  const manufacturer = firstTraceValue(values.manufacturer, values.material_brand, supplier);
+  const manufacturer = firstTraceValue(
+    values.manufacturer,
+    values.material_brand,
+    supplier
+  );
 
   return {
     ...values,
     manufacturer,
     material_brand: firstTraceValue(values.material_brand, manufacturer),
-    trace_internalcontrolnumber: firstTraceValue(values.internalControlNumber, values.material_internal_control_number, values.material_icn),
+    trace_internalcontrolnumber: firstTraceValue(
+      values.internalControlNumber,
+      values.material_internal_control_number,
+      values.material_icn
+    ),
     trace_supplier: supplier,
-    trace_inventorypartnumber: firstTraceValue(values.inventoryPartNumber, values.material_part_number),
-    trace_batchlotnumber: firstTraceValue(values.batchLotNumber, values.material_batch_number, values.material_lot),
+    trace_inventorypartnumber: firstTraceValue(
+      values.inventoryPartNumber,
+      values.material_part_number
+    ),
+    trace_batchlotnumber: firstTraceValue(
+      values.batchLotNumber,
+      values.material_batch_number,
+      values.material_lot
+    ),
     trace_manufacturer: manufacturer,
     trace_rollnumber: firstTraceValue(values.rollNumber),
-    trace_expirationdate: firstTraceValue(values.expirationDate, values.material_expiration_date),
+    trace_expirationdate: firstTraceValue(
+      values.expirationDate,
+      values.material_expiration_date
+    ),
     trace_receiveddate: firstTraceValue(values.receivedDate),
   };
 };
@@ -246,14 +274,24 @@ const TASK_TYPE_ICONS: Record<string, any> = {
   NOTES: FileText,
 };
 
-const PHASE_CONFIG: Record<string, { label: string; icon: any; color: string; bgColor: string; borderColor: string; description: string }> = {
+const PHASE_CONFIG: Record<
+  string,
+  {
+    label: string;
+    icon: any;
+    color: string;
+    bgColor: string;
+    borderColor: string;
+    description: string;
+  }
+> = {
   START: {
     label: 'Start Phase',
     icon: ScanBarcode,
     color: 'text-blue-700',
     bgColor: 'bg-blue-50',
     borderColor: 'border-blue-200',
-    description: 'Material scans, tooling verification, technician assignment'
+    description: 'Material scans, tooling verification, technician assignment',
   },
   WORK: {
     label: 'Work Phase',
@@ -261,7 +299,7 @@ const PHASE_CONFIG: Record<string, { label: string; icon: any; color: string; bg
     color: 'text-amber-700',
     bgColor: 'bg-amber-50',
     borderColor: 'border-amber-200',
-    description: 'Process data entry, special process parameters'
+    description: 'Process data entry, special process parameters',
   },
   FINISH: {
     label: 'Finish Phase',
@@ -269,7 +307,7 @@ const PHASE_CONFIG: Record<string, { label: string; icon: any; color: string; bg
     color: 'text-green-700',
     bgColor: 'bg-green-50',
     borderColor: 'border-green-200',
-    description: 'QC checks, acceptance criteria, final sign-off'
+    description: 'QC checks, acceptance criteria, final sign-off',
   },
 };
 
@@ -284,8 +322,12 @@ export default function TravelerExecution() {
   const [currentStepId, setCurrentStepId] = useState<string | null>(null);
   const [showSignDialog, setShowSignDialog] = useState(false);
   const [showInventoryPicker, setShowInventoryPicker] = useState(false);
-  const [inventoryPickerTaskId, setInventoryPickerTaskId] = useState<string | null>(null);
-  const [pickerValidations, setPickerValidations] = useState<Record<string, Record<string, any>>>({});
+  const [inventoryPickerTaskId, setInventoryPickerTaskId] = useState<
+    string | null
+  >(null);
+  const [pickerValidations, setPickerValidations] = useState<
+    Record<string, Record<string, any>>
+  >({});
   const [signingTaskId, setSigningTaskId] = useState<string | null>(null);
   const [signingRole, setSigningRole] = useState<string | null>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
@@ -305,50 +347,104 @@ export default function TravelerExecution() {
   } | null>(null);
   const [activeBadge, setActiveBadge] = useState('');
   const [activeTechName, setActiveTechName] = useState('');
-  const [badgeLookupStatus, setBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found' | 'error'>('idle');
+  const [badgeLookupStatus, setBadgeLookupStatus] = useState<
+    'idle' | 'loading' | 'found' | 'not_found' | 'error'
+  >('idle');
   const [stepNotes, setStepNotes] = useState('');
-  const [resolvedEmployee, setResolvedEmployee] = useState<{ id: number; name: string; employeeCode: string; department: string | null } | null>(null);
+  const [resolvedEmployee, setResolvedEmployee] = useState<{
+    id: number;
+    name: string;
+    employeeCode: string;
+    department: string | null;
+  } | null>(null);
   const [nameLookupPending, setNameLookupPending] = useState(false);
-  const badgeLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const badgeLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const nameLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [signBadgeLookupStatus, setSignBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found'>('idle');
-  const [signResolvedEmployee, setSignResolvedEmployee] = useState<{ id: number; name: string; employeeCode: string; department: string | null } | null>(null);
-  const signBadgeLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [fieldValues, setFieldValues] = useState<Record<string, Record<string, string>>>({});
+  const [signBadgeLookupStatus, setSignBadgeLookupStatus] = useState<
+    'idle' | 'loading' | 'found' | 'not_found'
+  >('idle');
+  const [signResolvedEmployee, setSignResolvedEmployee] = useState<{
+    id: number;
+    name: string;
+    employeeCode: string;
+    department: string | null;
+  } | null>(null);
+  const signBadgeLookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const [fieldValues, setFieldValues] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [blockReason, setBlockReason] = useState('');
   const [instructionSheetOpen, setInstructionSheetOpen] = useState(false);
-  const [instructionSheetTaskId, setInstructionSheetTaskId] = useState<string | null>(null);
+  const [instructionSheetTaskId, setInstructionSheetTaskId] = useState<
+    string | null
+  >(null);
   const [wiModalOpen, setWiModalOpen] = useState(false);
-  const [wiModalRef, setWiModalRef] = useState<{ documentId: string; title?: string; pageRange?: string; anchor?: string } | null>(null);
+  const [wiModalRef, setWiModalRef] = useState<{
+    documentId: string;
+    title?: string;
+    pageRange?: string;
+    anchor?: string;
+  } | null>(null);
   const [showTimerModal, setShowTimerModal] = useState(false);
-  const [timerStartedForStep, setTimerStartedForStep] = useState<Record<string, boolean>>({});
+  const [timerStartedForStep, setTimerStartedForStep] = useState<
+    Record<string, boolean>
+  >({});
 
   // ── Labor budget override request (shown when WAD budget is BLOCKED) ──────
-  const [overrideForm, setOverrideForm] = useState({ operatorEmployeeId: '', operatorDisplayName: '', requestedHours: '2', note: '' });
-  const [overrideSubmittedId, setOverrideSubmittedId] = useState<number | null>(null);
-  const [overrideCanonicalOpId, setOverrideCanonicalOpId] = useState<string | null>(null);
+  const [overrideForm, setOverrideForm] = useState({
+    operatorEmployeeId: '',
+    operatorDisplayName: '',
+    requestedHours: '2',
+    note: '',
+  });
+  const [overrideSubmittedId, setOverrideSubmittedId] = useState<number | null>(
+    null
+  );
+  const [overrideCanonicalOpId, setOverrideCanonicalOpId] = useState<
+    string | null
+  >(null);
   // ─────────────────────────────────────────────────────────────────────────
 
   // ── Job-switch scan (barcode-driven auto job-switch) ────────────────────
   const [jobSwitchEmployeeId, setJobSwitchEmployeeId] = useState('');
-  const [jobSwitchStatus, setJobSwitchStatus] = useState<'idle' | 'transitioning' | 'success' | 'error'>('idle');
+  const [jobSwitchStatus, setJobSwitchStatus] = useState<
+    'idle' | 'transitioning' | 'success' | 'error'
+  >('idle');
   interface JobSwitchApiResult {
     switched?: boolean;
-    closed?: { id: number; chargeCode?: string | null; travelerId?: string | null } | null;
+    closed?: {
+      id: number;
+      chargeCode?: string | null;
+      travelerId?: string | null;
+    } | null;
     created?: { id: number; chargeCode?: string | null };
     entry?: { id: number; chargeCode?: string | null };
-    chargeContext: { chargeCode: string; travelerNumber: string; wadNumber: string };
+    chargeContext: {
+      chargeCode: string;
+      travelerNumber: string;
+      wadNumber: string;
+    };
     warning?: string;
   }
-  const [jobSwitchResult, setJobSwitchResult] = useState<JobSwitchApiResult | null>(null);
+  const [jobSwitchResult, setJobSwitchResult] =
+    useState<JobSwitchApiResult | null>(null);
   const [jobSwitchError, setJobSwitchError] = useState<string | null>(null);
   // ─────────────────────────────────────────────────────────────────────────
 
-  const { data: activeTimerData, refetch: refetchActiveTimer } = useQuery<{ run: any; program: any }>({
+  const { data: activeTimerData, refetch: refetchActiveTimer } = useQuery<{
+    run: any;
+    program: any;
+  }>({
     queryKey: ['/api/production/timers/runs/active', currentStepId],
     queryFn: async () => {
-      const res = await fetch(`/api/production/timers/runs/active?travelerStepId=${currentStepId}`);
+      const res = await fetch(
+        `/api/production/timers/runs/active?travelerStepId=${currentStepId}`
+      );
       if (!res.ok) return { run: null, program: null };
       return res.json();
     },
@@ -360,14 +456,24 @@ export default function TravelerExecution() {
   const [showAdminForceSign, setShowAdminForceSign] = useState(false);
   const [adminForceReason, setAdminForceReason] = useState('');
   const [showGateOverrideDialog, setShowGateOverrideDialog] = useState(false);
-  const [gateOverridePendingStep, setGateOverridePendingStep] = useState<{ stepId: string; badge: string; techName: string } | null>(null);
-  const [gateOverrideBlockedReason, setGateOverrideBlockedReason] = useState('');
-  const [gateOverrideSupervisorBadge, setGateOverrideSupervisorBadge] = useState('');
+  const [gateOverridePendingStep, setGateOverridePendingStep] = useState<{
+    stepId: string;
+    badge: string;
+    techName: string;
+  } | null>(null);
+  const [gateOverrideBlockedReason, setGateOverrideBlockedReason] =
+    useState('');
+  const [gateOverrideSupervisorBadge, setGateOverrideSupervisorBadge] =
+    useState('');
   const [gateOverrideReason, setGateOverrideReason] = useState('');
   const [showQcApprovalDialog, setShowQcApprovalDialog] = useState(false);
   const [qcApprovalData, setQcApprovalData] = useState<{
     taskId: string;
-    failedChecks: Array<{ fieldKey: string; fieldLabel: string; measuredResult?: string }>;
+    failedChecks: Array<{
+      fieldKey: string;
+      fieldLabel: string;
+      measuredResult?: string;
+    }>;
     fieldVals: Record<string, string>;
     fieldValidations?: Record<string, any>;
   } | null>(null);
@@ -396,7 +502,13 @@ export default function TravelerExecution() {
   // Labor context query — fetched per-step for NOT_STARTED steps (Task #1235)
   interface LaborContext {
     chargeCode: string | null;
-    chargeCodeResolvedFrom: 'wad_default' | 'traveler_default' | 'wad_department' | 'department_match' | 'wad_wizard' | null;
+    chargeCodeResolvedFrom:
+      | 'wad_default'
+      | 'traveler_default'
+      | 'wad_department'
+      | 'department_match'
+      | 'wad_wizard'
+      | null;
     chargeCodeError: string | null;
     isOverrun: boolean;
     nearlyExhausted: boolean;
@@ -417,10 +529,21 @@ export default function TravelerExecution() {
   const laborContextEmployeeId = resolvedEmployee?.id ?? null;
 
   const { data: laborContext } = useQuery<LaborContext | null>({
-    queryKey: ['/api/travelers', travelerId, 'steps', currentStepId, 'labor-context', laborContextEmployeeId],
+    queryKey: [
+      '/api/travelers',
+      travelerId,
+      'steps',
+      currentStepId,
+      'labor-context',
+      laborContextEmployeeId,
+    ],
     queryFn: () => {
-      const url = new URL(`/api/travelers/${travelerId}/steps/${currentStepId}/labor-context`, window.location.origin);
-      if (laborContextEmployeeId) url.searchParams.set('employeeId', String(laborContextEmployeeId));
+      const url = new URL(
+        `/api/travelers/${travelerId}/steps/${currentStepId}/labor-context`,
+        window.location.origin
+      );
+      if (laborContextEmployeeId)
+        url.searchParams.set('employeeId', String(laborContextEmployeeId));
       return fetch(url.toString()).then(async (res) => {
         if (!res.ok) return null;
         return res.json();
@@ -450,10 +573,17 @@ export default function TravelerExecution() {
       setBadgeLookupStatus('loading');
       badgeLookupTimerRef.current = setTimeout(async () => {
         try {
-          const resp = await fetch(`/api/p2-traveler/badge-lookup/${encodeURIComponent(value.trim())}`);
+          const resp = await fetch(
+            `/api/p2-traveler/badge-lookup/${encodeURIComponent(value.trim())}`
+          );
           if (resp.ok) {
             const emp = await resp.json();
-            setResolvedEmployee({ id: emp.id, name: emp.name, employeeCode: emp.employeeCode, department: null });
+            setResolvedEmployee({
+              id: emp.id,
+              name: emp.name,
+              employeeCode: emp.employeeCode,
+              department: null,
+            });
             setSignatureData((prev) => ({ ...prev, signedByName: emp.name }));
             setBadgeLookupStatus('found');
           } else if (resp.status === 404) {
@@ -469,7 +599,12 @@ export default function TravelerExecution() {
   };
 
   const handleSignBadgeScanInput = (value: string) => {
-    setSignatureData((prev) => ({ ...prev, signedBy: value, badgeScan: value, signedByName: '' }));
+    setSignatureData((prev) => ({
+      ...prev,
+      signedBy: value,
+      badgeScan: value,
+      signedByName: '',
+    }));
     setSignResolvedEmployee(null);
     setSignBadgeLookupStatus('idle');
 
@@ -482,7 +617,8 @@ export default function TravelerExecution() {
       signBadgeLookupTimerRef.current = setTimeout(async () => {
         await runSignBadgeLookup(value.trim(), {
           resolveBadge: fetchResolveBadge,
-          setSignedByName: (name) => setSignatureData((prev) => ({ ...prev, signedByName: name })),
+          setSignedByName: (name) =>
+            setSignatureData((prev) => ({ ...prev, signedByName: name })),
           setSignResolvedEmployee,
           setSignBadgeLookupStatus,
         });
@@ -492,28 +628,57 @@ export default function TravelerExecution() {
 
   const normalizeInstructionPack = (rawPack: any) => {
     if (!rawPack) return null;
-    const normalizedRefs = (rawPack.workInstructionRefs || []).map((r: any) => ({
-      documentId: r.documentId || '',
-      title: r.title || r.documentTitle || undefined,
-      pageRange: r.pageRange || undefined,
-      anchor: r.anchor || undefined,
-    }));
+    const normalizedRefs = (rawPack.workInstructionRefs || []).map(
+      (r: any) => ({
+        documentId: r.documentId || '',
+        title: r.title || r.documentTitle || undefined,
+        pageRange: r.pageRange || undefined,
+        anchor: r.anchor || undefined,
+      })
+    );
     const normalizedSnippets = (rawPack.aiSnippets || []).map((s: any) =>
       typeof s === 'string'
         ? { title: 'Tip', bullets: [s] }
-        : { title: s.title || 'Tip', bullets: s.bullets || [], sourceDocumentId: s.sourceDocumentId, confidence: s.confidence }
+        : {
+            title: s.title || 'Tip',
+            bullets: s.bullets || [],
+            sourceDocumentId: s.sourceDocumentId,
+            confidence: s.confidence,
+          }
     );
     const pack = {
-      workInstructionRefs: normalizedRefs as { documentId: string; title?: string; pageRange?: string; anchor?: string }[],
-      aiSnippets: normalizedSnippets as { title: string; bullets: string[]; sourceDocumentId?: string; confidence?: number }[],
+      workInstructionRefs: normalizedRefs as {
+        documentId: string;
+        title?: string;
+        pageRange?: string;
+        anchor?: string;
+      }[],
+      aiSnippets: normalizedSnippets as {
+        title: string;
+        bullets: string[];
+        sourceDocumentId?: string;
+        confidence?: number;
+      }[],
       specialNotes: rawPack.specialNotes as string | undefined,
-      media: (rawPack.media || []) as { type: 'image' | 'pdf'; documentId: string; caption?: string }[],
+      media: (rawPack.media || []) as {
+        type: 'image' | 'pdf';
+        documentId: string;
+        caption?: string;
+      }[],
     };
-    const hasContent = pack.workInstructionRefs.length > 0 || pack.aiSnippets.length > 0 || pack.specialNotes || pack.media.length > 0;
+    const hasContent =
+      pack.workInstructionRefs.length > 0 ||
+      pack.aiSnippets.length > 0 ||
+      pack.specialNotes ||
+      pack.media.length > 0;
     return hasContent ? pack : null;
   };
 
-  const { data: travelerData, isLoading, refetch } = useQuery<TravelerWithDetails>({
+  const {
+    data: travelerData,
+    isLoading,
+    refetch,
+  } = useQuery<TravelerWithDetails>({
     queryKey: ['/api/travelers', travelerId, 'details'],
     queryFn: () =>
       fetch(`/api/travelers/${travelerId}?details=true`).then((res) => {
@@ -552,10 +717,17 @@ export default function TravelerExecution() {
   }, [events]);
 
   // Labor budget status for the WAD linked to this traveler
-  const { data: wadLaborStatus } = useQuery<{ status: string; totalHours: number; totalBudget: number | null; percentUsed: number | null } | null>({
+  const { data: wadLaborStatus } = useQuery<{
+    status: string;
+    totalHours: number;
+    totalBudget: number | null;
+    percentUsed: number | null;
+  } | null>({
     queryKey: ['/api/work-orders', traveler?.workOrderId, 'labor-status'],
     queryFn: async () => {
-      const res = await fetch(`/api/work-orders/${traveler!.workOrderId}/labor-status`);
+      const res = await fetch(
+        `/api/work-orders/${traveler!.workOrderId}/labor-status`
+      );
       if (!res.ok) return null;
       return res.json();
     },
@@ -563,85 +735,170 @@ export default function TravelerExecution() {
     refetchInterval: 30000,
   });
 
-  interface OverrideStatusItem { id: number; status: string; expiresAt: string | null; supervisorNote: string | null }
-  interface OverrideCreateResponse { override: { id: number; operatorEmployeeId: string } }
+  interface OverrideStatusItem {
+    id: number;
+    status: string;
+    expiresAt: string | null;
+    supervisorNote: string | null;
+  }
+  interface OverrideCreateResponse {
+    override: { id: number; operatorEmployeeId: string };
+  }
 
   // Override request mutation for blocked WAD budget
-  const overrideMutation = useMutation<OverrideCreateResponse, Error, typeof overrideForm>({
+  const overrideMutation = useMutation<
+    OverrideCreateResponse,
+    Error,
+    typeof overrideForm
+  >({
     mutationFn: async (data) => {
-      return await apiRequest(`/api/work-orders/production/${traveler!.workOrderId}/budget-overrides`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return await apiRequest(
+        `/api/work-orders/production/${traveler!.workOrderId}/budget-overrides`,
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     },
     onSuccess: (result) => {
       const ov = result.override;
       setOverrideSubmittedId(ov?.id ?? null);
-      setOverrideCanonicalOpId(ov?.operatorEmployeeId ?? overrideForm.operatorEmployeeId);
-      toast({ title: 'Override request submitted', description: 'Waiting for supervisor approval.' });
+      setOverrideCanonicalOpId(
+        ov?.operatorEmployeeId ?? overrideForm.operatorEmployeeId
+      );
+      toast({
+        title: 'Override request submitted',
+        description: 'Waiting for supervisor approval.',
+      });
     },
     onError: (err) => {
       let msg = err.message;
       try {
-        const b = JSON.parse(err.message) as { message?: string; existingOverride?: { id: number; operatorEmployeeId: string } };
+        const b = JSON.parse(err.message) as {
+          message?: string;
+          existingOverride?: { id: number; operatorEmployeeId: string };
+        };
         if (b?.message) msg = b.message;
-        if (b?.existingOverride) { setOverrideSubmittedId(b.existingOverride.id); setOverrideCanonicalOpId(b.existingOverride.operatorEmployeeId); return; }
-      } catch { /* ignore */ }
-      toast({ title: 'Override request failed', description: msg, variant: 'destructive' });
+        if (b?.existingOverride) {
+          setOverrideSubmittedId(b.existingOverride.id);
+          setOverrideCanonicalOpId(b.existingOverride.operatorEmployeeId);
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      toast({
+        title: 'Override request failed',
+        description: msg,
+        variant: 'destructive',
+      });
     },
   });
 
   // Poll for override approval status
   const { data: overrideStatusList } = useQuery<OverrideStatusItem[]>({
-    queryKey: ['/api/work-orders/production', traveler?.workOrderId, 'budget-overrides', overrideCanonicalOpId],
+    queryKey: [
+      '/api/work-orders/production',
+      traveler?.workOrderId,
+      'budget-overrides',
+      overrideCanonicalOpId,
+    ],
     queryFn: async () => {
-      const res = await fetch(`/api/work-orders/production/${traveler!.workOrderId}/budget-overrides?operatorEmployeeId=${encodeURIComponent(overrideCanonicalOpId!)}`);
+      const res = await fetch(
+        `/api/work-orders/production/${traveler!.workOrderId}/budget-overrides?operatorEmployeeId=${encodeURIComponent(overrideCanonicalOpId!)}`
+      );
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!overrideSubmittedId && !!overrideCanonicalOpId && !!traveler?.workOrderId,
+    enabled:
+      !!overrideSubmittedId &&
+      !!overrideCanonicalOpId &&
+      !!traveler?.workOrderId,
     refetchInterval: (query) => {
       const list = query.state.data ?? [];
-      const ov = list.find(o => o.id === overrideSubmittedId);
+      const ov = list.find((o) => o.id === overrideSubmittedId);
       return ov?.status === 'PENDING' ? 3000 : false;
     },
   });
 
-  const submittedOverride = overrideStatusList?.find(o => o.id === overrideSubmittedId);
+  const submittedOverride = overrideStatusList?.find(
+    (o) => o.id === overrideSubmittedId
+  );
 
   interface PartRoutingData {
     id: string;
     partNumber: string;
-    departmentConfig?: Record<string, {
-      timerConfig?: {
-        enabled: boolean;
-        defaultProgramId?: string;
-        defaultProgramName?: string;
-      };
-      customDataFields?: { fieldName: string; fieldType: string; isRequired: boolean }[];
-      startCustomDataFields?: { fieldName: string; fieldType: string; isRequired: boolean }[];
-      finishCustomDataFields?: { fieldName: string; fieldType: string; isRequired: boolean }[];
-      qcStandards?: { standard: string; tolerance: string; requirement: string }[];
-      startQcStandards?: { standard: string; tolerance: string; requirement: string }[];
-      finishQcStandards?: { standard: string; tolerance: string; requirement: string }[];
-      materials?: { partId: string; partNumber: string; partName: string; requiredFields?: string[]; entryMethod?: string }[];
-      startChecks?: { title: string; taskType?: string; required?: boolean }[];
-      workChecks?: { title: string; taskType?: string; required?: boolean }[];
-      finishChecks?: { title: string; taskType?: string; required?: boolean }[];
-      ovenCuringSteps?: { temperature: string; time: string }[];
-      instructionPack?: {
-        workInstructionRefs?: any[];
-        aiSnippets?: any[];
-        specialNotes?: string;
-        media?: any[];
-      };
-      signatureConfig?: {
-        startRequiresSignature: boolean;
-        finishRequiresSignature: boolean;
-        requiredSignatures: string[];
-      };
-    }>;
+    departmentConfig?: Record<
+      string,
+      {
+        timerConfig?: {
+          enabled: boolean;
+          defaultProgramId?: string;
+          defaultProgramName?: string;
+        };
+        customDataFields?: {
+          fieldName: string;
+          fieldType: string;
+          isRequired: boolean;
+        }[];
+        startCustomDataFields?: {
+          fieldName: string;
+          fieldType: string;
+          isRequired: boolean;
+        }[];
+        finishCustomDataFields?: {
+          fieldName: string;
+          fieldType: string;
+          isRequired: boolean;
+        }[];
+        qcStandards?: {
+          standard: string;
+          tolerance: string;
+          requirement: string;
+        }[];
+        startQcStandards?: {
+          standard: string;
+          tolerance: string;
+          requirement: string;
+        }[];
+        finishQcStandards?: {
+          standard: string;
+          tolerance: string;
+          requirement: string;
+        }[];
+        materials?: {
+          partId: string;
+          partNumber: string;
+          partName: string;
+          requiredFields?: string[];
+          entryMethod?: string;
+        }[];
+        startChecks?: {
+          title: string;
+          taskType?: string;
+          required?: boolean;
+        }[];
+        workChecks?: { title: string; taskType?: string; required?: boolean }[];
+        finishChecks?: {
+          title: string;
+          taskType?: string;
+          required?: boolean;
+        }[];
+        ovenCuringSteps?: { temperature: string; time: string }[];
+        instructionPack?: {
+          workInstructionRefs?: any[];
+          aiSnippets?: any[];
+          specialNotes?: string;
+          media?: any[];
+        };
+        signatureConfig?: {
+          startRequiresSignature: boolean;
+          finishRequiresSignature: boolean;
+          requiredSignatures: string[];
+        };
+      }
+    >;
   }
 
   const { data: partRoutings = [] } = useQuery<PartRoutingData[]>({
@@ -655,8 +912,18 @@ export default function TravelerExecution() {
     satisfiedCount: number;
     blockingCount: number;
     completionPct: number;
-    blockingItems: { dependencyId: number; dependencyType: string; requiredPartNumber: string | null; reason: string }[];
-    satisfiedItems: { dependencyId: number; dependencyType: string; requiredPartNumber: string | null; reason: string }[];
+    blockingItems: {
+      dependencyId: number;
+      dependencyType: string;
+      requiredPartNumber: string | null;
+      reason: string;
+    }[];
+    satisfiedItems: {
+      dependencyId: number;
+      dependencyType: string;
+      requiredPartNumber: string | null;
+      reason: string;
+    }[];
     warnings: string[];
   }>({
     queryKey: ['/api/travelers', travelerId, 'dependency-status'],
@@ -681,10 +948,11 @@ export default function TravelerExecution() {
     notes: string | null;
   }
 
-  const { data: componentAssociations = [], refetch: refetchAssociations } = useQuery<ComponentAssociation[]>({
-    queryKey: ['/api/travelers', travelerId, 'component-associations'],
-    enabled: !!travelerId && !!traveler?.partRoutingId,
-  });
+  const { data: componentAssociations = [], refetch: refetchAssociations } =
+    useQuery<ComponentAssociation[]>({
+      queryKey: ['/api/travelers', travelerId, 'component-associations'],
+      enabled: !!travelerId && !!traveler?.partRoutingId,
+    });
 
   interface GateCheckResult {
     key: string;
@@ -694,11 +962,22 @@ export default function TravelerExecution() {
   }
 
   const gatesBadge = signatureData.badgeScan || activeBadge || '';
-  const isCurrentStepNotStarted = steps.find((s) => s.id === currentStepId)?.status === 'NOT_STARTED';
+  const isCurrentStepNotStarted =
+    steps.find((s) => s.id === currentStepId)?.status === 'NOT_STARTED';
   const { data: gatesData } = useQuery<{ gates: GateCheckResult[] }>({
-    queryKey: ['/api/travelers', travelerId, 'steps', currentStepId, 'gates', gatesBadge],
+    queryKey: [
+      '/api/travelers',
+      travelerId,
+      'steps',
+      currentStepId,
+      'gates',
+      gatesBadge,
+    ],
     queryFn: () => {
-      const url = new URL(`/api/travelers/${travelerId}/steps/${currentStepId}/gates`, window.location.origin);
+      const url = new URL(
+        `/api/travelers/${travelerId}/steps/${currentStepId}/gates`,
+        window.location.origin
+      );
       if (gatesBadge) url.searchParams.set('badge', gatesBadge);
       return fetch(url.toString()).then((res) => {
         if (!res.ok) throw new Error('Failed to fetch gate status');
@@ -724,26 +1003,53 @@ export default function TravelerExecution() {
 
   const createAssocMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      apiRequest(`/api/travelers/${travelerId}/component-associations`, { method: 'POST', body: JSON.stringify(data) }),
+      apiRequest(`/api/travelers/${travelerId}/component-associations`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'component-associations'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'dependency-status'] });
-      setNewAssoc({ childPartNumber: '', childTravelerId: '', childSerialNumber: '', associationType: 'TRAVELER', quantity: 1, scannedBy: '', notes: '' });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/travelers', travelerId, 'component-associations'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/travelers', travelerId, 'dependency-status'],
+      });
+      setNewAssoc({
+        childPartNumber: '',
+        childTravelerId: '',
+        childSerialNumber: '',
+        associationType: 'TRAVELER',
+        quantity: 1,
+        scannedBy: '',
+        notes: '',
+      });
       setShowAssocForm(false);
     },
   });
 
   const deleteAssocMutation = useMutation({
     mutationFn: (assocId: number) =>
-      apiRequest(`/api/traveler-component-associations/${assocId}`, { method: 'DELETE' }),
+      apiRequest(`/api/traveler-component-associations/${assocId}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'component-associations'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'dependency-status'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/travelers', travelerId, 'component-associations'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/travelers', travelerId, 'dependency-status'],
+      });
     },
   });
 
   const switchJobMutation = useMutation({
-    mutationFn: async ({ employeeId, travelerNumber }: { employeeId: string; travelerNumber: string }) => {
+    mutationFn: async ({
+      employeeId,
+      travelerNumber,
+    }: {
+      employeeId: string;
+      travelerNumber: string;
+    }) => {
       const res = await fetch('/api/time-clock/clock-in/traveler', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -768,7 +1074,11 @@ export default function TravelerExecution() {
     },
     onError: (err: any) => {
       const errData = err?.data ?? {};
-      setJobSwitchError(errData?.message ?? err?.message ?? 'Failed to switch job. Please try again.');
+      setJobSwitchError(
+        errData?.message ??
+          err?.message ??
+          'Failed to switch job. Please try again.'
+      );
       setJobSwitchStatus('error');
     },
   });
@@ -780,7 +1090,12 @@ export default function TravelerExecution() {
     associationCreated: boolean;
     rejectionReason?: string;
     duplicate?: boolean;
-    candidate?: { matchFound: boolean; displayLabel: string; childPartNumber?: string; matchType: string | null };
+    candidate?: {
+      matchFound: boolean;
+      displayLabel: string;
+      childPartNumber?: string;
+      matchType: string | null;
+    };
   }
   const [lastScanResult, setLastScanResult] = useState<ScanResult | null>(null);
 
@@ -794,17 +1109,28 @@ export default function TravelerExecution() {
       setLastScanResult(data);
       setScanValue('');
       if (data.associationCreated) {
-        queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'component-associations'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId, 'dependency-status'] });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/travelers', travelerId, 'component-associations'],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/travelers', travelerId, 'dependency-status'],
+        });
       }
     },
     onError: () => {
-      setLastScanResult({ candidateFound: false, matchedDependency: false, associationCreated: false, rejectionReason: 'Scan request failed' });
+      setLastScanResult({
+        candidateFound: false,
+        matchedDependency: false,
+        associationCreated: false,
+        rejectionReason: 'Scan request failed',
+      });
     },
   });
 
   const currentPartRouting = partRoutings.find(
-    (r) => (traveler?.partRoutingId && r.id === traveler.partRoutingId) || r.partNumber === traveler?.partNumber
+    (r) =>
+      (traveler?.partRoutingId && r.id === traveler.partRoutingId) ||
+      r.partNumber === traveler?.partNumber
   );
 
   const getDeptConfig = (departmentName: string) => {
@@ -812,7 +1138,10 @@ export default function TravelerExecution() {
     return currentPartRouting.departmentConfig[departmentName] || null;
   };
 
-  const getRoutingQcStandardsForTask = (task: TravelerTask, departmentName: string) => {
+  const getRoutingQcStandardsForTask = (
+    task: TravelerTask,
+    departmentName: string
+  ) => {
     if (task.taskType !== 'QC') return [];
     const deptConfig = getDeptConfig(departmentName) as any;
     if (!deptConfig) return [];
@@ -828,16 +1157,21 @@ export default function TravelerExecution() {
         ? deptConfig.qcStandards
         : deptConfig.finishQcStandards;
 
-    const standards = Array.isArray(phaseStandards) && phaseStandards.length > 0
-      ? phaseStandards
-      : (Array.isArray(fallbackStandards) ? fallbackStandards : []);
+    const standards =
+      Array.isArray(phaseStandards) && phaseStandards.length > 0
+        ? phaseStandards
+        : Array.isArray(fallbackStandards)
+          ? fallbackStandards
+          : [];
     const seen = new Set<string>();
 
     return standards
       .map((qc: any) => ({
-        standard: qc.standard || qc.standardName || qc.name || qc.title || 'QC Check',
+        standard:
+          qc.standard || qc.standardName || qc.name || qc.title || 'QC Check',
         tolerance: qc.tolerance || '',
-        requirement: qc.requirement || qc.specification || qc.acceptanceCriteria || '',
+        requirement:
+          qc.requirement || qc.specification || qc.acceptanceCriteria || '',
         referenceLink: qc.referenceLink || '',
       }))
       .filter((qc: any) => {
@@ -851,9 +1185,13 @@ export default function TravelerExecution() {
   const getTimerConfigForDepartment = (departmentName: string) => {
     const deptConfig = getDeptConfig(departmentName);
     if (deptConfig?.timerConfig?.enabled) return deptConfig.timerConfig;
-    const step = steps.find(s => s.departmentName === departmentName);
+    const step = steps.find((s) => s.departmentName === departmentName);
     if (step) {
-      const timerTask = step.tasks.find(t => t.title === 'Production Timer' && (t.instructionPack as any)?.timerConfig);
+      const timerTask = step.tasks.find(
+        (t) =>
+          t.title === 'Production Timer' &&
+          (t.instructionPack as any)?.timerConfig
+      );
       const timerPack = timerTask?.instructionPack as any;
       if (timerPack?.timerConfig) return timerPack.timerConfig;
     }
@@ -868,9 +1206,7 @@ export default function TravelerExecution() {
     const nonGateTasks = step.tasks.filter(
       (t) => t.taskType !== 'SIGNATURE' && t.taskType !== 'END_GATE'
     );
-    const meaningfulTasks = nonGateTasks.filter(
-      (t) => !isBadgeGateTask(t)
-    );
+    const meaningfulTasks = nonGateTasks.filter((t) => !isBadgeGateTask(t));
     return meaningfulTasks.length === 0;
   };
 
@@ -890,7 +1226,7 @@ export default function TravelerExecution() {
         }));
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchString]);
 
   useEffect(() => {
@@ -911,10 +1247,24 @@ export default function TravelerExecution() {
   }, [steps, currentStepId]);
 
   const startStepMutation = useMutation({
-    mutationFn: ({ stepId, badge, techName, employeeId }: { stepId: string; badge: string; techName: string; employeeId?: number }) =>
+    mutationFn: ({
+      stepId,
+      badge,
+      techName,
+      employeeId,
+    }: {
+      stepId: string;
+      badge: string;
+      techName: string;
+      employeeId?: number;
+    }) =>
       apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/start`, {
         method: 'POST',
-        body: JSON.stringify({ startedBy: techName || badge || 'operator', badgeScan: badge, employeeId }),
+        body: JSON.stringify({
+          startedBy: techName || badge || 'operator',
+          badgeScan: badge,
+          employeeId,
+        }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: (data: any, variables) => {
@@ -929,26 +1279,35 @@ export default function TravelerExecution() {
         if (wad.certificationStatus === 'EXPIRED') {
           toast({
             title: 'Certification Expired',
-            description: wad.certReason ?? 'Your certification for this step has expired. Notify your supervisor.',
+            description:
+              wad.certReason ??
+              'Your certification for this step has expired. Notify your supervisor.',
             variant: 'destructive',
           });
         } else if (wad.certificationStatus === 'MISSING') {
           toast({
             title: 'Certification Not Found',
-            description: wad.certReason ?? 'No certification record found for this step. Notify your supervisor.',
+            description:
+              wad.certReason ??
+              'No certification record found for this step. Notify your supervisor.',
             variant: 'destructive',
           });
         } else if (wad.isOverrun) {
           toast({
             title: 'Budget Warning Recorded',
-            description: 'Session started — budget overrun has been flagged for supervisor review.',
+            description:
+              'Session started — budget overrun has been flagged for supervisor review.',
             variant: 'destructive',
           });
         }
       }
 
       const autoPunch = data?.autoPunch as
-        | { action?: 'clockedIn' | 'switched' | 'unchanged'; chargeCode?: string | null; warning?: string }
+        | {
+            action?: 'clockedIn' | 'switched' | 'unchanged';
+            chargeCode?: string | null;
+            warning?: string;
+          }
         | null
         | undefined;
       let punchLine = '';
@@ -960,7 +1319,10 @@ export default function TravelerExecution() {
         punchLine = ` Punch already on ${autoPunch.chargeCode}.`;
       }
 
-      toast({ title: 'Step Started', description: `Badge verified — gate checks passed. Work on this step has begun.${punchLine}` });
+      toast({
+        title: 'Step Started',
+        description: `Badge verified — gate checks passed. Work on this step has begun.${punchLine}`,
+      });
       if (autoPunch?.warning) {
         toast({
           title: 'Labor budget warning',
@@ -971,11 +1333,20 @@ export default function TravelerExecution() {
       refetch();
     },
     onError: (error: any, variables) => {
-      const gateKey: string | undefined = error.gate ?? error.responseData?.gate;
-      const detail: string | undefined = error.detail ?? error.responseData?.detail;
-      const reason: string | undefined = detail ?? error.reason ?? error.responseData?.reason;
-      const description = reason ? `${error.message}: ${reason}` : error.message;
-      const isGateBlock = !!gateKey || error.message?.toLowerCase().includes('gate') || reason?.toLowerCase().includes('gate') || description?.toLowerCase().includes('gate');
+      const gateKey: string | undefined =
+        error.gate ?? error.responseData?.gate;
+      const detail: string | undefined =
+        error.detail ?? error.responseData?.detail;
+      const reason: string | undefined =
+        detail ?? error.reason ?? error.responseData?.reason;
+      const description = reason
+        ? `${error.message}: ${reason}`
+        : error.message;
+      const isGateBlock =
+        !!gateKey ||
+        error.message?.toLowerCase().includes('gate') ||
+        reason?.toLowerCase().includes('gate') ||
+        description?.toLowerCase().includes('gate');
       toast({
         title: 'Cannot Start Step',
         description,
@@ -984,7 +1355,11 @@ export default function TravelerExecution() {
           <ToastAction
             altText="Request supervisor override for this gate"
             onClick={() => {
-              setGateOverridePendingStep({ stepId: variables.stepId, badge: variables.badge, techName: variables.techName });
+              setGateOverridePendingStep({
+                stepId: variables.stepId,
+                badge: variables.badge,
+                techName: variables.techName,
+              });
               setGateOverrideBlockedReason(reason || description || '');
               setGateOverrideSupervisorBadge('');
               setGateOverrideReason('');
@@ -999,17 +1374,29 @@ export default function TravelerExecution() {
   });
 
   const gateOverrideMutation = useMutation({
-    mutationFn: ({ stepId, supervisorBadge, overrideReason, operatorBadge }: {
+    mutationFn: ({
+      stepId,
+      supervisorBadge,
+      overrideReason,
+      operatorBadge,
+    }: {
       stepId: string;
       supervisorBadge: string;
       overrideReason: string;
       operatorBadge: string;
     }) =>
-      apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/start/override`, {
-        method: 'POST',
-        body: JSON.stringify({ supervisorBadge, overrideReason, operatorBadge }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
+      apiRequest(
+        `/api/travelers/${travelerId}/steps/${stepId}/start/override`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            supervisorBadge,
+            overrideReason,
+            operatorBadge,
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        }
+      ),
     onSuccess: (_data, variables) => {
       setShowGateOverrideDialog(false);
       setGateOverridePendingStep(null);
@@ -1018,21 +1405,35 @@ export default function TravelerExecution() {
       setGateOverrideReason('');
       if (gateOverridePendingStep) {
         setActiveBadge(gateOverridePendingStep.badge);
-        setActiveTechName(gateOverridePendingStep.techName || gateOverridePendingStep.badge);
+        setActiveTechName(
+          gateOverridePendingStep.techName || gateOverridePendingStep.badge
+        );
       }
-      toast({ title: 'Gate Override Applied', description: 'Supervisor override recorded. Step has been started.' });
+      toast({
+        title: 'Gate Override Applied',
+        description: 'Supervisor override recorded. Step has been started.',
+      });
       refetch();
     },
     onError: (error: any) => {
-      const detail: string | undefined = error.detail ?? error.responseData?.detail;
-      const reason: string | undefined = detail ?? error.reason ?? error.responseData?.reason;
-      const description = reason ? `${error.message}: ${reason}` : error.message;
+      const detail: string | undefined =
+        error.detail ?? error.responseData?.detail;
+      const reason: string | undefined =
+        detail ?? error.reason ?? error.responseData?.reason;
+      const description = reason
+        ? `${error.message}: ${reason}`
+        : error.message;
       toast({ title: 'Override Failed', description, variant: 'destructive' });
     },
   });
 
   const completeTaskMutation = useMutation({
-    mutationFn: ({ taskId, fieldVals, fieldValidations, toleranceApproval }: {
+    mutationFn: ({
+      taskId,
+      fieldVals,
+      fieldValidations,
+      toleranceApproval,
+    }: {
       taskId: string;
       fieldVals?: Record<string, string>;
       fieldValidations?: Record<string, any>;
@@ -1041,19 +1442,25 @@ export default function TravelerExecution() {
       const badgeHeader: Record<string, string> = activeBadge
         ? { 'X-Badge-Code': activeBadge }
         : {};
-      return apiRequest(`/api/travelers/${travelerId}/tasks/${taskId}/complete`, {
-        method: 'POST',
-        body: JSON.stringify({
-          completedBy: activeTechName || activeBadge || 'operator',
-          fieldValues: fieldVals,
-          fieldValidations,
-          toleranceApproval,
-        }),
-        headers: { 'Content-Type': 'application/json', ...badgeHeader },
-      });
+      return apiRequest(
+        `/api/travelers/${travelerId}/tasks/${taskId}/complete`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            completedBy: activeTechName || activeBadge || 'operator',
+            fieldValues: fieldVals,
+            fieldValidations,
+            toleranceApproval,
+          }),
+          headers: { 'Content-Type': 'application/json', ...badgeHeader },
+        }
+      );
     },
     onSuccess: () => {
-      toast({ title: 'Task Completed', description: 'Task has been marked complete' });
+      toast({
+        title: 'Task Completed',
+        description: 'Task has been marked complete',
+      });
       setShowQcApprovalDialog(false);
       setQcApprovalData(null);
       setQcApproverName('');
@@ -1064,20 +1471,34 @@ export default function TravelerExecution() {
       if (error.message?.startsWith('HARD_QC_STOP:')) {
         toast({
           title: 'Hard QC Stop',
-          description: 'Out-of-tolerance results detected. Please use the approval dialog to provide authorization.',
+          description:
+            'Out-of-tolerance results detected. Please use the approval dialog to provide authorization.',
           variant: 'destructive',
         });
         return;
       }
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
   const signStepMutation = useMutation({
-    mutationFn: ({ stepId, taskId, role }: { stepId: string; taskId?: string | null; role?: string | null }) => {
-      const drawnSignature = sigPadRef.current && !sigPadRef.current.isEmpty()
-        ? sigPadRef.current.toDataURL('image/png')
-        : null;
+    mutationFn: ({
+      stepId,
+      taskId,
+      role,
+    }: {
+      stepId: string;
+      taskId?: string | null;
+      role?: string | null;
+    }) => {
+      const drawnSignature =
+        sigPadRef.current && !sigPadRef.current.isEmpty()
+          ? sigPadRef.current.toDataURL('image/png')
+          : null;
       const badgeHeader: Record<string, string> = activeBadge
         ? { 'X-Badge-Code': activeBadge }
         : {};
@@ -1089,11 +1510,18 @@ export default function TravelerExecution() {
           taskId: taskId || undefined,
           signatureRole: role || undefined,
         }),
-        headers: { 'Content-Type': 'application/json', ...badgeHeader, ...getAuthHeaders() },
+        headers: {
+          'Content-Type': 'application/json',
+          ...badgeHeader,
+          ...getAuthHeaders(),
+        },
       });
     },
     onSuccess: () => {
-      toast({ title: 'Signed', description: 'Signature recorded successfully' });
+      toast({
+        title: 'Signed',
+        description: 'Signature recorded successfully',
+      });
       setShowSignDialog(false);
       setSigningTaskId(null);
       setSigningRole(null);
@@ -1113,9 +1541,13 @@ export default function TravelerExecution() {
       refetch();
     },
     onError: (error: any) => {
-      const detail: string | undefined = error.detail ?? error.responseData?.detail;
-      const reason: string | undefined = detail ?? error.reason ?? error.responseData?.reason;
-      const description = reason ? `${error.message}: ${reason}` : error.message;
+      const detail: string | undefined =
+        error.detail ?? error.responseData?.detail;
+      const reason: string | undefined =
+        detail ?? error.reason ?? error.responseData?.reason;
+      const description = reason
+        ? `${error.message}: ${reason}`
+        : error.message;
       toast({ title: 'Cannot Sign Step', description, variant: 'destructive' });
     },
   });
@@ -1124,17 +1556,27 @@ export default function TravelerExecution() {
     mutationFn: () =>
       apiRequest(`/api/travelers/${travelerId}/block`, {
         method: 'POST',
-        body: JSON.stringify({ blockedBy: activeTechName || activeBadge || 'operator', reason: blockReason }),
+        body: JSON.stringify({
+          blockedBy: activeTechName || activeBadge || 'operator',
+          reason: blockReason,
+        }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
-      toast({ title: 'Traveler Blocked', description: 'Traveler has been blocked' });
+      toast({
+        title: 'Traveler Blocked',
+        description: 'Traveler has been blocked',
+      });
       setShowBlockDialog(false);
       setBlockReason('');
       refetch();
     },
     onError: (error: any) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -1142,15 +1584,24 @@ export default function TravelerExecution() {
     mutationFn: () =>
       apiRequest(`/api/travelers/${travelerId}/unblock`, {
         method: 'POST',
-        body: JSON.stringify({ unblockedBy: activeTechName || activeBadge || 'operator' }),
+        body: JSON.stringify({
+          unblockedBy: activeTechName || activeBadge || 'operator',
+        }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
-      toast({ title: 'Traveler Unblocked', description: 'Traveler is back in progress' });
+      toast({
+        title: 'Traveler Unblocked',
+        description: 'Traveler is back in progress',
+      });
       refetch();
     },
     onError: (error: any) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -1161,21 +1612,36 @@ export default function TravelerExecution() {
         : {};
       return apiRequest(`/api/travelers/${travelerId}/complete`, {
         method: 'POST',
-        body: JSON.stringify({ completedBy: activeTechName || activeBadge || 'operator' }),
+        body: JSON.stringify({
+          completedBy: activeTechName || activeBadge || 'operator',
+        }),
         headers: { 'Content-Type': 'application/json', ...badgeHeader },
       });
     },
     onSuccess: () => {
-      toast({ title: 'Traveler Completed', description: 'All work has been completed' });
+      toast({
+        title: 'Traveler Completed',
+        description: 'All work has been completed',
+      });
       refetch();
     },
     onError: (error: any) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
   const adminForceSignMutation = useMutation({
-    mutationFn: async ({ stepId, reason }: { stepId: string; reason: string }) => {
+    mutationFn: async ({
+      stepId,
+      reason,
+    }: {
+      stepId: string;
+      reason: string;
+    }) => {
       return apiRequest(`/api/travelers/${travelerId}/admin/force-sign-step`, {
         method: 'POST',
         body: {
@@ -1187,11 +1653,18 @@ export default function TravelerExecution() {
       });
     },
     onSuccess: () => {
-      toast({ title: 'Step Force-Signed', description: 'Step has been administratively signed' });
+      toast({
+        title: 'Step Force-Signed',
+        description: 'Step has been administratively signed',
+      });
       refetch();
     },
     onError: (error: any) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -1203,34 +1676,60 @@ export default function TravelerExecution() {
       }),
     onSuccess: () => {
       toast({ title: 'Notes saved' });
-      queryClient.invalidateQueries({ queryKey: ['/api/travelers', travelerId] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/travelers', travelerId],
+      });
     },
     onError: (error: any) => {
-      toast({ title: 'Error saving notes', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Error saving notes',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
   const adminForceCompleteTaskMutation = useMutation({
-    mutationFn: async ({ taskId, reason }: { taskId: string; reason: string }) => {
-      return apiRequest(`/api/travelers/${travelerId}/admin/force-complete-task`, {
-        method: 'POST',
-        body: {
-          taskId,
-          reason,
-          completedBy: activeTechName || activeBadge || 'admin',
-        },
-      });
+    mutationFn: async ({
+      taskId,
+      reason,
+    }: {
+      taskId: string;
+      reason: string;
+    }) => {
+      return apiRequest(
+        `/api/travelers/${travelerId}/admin/force-complete-task`,
+        {
+          method: 'POST',
+          body: {
+            taskId,
+            reason,
+            completedBy: activeTechName || activeBadge || 'admin',
+          },
+        }
+      );
     },
     onSuccess: () => {
-      toast({ title: 'Task Force-Completed', description: 'Task has been administratively completed' });
+      toast({
+        title: 'Task Force-Completed',
+        description: 'Task has been administratively completed',
+      });
       refetch();
     },
     onError: (error: any) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
-  const isWithinTolerance = (measuredValue: string, tolerance: string, requirement: string): boolean | null => {
+  const isWithinTolerance = (
+    measuredValue: string,
+    tolerance: string,
+    requirement: string
+  ): boolean | null => {
     if (!measuredValue.trim() || !tolerance) return null;
     const val = measuredValue.trim().toLowerCase();
     const tol = tolerance.trim().toLowerCase();
@@ -1257,7 +1756,9 @@ export default function TravelerExecution() {
       return numVal >= lo && numVal <= hi;
     }
 
-    const reqRange = (requirement || '').trim().match(/^(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)$/);
+    const reqRange = (requirement || '')
+      .trim()
+      .match(/^(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)$/);
     if (reqRange) {
       const lo = parseFloat(reqRange[1]);
       const hi = parseFloat(reqRange[2]);
@@ -1269,7 +1770,7 @@ export default function TravelerExecution() {
       const dev = parseFloat(pmMatch[1]);
       const reqVal = parseFloat((requirement || '').replace(/[^0-9.\-]/g, ''));
       if (!isNaN(reqVal)) {
-        return numVal >= (reqVal - dev) && numVal <= (reqVal + dev);
+        return numVal >= reqVal - dev && numVal <= reqVal + dev;
       }
     }
 
@@ -1286,7 +1787,14 @@ export default function TravelerExecution() {
       const levelMatch = val.match(/level\s*(\w+)/i) || val.match(/^(\w+)$/i);
       const tolLevel = tol.match(/level\s*(\w+)/i);
       if (levelMatch && tolLevel) {
-        const levelOrder: Record<string, number> = { 'i': 1, 'ii': 2, 'iii': 3, '1': 1, '2': 2, '3': 3 };
+        const levelOrder: Record<string, number> = {
+          i: 1,
+          ii: 2,
+          iii: 3,
+          '1': 1,
+          '2': 2,
+          '3': 3,
+        };
         const measuredLevel = levelOrder[levelMatch[1].toLowerCase()] ?? 99;
         const maxLevel = levelOrder[tolLevel[1].toLowerCase()] ?? 99;
         return measuredLevel <= maxLevel;
@@ -1296,7 +1804,11 @@ export default function TravelerExecution() {
     return null;
   };
 
-  const handleFieldChange = (taskId: string, fieldKey: string, value: string) => {
+  const handleFieldChange = (
+    taskId: string,
+    fieldKey: string,
+    value: string
+  ) => {
     setFieldValues((prev) => {
       const updated = {
         ...prev,
@@ -1314,7 +1826,11 @@ export default function TravelerExecution() {
         const task = step?.tasks?.find((t: any) => t.id === taskId);
         const field = task?.fields?.find((f: any) => f.fieldKey === baseKey);
         if (field?.validation?.tolerance) {
-          const result = isWithinTolerance(value, field.validation.tolerance, field.validation.requirement);
+          const result = isWithinTolerance(
+            value,
+            field.validation.tolerance,
+            field.validation.requirement
+          );
           if (result === true) {
             updated[taskId] = { ...updated[taskId], [baseKey]: 'yes' };
           } else if (result === false) {
@@ -1331,16 +1847,24 @@ export default function TravelerExecution() {
     const merged: Record<string, string> = { ...(fieldValues[task.id] || {}) };
 
     for (const field of task.fields) {
-      const fieldInput = document.getElementById(`field-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
-      const textareaInput = document.getElementById(`ta-${task.id}-${field.fieldKey}`) as HTMLTextAreaElement | null;
-      const inventoryInput = document.getElementById(`inv-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
-      const qcResultInput = document.getElementById(`qc-result-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
-      const checkboxInput = document.getElementById(field.id) as HTMLInputElement | null;
+      const fieldInput = document.getElementById(
+        `field-${task.id}-${field.fieldKey}`
+      ) as HTMLInputElement | null;
+      const textareaInput = document.getElementById(
+        `ta-${task.id}-${field.fieldKey}`
+      ) as HTMLTextAreaElement | null;
+      const inventoryInput = document.getElementById(
+        `inv-${task.id}-${field.fieldKey}`
+      ) as HTMLInputElement | null;
+      const qcResultInput = document.getElementById(
+        `qc-result-${task.id}-${field.fieldKey}`
+      ) as HTMLInputElement | null;
+      const checkboxInput = document.getElementById(
+        field.id
+      ) as HTMLInputElement | null;
 
       const currentValue =
-        fieldInput?.value ??
-        textareaInput?.value ??
-        inventoryInput?.value;
+        fieldInput?.value ?? textareaInput?.value ?? inventoryInput?.value;
 
       if (currentValue !== undefined) {
         merged[field.fieldKey] = currentValue;
@@ -1358,7 +1882,10 @@ export default function TravelerExecution() {
     return merged;
   };
 
-  const appendTraceValue = (existing: string | undefined, incoming: string | undefined) => {
+  const appendTraceValue = (
+    existing: string | undefined,
+    incoming: string | undefined
+  ) => {
     const nextValue = String(incoming ?? '').trim();
     if (!nextValue) return existing || '';
     const values = String(existing ?? '')
@@ -1383,7 +1910,10 @@ export default function TravelerExecution() {
       return { ...prev, [task.id]: merged };
     });
 
-    if (traceFieldValidations && Object.keys(traceFieldValidations).length > 0) {
+    if (
+      traceFieldValidations &&
+      Object.keys(traceFieldValidations).length > 0
+    ) {
       setPickerValidations((prev) => ({
         ...prev,
         [task.id]: {
@@ -1407,7 +1937,10 @@ export default function TravelerExecution() {
     });
   };
 
-  const handleCompleteTask = (task: TravelerTask, toleranceApproval?: { approvedBy: string; notes: string }) => {
+  const handleCompleteTask = (
+    task: TravelerTask,
+    toleranceApproval?: { approvedBy: string; notes: string }
+  ) => {
     const taskFieldVals = collectCurrentTaskFieldValues(task);
     const traceLabelMap: Record<string, string> = {
       internalControlNumber: 'Internal Control Number',
@@ -1435,9 +1968,19 @@ export default function TravelerExecution() {
     if (task.taskType === 'QC' && !toleranceApproval) {
       const failedHardStops = task.fields.filter((f) => {
         const val = taskFieldVals[f.fieldKey] ?? f.value;
-        const rawVal = typeof val === 'string' && val.includes('|') ? val.split('|')[0] : val;
-        const normalized = String(rawVal ?? '').toLowerCase().trim();
-        return f.validation?.hardQcStop && (normalized === 'no' || normalized === 'fail' || normalized === 'false');
+        const rawVal =
+          typeof val === 'string' && val.includes('|')
+            ? val.split('|')[0]
+            : val;
+        const normalized = String(rawVal ?? '')
+          .toLowerCase()
+          .trim();
+        return (
+          f.validation?.hardQcStop &&
+          (normalized === 'no' ||
+            normalized === 'fail' ||
+            normalized === 'false')
+        );
       });
 
       if (failedHardStops.length > 0) {
@@ -1507,12 +2050,18 @@ export default function TravelerExecution() {
         </Link>
         <div className="ml-auto">
           {activeBadge || activeTechName ? (
-            <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-sm font-medium">
+            <Badge
+              variant="secondary"
+              className="flex items-center gap-1.5 px-3 py-1 text-sm font-medium"
+            >
               <User className="h-3.5 w-3.5 shrink-0" />
               {activeTechName || activeBadge}
             </Badge>
           ) : (
-            <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 text-sm text-muted-foreground">
+            <Badge
+              variant="outline"
+              className="flex items-center gap-1.5 px-3 py-1 text-sm text-muted-foreground"
+            >
               <User className="h-3.5 w-3.5 shrink-0" />
               No operator — scan your badge
             </Badge>
@@ -1524,7 +2073,8 @@ export default function TravelerExecution() {
         <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           <ShieldCheck className="h-4 w-4 shrink-0" />
           <span>
-            This traveler was created under WAD {wadRevisionBanner?.revisionCode ?? 'revision on record'}.
+            This traveler was created under WAD{' '}
+            {wadRevisionBanner?.revisionCode ?? 'revision on record'}.
           </span>
         </div>
       )}
@@ -1538,20 +2088,31 @@ export default function TravelerExecution() {
             <CardContent className="space-y-3 text-sm">
               <div>
                 <span className="text-muted-foreground">Number:</span>
-                <p className="font-mono font-bold" data-testid="text-traveler-number">
+                <p
+                  className="font-mono font-bold"
+                  data-testid="text-traveler-number"
+                >
                   {traveler.travelerNumber}
                 </p>
               </div>
               <div>
                 <span className="text-muted-foreground">Part:</span>
                 <p className="font-medium">{traveler.partNumber}</p>
-                <p className="text-xs text-muted-foreground">{traveler.partName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {traveler.partName}
+                </p>
               </div>
               {traveler.partRoutingId && (
                 <div>
                   <span className="text-muted-foreground">Routing:</span>
-                  <Link href={`/p2-control-center?tab=routing&routingId=${traveler.partRoutingId}`}>
-                    <Button variant="link" className="h-auto p-0 font-medium text-left" data-testid={`link-routing-${traveler.partRoutingId}`}>
+                  <Link
+                    href={`/p2-control-center?tab=routing&routingId=${traveler.partRoutingId}`}
+                  >
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 font-medium text-left"
+                      data-testid={`link-routing-${traveler.partRoutingId}`}
+                    >
                       View routing
                     </Button>
                   </Link>
@@ -1573,13 +2134,15 @@ export default function TravelerExecution() {
               {traveler.workOrderId && wadLaborStatus?.status === 'BLOCKED' && (
                 <div className="col-span-2">
                   {overrideSubmittedId && submittedOverride ? (
-                    <div className={`rounded border px-3 py-2 text-sm ${
-                      submittedOverride.status === 'APPROVED'
-                        ? 'bg-green-50 border-green-200 text-green-800'
-                        : submittedOverride.status === 'DENIED'
-                        ? 'bg-red-50 border-red-200 text-red-800'
-                        : 'bg-yellow-50 border-yellow-200 text-yellow-800'
-                    }`}>
+                    <div
+                      className={`rounded border px-3 py-2 text-sm ${
+                        submittedOverride.status === 'APPROVED'
+                          ? 'bg-green-50 border-green-200 text-green-800'
+                          : submittedOverride.status === 'DENIED'
+                            ? 'bg-red-50 border-red-200 text-red-800'
+                            : 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                      }`}
+                    >
                       {submittedOverride.status === 'PENDING' && (
                         <p className="flex items-center gap-1 font-medium">
                           <span className="animate-spin inline-block w-3 h-3 border border-yellow-600 border-t-transparent rounded-full" />
@@ -1587,12 +2150,18 @@ export default function TravelerExecution() {
                         </p>
                       )}
                       {submittedOverride.status === 'APPROVED' && (
-                        <p className="font-medium">Supervisor approved — you may clock in</p>
+                        <p className="font-medium">
+                          Supervisor approved — you may clock in
+                        </p>
                       )}
                       {submittedOverride.status === 'DENIED' && (
                         <>
                           <p className="font-medium">Override request denied</p>
-                          {submittedOverride.supervisorNote && <p className="text-xs mt-0.5">"{submittedOverride.supervisorNote}"</p>}
+                          {submittedOverride.supervisorNote && (
+                            <p className="text-xs mt-0.5">
+                              "{submittedOverride.supervisorNote}"
+                            </p>
+                          )}
                           <button
                             className="mt-1 text-xs underline text-red-700"
                             onClick={() => setOverrideSubmittedId(null)}
@@ -1604,43 +2173,75 @@ export default function TravelerExecution() {
                     </div>
                   ) : (
                     <div className="rounded border border-orange-200 bg-orange-50 p-3 space-y-2">
-                      <p className="text-sm font-medium text-orange-800">Request Supervisor Override to Clock In</p>
+                      <p className="text-sm font-medium text-orange-800">
+                        Request Supervisor Override to Clock In
+                      </p>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-xs text-orange-700 block mb-0.5">Your Employee ID *</label>
+                          <label className="text-xs text-orange-700 block mb-0.5">
+                            Your Employee ID *
+                          </label>
                           <input
                             className="w-full text-sm border rounded px-2 py-1"
                             value={overrideForm.operatorEmployeeId}
-                            onChange={e => setOverrideForm(f => ({ ...f, operatorEmployeeId: e.target.value }))}
+                            onChange={(e) =>
+                              setOverrideForm((f) => ({
+                                ...f,
+                                operatorEmployeeId: e.target.value,
+                              }))
+                            }
                             placeholder="EMP-001"
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-orange-700 block mb-0.5">Your Name *</label>
+                          <label className="text-xs text-orange-700 block mb-0.5">
+                            Your Name *
+                          </label>
                           <input
                             className="w-full text-sm border rounded px-2 py-1"
                             value={overrideForm.operatorDisplayName}
-                            onChange={e => setOverrideForm(f => ({ ...f, operatorDisplayName: e.target.value }))}
+                            onChange={(e) =>
+                              setOverrideForm((f) => ({
+                                ...f,
+                                operatorDisplayName: e.target.value,
+                              }))
+                            }
                             placeholder="First Last"
                           />
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <div>
-                          <label className="text-xs text-orange-700 block mb-0.5">Additional hours needed</label>
+                          <label className="text-xs text-orange-700 block mb-0.5">
+                            Additional hours needed
+                          </label>
                           <input
-                            type="number" min="0.5" max="24" step="0.5"
+                            type="number"
+                            min="0.5"
+                            max="24"
+                            step="0.5"
                             className="w-24 text-sm border rounded px-2 py-1"
                             value={overrideForm.requestedHours}
-                            onChange={e => setOverrideForm(f => ({ ...f, requestedHours: e.target.value }))}
+                            onChange={(e) =>
+                              setOverrideForm((f) => ({
+                                ...f,
+                                requestedHours: e.target.value,
+                              }))
+                            }
                           />
                         </div>
                         <button
                           className="mt-4 px-3 py-1.5 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded disabled:opacity-50"
-                          disabled={!overrideForm.operatorEmployeeId.trim() || !overrideForm.operatorDisplayName.trim() || overrideMutation.isPending}
+                          disabled={
+                            !overrideForm.operatorEmployeeId.trim() ||
+                            !overrideForm.operatorDisplayName.trim() ||
+                            overrideMutation.isPending
+                          }
                           onClick={() => overrideMutation.mutate(overrideForm)}
                         >
-                          {overrideMutation.isPending ? 'Submitting…' : 'Request Override'}
+                          {overrideMutation.isPending
+                            ? 'Submitting…'
+                            : 'Request Override'}
                         </button>
                       </div>
                     </div>
@@ -1652,7 +2253,9 @@ export default function TravelerExecution() {
               {traveler.serialNumber && (
                 <div>
                   <span className="text-muted-foreground">Serial Number:</span>
-                  <p className="font-medium font-mono">{traveler.serialNumber}</p>
+                  <p className="font-medium font-mono">
+                    {traveler.serialNumber}
+                  </p>
                 </div>
               )}
               {traveler.lotNumber && (
@@ -1672,10 +2275,10 @@ export default function TravelerExecution() {
                     traveler.status === 'COMPLETED'
                       ? 'bg-green-100 text-green-800'
                       : traveler.status === 'IN_PROGRESS'
-                      ? 'bg-blue-100 text-blue-800'
-                      : traveler.status === 'BLOCKED'
-                      ? 'bg-red-100 text-red-800'
-                      : 'bg-gray-100 text-gray-800'
+                        ? 'bg-blue-100 text-blue-800'
+                        : traveler.status === 'BLOCKED'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
                   }`}
                   data-testid={`text-traveler-status-${traveler.status.toLowerCase()}`}
                 >
@@ -1702,7 +2305,10 @@ export default function TravelerExecution() {
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Closing current session and opening{' '}
-                    <span className="font-mono font-medium">{traveler.travelerNumber}</span>…
+                    <span className="font-mono font-medium">
+                      {traveler.travelerNumber}
+                    </span>
+                    …
                   </div>
                 </div>
               ) : jobSwitchStatus === 'success' && jobSwitchResult ? (
@@ -1710,11 +2316,15 @@ export default function TravelerExecution() {
                   {jobSwitchResult.switched && jobSwitchResult.closed && (
                     <div className="rounded bg-gray-50 border px-2 py-1 text-xs">
                       <span className="font-medium text-red-600">Closed:</span>{' '}
-                      {jobSwitchResult.closed.chargeCode ?? 'prior session'} (entry #{jobSwitchResult.closed.id})
+                      {jobSwitchResult.closed.chargeCode ?? 'prior session'}{' '}
+                      (entry #{jobSwitchResult.closed.id})
                     </div>
                   )}
                   <div className="rounded bg-green-50 border border-green-200 px-2 py-1.5 text-xs text-green-800 font-medium">
-                    Active charge: {jobSwitchResult.chargeContext.chargeCode}{(jobSwitchResult.created ?? jobSwitchResult.entry) ? ` (entry #${(jobSwitchResult.created ?? jobSwitchResult.entry)!.id})` : ''}
+                    Active charge: {jobSwitchResult.chargeContext.chargeCode}
+                    {(jobSwitchResult.created ?? jobSwitchResult.entry)
+                      ? ` (entry #${(jobSwitchResult.created ?? jobSwitchResult.entry)!.id})`
+                      : ''}
                   </div>
                   {jobSwitchResult.warning && (
                     <div className="rounded bg-amber-50 border border-amber-200 px-2 py-1 text-xs text-amber-700 flex items-start gap-1">
@@ -1724,7 +2334,11 @@ export default function TravelerExecution() {
                   )}
                   <button
                     className="text-xs text-muted-foreground underline"
-                    onClick={() => { setJobSwitchStatus('idle'); setJobSwitchResult(null); setJobSwitchEmployeeId(''); }}
+                    onClick={() => {
+                      setJobSwitchStatus('idle');
+                      setJobSwitchResult(null);
+                      setJobSwitchEmployeeId('');
+                    }}
                   >
                     Switch again
                   </button>
@@ -1736,7 +2350,10 @@ export default function TravelerExecution() {
                   </div>
                   <button
                     className="text-xs text-muted-foreground underline"
-                    onClick={() => { setJobSwitchStatus('idle'); setJobSwitchError(null); }}
+                    onClick={() => {
+                      setJobSwitchStatus('idle');
+                      setJobSwitchError(null);
+                    }}
                   >
                     Try again
                   </button>
@@ -1745,19 +2362,27 @@ export default function TravelerExecution() {
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">
                     Clock in to{' '}
-                    <span className="font-mono font-medium">{traveler.travelerNumber}</span>.
-                    If already on another job, that session closes automatically.
+                    <span className="font-mono font-medium">
+                      {traveler.travelerNumber}
+                    </span>
+                    . If already on another job, that session closes
+                    automatically.
                   </p>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-0.5">Employee ID or Badge Code</label>
+                    <label className="text-xs text-muted-foreground block mb-0.5">
+                      Employee ID or Badge Code
+                    </label>
                     <Input
                       className="h-7 text-xs"
                       placeholder="EMP-001 or badge code"
                       value={jobSwitchEmployeeId}
-                      onChange={e => setJobSwitchEmployeeId(e.target.value)}
-                      onKeyDown={e => {
+                      onChange={(e) => setJobSwitchEmployeeId(e.target.value)}
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter' && jobSwitchEmployeeId.trim()) {
-                          switchJobMutation.mutate({ employeeId: jobSwitchEmployeeId.trim(), travelerNumber: traveler.travelerNumber });
+                          switchJobMutation.mutate({
+                            employeeId: jobSwitchEmployeeId.trim(),
+                            travelerNumber: traveler.travelerNumber,
+                          });
                         }
                       }}
                     />
@@ -1765,13 +2390,27 @@ export default function TravelerExecution() {
                   <Button
                     size="sm"
                     className="w-full h-7 text-xs"
-                    disabled={!jobSwitchEmployeeId.trim() || switchJobMutation.isPending}
-                    onClick={() => switchJobMutation.mutate({ employeeId: jobSwitchEmployeeId.trim(), travelerNumber: traveler.travelerNumber })}
-                  >
-                    {switchJobMutation.isPending
-                      ? <><Loader2 className="h-3 w-3 animate-spin mr-1" />Switching…</>
-                      : <><Clock className="h-3 w-3 mr-1" />Switch to This Traveler</>
+                    disabled={
+                      !jobSwitchEmployeeId.trim() || switchJobMutation.isPending
                     }
+                    onClick={() =>
+                      switchJobMutation.mutate({
+                        employeeId: jobSwitchEmployeeId.trim(),
+                        travelerNumber: traveler.travelerNumber,
+                      })
+                    }
+                  >
+                    {switchJobMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        Switching…
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="h-3 w-3 mr-1" />
+                        Switch to This Traveler
+                      </>
+                    )}
                   </Button>
                 </div>
               )}
@@ -1786,32 +2425,58 @@ export default function TravelerExecution() {
                   <GitBranch className="h-4 w-4" />
                   Assembly Dependencies
                   {depStatus.ready ? (
-                    <Badge className="ml-auto bg-green-100 text-green-800 text-xs">Ready</Badge>
+                    <Badge className="ml-auto bg-green-100 text-green-800 text-xs">
+                      Ready
+                    </Badge>
                   ) : (
-                    <Badge className="ml-auto bg-red-100 text-red-800 text-xs">Blocked</Badge>
+                    <Badge className="ml-auto bg-red-100 text-red-800 text-xs">
+                      Blocked
+                    </Badge>
                   )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-xs">
                 <p className="text-muted-foreground">
-                  {depStatus.satisfiedCount}/{depStatus.totalDependencies} satisfied ({depStatus.completionPct}%)
+                  {depStatus.satisfiedCount}/{depStatus.totalDependencies}{' '}
+                  satisfied ({depStatus.completionPct}%)
                 </p>
                 {depStatus.blockingItems.map((item) => (
-                  <div key={item.dependencyId} className="bg-red-50 text-red-700 rounded px-2 py-1">
-                    <span className="font-medium">[{item.dependencyType.replace(/_/g, ' ')}]</span>{' '}
-                    {item.requiredPartNumber && <span className="font-mono">{item.requiredPartNumber} — </span>}
+                  <div
+                    key={item.dependencyId}
+                    className="bg-red-50 text-red-700 rounded px-2 py-1"
+                  >
+                    <span className="font-medium">
+                      [{item.dependencyType.replace(/_/g, ' ')}]
+                    </span>{' '}
+                    {item.requiredPartNumber && (
+                      <span className="font-mono">
+                        {item.requiredPartNumber} —{' '}
+                      </span>
+                    )}
                     {item.reason}
                   </div>
                 ))}
                 {depStatus.satisfiedItems.map((item) => (
-                  <div key={item.dependencyId} className="bg-green-50 text-green-700 rounded px-2 py-1">
-                    <span className="font-medium">[{item.dependencyType.replace(/_/g, ' ')}]</span>{' '}
-                    {item.requiredPartNumber && <span className="font-mono">{item.requiredPartNumber} — </span>}
+                  <div
+                    key={item.dependencyId}
+                    className="bg-green-50 text-green-700 rounded px-2 py-1"
+                  >
+                    <span className="font-medium">
+                      [{item.dependencyType.replace(/_/g, ' ')}]
+                    </span>{' '}
+                    {item.requiredPartNumber && (
+                      <span className="font-mono">
+                        {item.requiredPartNumber} —{' '}
+                      </span>
+                    )}
                     {item.reason}
                   </div>
                 ))}
                 {depStatus.warnings.map((w, i) => (
-                  <div key={i} className="bg-amber-50 text-amber-700 rounded px-2 py-1 flex items-start gap-1">
+                  <div
+                    key={i}
+                    className="bg-amber-50 text-amber-700 rounded px-2 py-1 flex items-start gap-1"
+                  >
                     <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
                     {w}
                   </div>
@@ -1826,7 +2491,9 @@ export default function TravelerExecution() {
                 <CardTitle className="text-sm flex items-center gap-2">
                   <ScanBarcode className="h-4 w-4" />
                   Component Associations
-                  <Badge variant="secondary" className="ml-auto text-xs">{componentAssociations.length}</Badge>
+                  <Badge variant="secondary" className="ml-auto text-xs">
+                    {componentAssociations.length}
+                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-xs">
@@ -1836,9 +2503,16 @@ export default function TravelerExecution() {
                     className="h-7 text-xs font-mono flex-1"
                     placeholder="Scan barcode / traveler / S/N…"
                     value={scanValue}
-                    onChange={(e) => { setScanValue(e.target.value); setLastScanResult(null); }}
+                    onChange={(e) => {
+                      setScanValue(e.target.value);
+                      setLastScanResult(null);
+                    }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && scanValue.trim() && !scanMutation.isPending) {
+                      if (
+                        e.key === 'Enter' &&
+                        scanValue.trim() &&
+                        !scanMutation.isPending
+                      ) {
                         scanMutation.mutate(scanValue.trim());
                       }
                     }}
@@ -1847,48 +2521,81 @@ export default function TravelerExecution() {
                   <Button
                     size="sm"
                     className="h-7 text-xs px-2"
-                    onClick={() => scanValue.trim() && scanMutation.mutate(scanValue.trim())}
+                    onClick={() =>
+                      scanValue.trim() && scanMutation.mutate(scanValue.trim())
+                    }
                     disabled={scanMutation.isPending || !scanValue.trim()}
                   >
-                    {scanMutation.isPending ? '…' : <ScanBarcode className="h-3.5 w-3.5" />}
+                    {scanMutation.isPending ? (
+                      '…'
+                    ) : (
+                      <ScanBarcode className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 </div>
 
                 {/* Last scan result feedback */}
                 {lastScanResult && (
-                  <div className={`rounded px-2 py-1.5 text-[11px] ${
-                    lastScanResult.associationCreated
-                      ? 'bg-green-50 text-green-800'
-                      : lastScanResult.duplicate
-                        ? 'bg-amber-50 text-amber-800'
-                        : 'bg-red-50 text-red-700'
-                  }`}>
+                  <div
+                    className={`rounded px-2 py-1.5 text-[11px] ${
+                      lastScanResult.associationCreated
+                        ? 'bg-green-50 text-green-800'
+                        : lastScanResult.duplicate
+                          ? 'bg-amber-50 text-amber-800'
+                          : 'bg-red-50 text-red-700'
+                    }`}
+                  >
                     {lastScanResult.associationCreated ? (
                       <span>
                         <span className="font-semibold">Scanned: </span>
                         {lastScanResult.candidate?.displayLabel}
-                        {lastScanResult.matchedDependency && ' — dependency satisfied'}
+                        {lastScanResult.matchedDependency &&
+                          ' — dependency satisfied'}
                       </span>
                     ) : lastScanResult.duplicate ? (
-                      <span><span className="font-semibold">Duplicate:</span> already associated</span>
+                      <span>
+                        <span className="font-semibold">Duplicate:</span>{' '}
+                        already associated
+                      </span>
                     ) : !lastScanResult.candidateFound ? (
-                      <span><span className="font-semibold">Not found:</span> {lastScanResult.rejectionReason ?? 'No match'}</span>
+                      <span>
+                        <span className="font-semibold">Not found:</span>{' '}
+                        {lastScanResult.rejectionReason ?? 'No match'}
+                      </span>
                     ) : (
-                      <span><span className="font-semibold">Rejected:</span> {lastScanResult.rejectionReason ?? 'Does not satisfy a dependency'}</span>
+                      <span>
+                        <span className="font-semibold">Rejected:</span>{' '}
+                        {lastScanResult.rejectionReason ??
+                          'Does not satisfy a dependency'}
+                      </span>
                     )}
                   </div>
                 )}
 
                 {/* Association list */}
                 {componentAssociations.length === 0 && !lastScanResult && (
-                  <p className="text-muted-foreground">No components associated yet.</p>
+                  <p className="text-muted-foreground">
+                    No components associated yet.
+                  </p>
                 )}
                 {componentAssociations.map((assoc) => (
-                  <div key={assoc.id} className="flex items-start justify-between gap-1 bg-muted/40 rounded px-2 py-1.5">
+                  <div
+                    key={assoc.id}
+                    className="flex items-start justify-between gap-1 bg-muted/40 rounded px-2 py-1.5"
+                  >
                     <div className="min-w-0">
-                      <p className="font-medium font-mono truncate">{assoc.childPartNumber || assoc.childTravelerId || '—'}</p>
-                      <p className="text-muted-foreground">{assoc.associationType.replace(/_/g, ' ')} · qty {assoc.quantity}</p>
-                      {assoc.childSerialNumber && <p className="text-muted-foreground">S/N: {assoc.childSerialNumber}</p>}
+                      <p className="font-medium font-mono truncate">
+                        {assoc.childPartNumber || assoc.childTravelerId || '—'}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {assoc.associationType.replace(/_/g, ' ')} · qty{' '}
+                        {assoc.quantity}
+                      </p>
+                      {assoc.childSerialNumber && (
+                        <p className="text-muted-foreground">
+                          S/N: {assoc.childSerialNumber}
+                        </p>
+                      )}
                     </div>
                     <Button
                       size="sm"
@@ -1907,53 +2614,90 @@ export default function TravelerExecution() {
                   <div className="space-y-2 border rounded p-2 bg-background">
                     <div className="grid grid-cols-2 gap-1.5">
                       <div>
-                        <p className="text-[10px] text-muted-foreground mb-0.5">Part Number</p>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">
+                          Part Number
+                        </p>
                         <Input
                           className="h-7 text-xs"
                           placeholder="e.g. PN-001"
                           value={newAssoc.childPartNumber}
-                          onChange={(e) => setNewAssoc(a => ({ ...a, childPartNumber: e.target.value }))}
+                          onChange={(e) =>
+                            setNewAssoc((a) => ({
+                              ...a,
+                              childPartNumber: e.target.value,
+                            }))
+                          }
                         />
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground mb-0.5">Type</p>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">
+                          Type
+                        </p>
                         <select
                           className="h-7 text-xs w-full border rounded px-1 bg-background"
                           value={newAssoc.associationType}
-                          onChange={(e) => setNewAssoc(a => ({ ...a, associationType: e.target.value }))}
+                          onChange={(e) =>
+                            setNewAssoc((a) => ({
+                              ...a,
+                              associationType: e.target.value,
+                            }))
+                          }
                         >
                           <option value="TRAVELER">TRAVELER</option>
                           <option value="INVENTORY_ITEM">INVENTORY ITEM</option>
-                          <option value="SERIALIZED_COMPONENT">SERIALIZED</option>
+                          <option value="SERIALIZED_COMPONENT">
+                            SERIALIZED
+                          </option>
                           <option value="LOT_COMPONENT">LOT COMPONENT</option>
                         </select>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground mb-0.5">Serial / Traveler ID</p>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">
+                          Serial / Traveler ID
+                        </p>
                         <Input
                           className="h-7 text-xs"
                           placeholder="Optional"
                           value={newAssoc.childTravelerId}
-                          onChange={(e) => setNewAssoc(a => ({ ...a, childTravelerId: e.target.value }))}
+                          onChange={(e) =>
+                            setNewAssoc((a) => ({
+                              ...a,
+                              childTravelerId: e.target.value,
+                            }))
+                          }
                         />
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground mb-0.5">Qty</p>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">
+                          Qty
+                        </p>
                         <Input
                           className="h-7 text-xs"
                           type="number"
                           min={1}
                           value={newAssoc.quantity}
-                          onChange={(e) => setNewAssoc(a => ({ ...a, quantity: parseInt(e.target.value) || 1 }))}
+                          onChange={(e) =>
+                            setNewAssoc((a) => ({
+                              ...a,
+                              quantity: parseInt(e.target.value) || 1,
+                            }))
+                          }
                         />
                       </div>
                       <div className="col-span-2">
-                        <p className="text-[10px] text-muted-foreground mb-0.5">Scanned By</p>
+                        <p className="text-[10px] text-muted-foreground mb-0.5">
+                          Scanned By
+                        </p>
                         <Input
                           className="h-7 text-xs"
                           placeholder="Operator name / badge"
                           value={newAssoc.scannedBy}
-                          onChange={(e) => setNewAssoc(a => ({ ...a, scannedBy: e.target.value }))}
+                          onChange={(e) =>
+                            setNewAssoc((a) => ({
+                              ...a,
+                              scannedBy: e.target.value,
+                            }))
+                          }
                         />
                       </div>
                     </div>
@@ -1961,23 +2705,39 @@ export default function TravelerExecution() {
                       <Button
                         size="sm"
                         className="h-6 text-xs flex-1"
-                        disabled={createAssocMutation.isPending || (!newAssoc.childPartNumber && !newAssoc.childTravelerId)}
+                        disabled={
+                          createAssocMutation.isPending ||
+                          (!newAssoc.childPartNumber &&
+                            !newAssoc.childTravelerId)
+                        }
                         onClick={() => {
                           const payload: Record<string, unknown> = {
                             associationType: newAssoc.associationType,
                             quantity: newAssoc.quantity,
                           };
-                          if (newAssoc.childPartNumber) payload.childPartNumber = newAssoc.childPartNumber;
-                          if (newAssoc.childTravelerId) payload.childTravelerId = newAssoc.childTravelerId;
-                          if (newAssoc.childSerialNumber) payload.childSerialNumber = newAssoc.childSerialNumber;
-                          if (newAssoc.scannedBy) payload.scannedBy = newAssoc.scannedBy;
+                          if (newAssoc.childPartNumber)
+                            payload.childPartNumber = newAssoc.childPartNumber;
+                          if (newAssoc.childTravelerId)
+                            payload.childTravelerId = newAssoc.childTravelerId;
+                          if (newAssoc.childSerialNumber)
+                            payload.childSerialNumber =
+                              newAssoc.childSerialNumber;
+                          if (newAssoc.scannedBy)
+                            payload.scannedBy = newAssoc.scannedBy;
                           if (newAssoc.notes) payload.notes = newAssoc.notes;
                           createAssocMutation.mutate(payload);
                         }}
                       >
                         {createAssocMutation.isPending ? 'Saving…' : 'Save'}
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setShowAssocForm(false)}>Cancel</Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-xs"
+                        onClick={() => setShowAssocForm(false)}
+                      >
+                        Cancel
+                      </Button>
                     </div>
                   </div>
                 ) : (
@@ -2029,7 +2789,9 @@ export default function TravelerExecution() {
                   {isStepMinimal(step) && step.status !== 'COMPLETED' && (
                     <div className="flex items-center gap-1 mt-1">
                       <SkipForward className="h-3 w-3 text-amber-500" />
-                      <span className="text-[10px] text-amber-600">No inputs configured</span>
+                      <span className="text-[10px] text-amber-600">
+                        No inputs configured
+                      </span>
                     </div>
                   )}
                 </button>
@@ -2064,93 +2826,165 @@ export default function TravelerExecution() {
                 Block Traveler
               </Button>
 
-              {isAdmin && (() => {
-                const unsignedSteps = steps.filter((s: any) => (!s.signatures || s.signatures.length === 0) && s.status !== 'NOT_STARTED');
-                const stuckTasks = steps.flatMap((s: any) =>
-                  (s.tasks || []).filter((t: any) => t.required && t.status !== 'COMPLETED').map((t: any) => ({ ...t, stepDept: s.departmentName, stepId: s.id }))
-                );
-                if (unsignedSteps.length === 0 && stuckTasks.length === 0) return null;
-                return (
-                  <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-700">
-                    <CardContent className="pt-4 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-amber-600" />
-                        <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">Admin: Resolve Stuck Items</p>
-                      </div>
-                      {!showAdminForceSign ? (
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => setShowAdminForceSign(true)}>
-                          Show Admin Options
-                        </Button>
-                      ) : (
-                        <div className="space-y-3">
-                          <div>
-                            <Label htmlFor="admin-force-reason" className="text-xs">Reason for admin action</Label>
-                            <Input
-                              id="admin-force-reason"
-                              name="admin-force-reason"
-                              value={adminForceReason}
-                              onChange={(e) => setAdminForceReason(e.target.value)}
-                              placeholder="e.g., Work completed before digital system"
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                          {unsignedSteps.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">Unsigned Steps ({unsignedSteps.length}):</p>
-                              {unsignedSteps.map((s: any) => (
-                                <div key={s.id} className="flex items-center justify-between p-1.5 bg-white dark:bg-gray-900 rounded border text-xs">
-                                  <span>Step {s.stepNumber}: {s.departmentName}</span>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-6 text-xs px-2"
-                                    disabled={!adminForceReason || adminForceSignMutation.isPending}
-                                    onClick={() => adminForceSignMutation.mutate({ stepId: s.id, reason: adminForceReason })}
-                                  >
-                                    {adminForceSignMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Force Sign'}
-                                  </Button>
-                                </div>
-                              ))}
-                              <Button
-                                size="sm"
-                                variant="default"
-                                className="w-full h-7 text-xs mt-1"
-                                disabled={!adminForceReason || adminForceSignMutation.isPending}
-                                onClick={async () => {
-                                  for (const s of unsignedSteps) {
-                                    await adminForceSignMutation.mutateAsync({ stepId: (s as any).id, reason: adminForceReason });
-                                  }
-                                }}
-                              >
-                                Force Sign All Unsigned Steps
-                              </Button>
-                            </div>
-                          )}
-                          {stuckTasks.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">Incomplete Tasks ({stuckTasks.length}):</p>
-                              {stuckTasks.map((t: any) => (
-                                <div key={t.id} className="flex items-center justify-between p-1.5 bg-white dark:bg-gray-900 rounded border text-xs">
-                                  <span className="truncate mr-2">{t.stepDept}: {t.title}</span>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-6 text-xs px-2 shrink-0"
-                                    disabled={!adminForceReason || adminForceCompleteTaskMutation.isPending}
-                                    onClick={() => adminForceCompleteTaskMutation.mutate({ taskId: t.id, reason: adminForceReason })}
-                                  >
-                                    {adminForceCompleteTaskMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Complete'}
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+              {isAdmin &&
+                (() => {
+                  const unsignedSteps = steps.filter(
+                    (s: any) =>
+                      (!s.signatures || s.signatures.length === 0) &&
+                      s.status !== 'NOT_STARTED'
+                  );
+                  const stuckTasks = steps.flatMap((s: any) =>
+                    (s.tasks || [])
+                      .filter(
+                        (t: any) => t.required && t.status !== 'COMPLETED'
+                      )
+                      .map((t: any) => ({
+                        ...t,
+                        stepDept: s.departmentName,
+                        stepId: s.id,
+                      }))
+                  );
+                  if (unsignedSteps.length === 0 && stuckTasks.length === 0)
+                    return null;
+                  return (
+                    <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-700">
+                      <CardContent className="pt-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-4 w-4 text-amber-600" />
+                          <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                            Admin: Resolve Stuck Items
+                          </p>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })()}
+                        {!showAdminForceSign ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => setShowAdminForceSign(true)}
+                          >
+                            Show Admin Options
+                          </Button>
+                        ) : (
+                          <div className="space-y-3">
+                            <div>
+                              <Label
+                                htmlFor="admin-force-reason"
+                                className="text-xs"
+                              >
+                                Reason for admin action
+                              </Label>
+                              <Input
+                                id="admin-force-reason"
+                                name="admin-force-reason"
+                                value={adminForceReason}
+                                onChange={(e) =>
+                                  setAdminForceReason(e.target.value)
+                                }
+                                placeholder="e.g., Work completed before digital system"
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            {unsignedSteps.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                                  Unsigned Steps ({unsignedSteps.length}):
+                                </p>
+                                {unsignedSteps.map((s: any) => (
+                                  <div
+                                    key={s.id}
+                                    className="flex items-center justify-between p-1.5 bg-white dark:bg-gray-900 rounded border text-xs"
+                                  >
+                                    <span>
+                                      Step {s.stepNumber}: {s.departmentName}
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 text-xs px-2"
+                                      disabled={
+                                        !adminForceReason ||
+                                        adminForceSignMutation.isPending
+                                      }
+                                      onClick={() =>
+                                        adminForceSignMutation.mutate({
+                                          stepId: s.id,
+                                          reason: adminForceReason,
+                                        })
+                                      }
+                                    >
+                                      {adminForceSignMutation.isPending ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        'Force Sign'
+                                      )}
+                                    </Button>
+                                  </div>
+                                ))}
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="w-full h-7 text-xs mt-1"
+                                  disabled={
+                                    !adminForceReason ||
+                                    adminForceSignMutation.isPending
+                                  }
+                                  onClick={async () => {
+                                    for (const s of unsignedSteps) {
+                                      await adminForceSignMutation.mutateAsync({
+                                        stepId: (s as any).id,
+                                        reason: adminForceReason,
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Force Sign All Unsigned Steps
+                                </Button>
+                              </div>
+                            )}
+                            {stuckTasks.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                                  Incomplete Tasks ({stuckTasks.length}):
+                                </p>
+                                {stuckTasks.map((t: any) => (
+                                  <div
+                                    key={t.id}
+                                    className="flex items-center justify-between p-1.5 bg-white dark:bg-gray-900 rounded border text-xs"
+                                  >
+                                    <span className="truncate mr-2">
+                                      {t.stepDept}: {t.title}
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 text-xs px-2 shrink-0"
+                                      disabled={
+                                        !adminForceReason ||
+                                        adminForceCompleteTaskMutation.isPending
+                                      }
+                                      onClick={() =>
+                                        adminForceCompleteTaskMutation.mutate({
+                                          taskId: t.id,
+                                          reason: adminForceReason,
+                                        })
+                                      }
+                                    >
+                                      {adminForceCompleteTaskMutation.isPending ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        'Complete'
+                                      )}
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
             </div>
           )}
 
@@ -2178,10 +3012,12 @@ export default function TravelerExecution() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>
-                      Step {currentStep.stepNumber}: {currentStep.departmentName}
+                      Step {currentStep.stepNumber}:{' '}
+                      {currentStep.departmentName}
                     </CardTitle>
                     <CardDescription>
-                      {currentStep.status === 'NOT_STARTED' && 'Not yet started'}
+                      {currentStep.status === 'NOT_STARTED' &&
+                        'Not yet started'}
                       {currentStep.status === 'IN_PROGRESS' &&
                         `Started by ${activeTechName || currentStep.startedBy}`}
                       {currentStep.status === 'COMPLETED' &&
@@ -2200,11 +3036,14 @@ export default function TravelerExecution() {
                       <div className="mb-4 mx-auto max-w-sm p-3 bg-amber-50 border border-amber-200 rounded-lg">
                         <div className="flex items-center justify-center gap-2 mb-1">
                           <SkipForward className="h-4 w-4 text-amber-600" />
-                          <span className="text-sm font-medium text-amber-700">Passthrough Step</span>
+                          <span className="text-sm font-medium text-amber-700">
+                            Passthrough Step
+                          </span>
                         </div>
                         <p className="text-xs text-amber-600">
-                          This step has no configured data entry, QC checks, or material tracking.
-                          Badge scan and sign to pass through.
+                          This step has no configured data entry, QC checks, or
+                          material tracking. Badge scan and sign to pass
+                          through.
                         </p>
                       </div>
                     )}
@@ -2218,13 +3057,31 @@ export default function TravelerExecution() {
                           {laborContext.chargeCode ? (
                             <span className="text-xs text-muted-foreground">
                               Charge code:{' '}
-                              <span className="font-mono font-semibold text-foreground">{laborContext.chargeCode}</span>
+                              <span className="font-mono font-semibold text-foreground">
+                                {laborContext.chargeCode}
+                              </span>
                               <span className="ml-1 text-[10px] text-muted-foreground">
-                                ({laborContext.chargeCodeResolvedFrom === 'wad_default' ? 'WAD default' : laborContext.chargeCodeResolvedFrom === 'traveler_default' ? 'traveler default' : laborContext.chargeCodeResolvedFrom === 'wad_department' ? 'WAD dept' : laborContext.chargeCodeResolvedFrom === 'wad_wizard' ? 'WAD Step 4' : 'dept match'})
+                                (
+                                {laborContext.chargeCodeResolvedFrom ===
+                                'wad_default'
+                                  ? 'WAD default'
+                                  : laborContext.chargeCodeResolvedFrom ===
+                                      'traveler_default'
+                                    ? 'traveler default'
+                                    : laborContext.chargeCodeResolvedFrom ===
+                                        'wad_department'
+                                      ? 'WAD dept'
+                                      : laborContext.chargeCodeResolvedFrom ===
+                                          'wad_wizard'
+                                        ? 'WAD Step 4'
+                                        : 'dept match'}
+                                )
                               </span>
                             </span>
                           ) : (
-                            <span className="text-xs text-amber-600 font-medium">No charge code resolved</span>
+                            <span className="text-xs text-amber-600 font-medium">
+                              No charge code resolved
+                            </span>
                           )}
                         </div>
 
@@ -2233,83 +3090,122 @@ export default function TravelerExecution() {
                           <div className="flex items-center justify-center gap-2">
                             {laborContext.certificationStatus === 'VALID' ? (
                               <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
-                            ) : laborContext.certificationStatus === 'EXPIRED' || laborContext.certificationStatus === 'MISSING' ? (
+                            ) : laborContext.certificationStatus ===
+                                'EXPIRED' ||
+                              laborContext.certificationStatus === 'MISSING' ? (
                               <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
                             ) : (
                               <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
                             )}
                             <span className="text-xs text-muted-foreground">
-                              {laborContext.certificationName
-                                ? <>Cert: <span className="font-semibold text-foreground">{laborContext.certificationName}</span></>
-                                : 'Certification required for this step'
-                              }
-                              {laborContext.certificationStatus && laborContext.certificationStatus !== 'UNKNOWN' && (
-                                <span className={`ml-1.5 font-semibold text-xs px-1.5 py-0.5 rounded ${
-                                  laborContext.certificationStatus === 'VALID'
-                                    ? 'bg-green-100 text-green-700'
-                                    : laborContext.certificationStatus === 'EXPIRED'
-                                      ? 'bg-amber-100 text-amber-700'
-                                      : 'bg-red-100 text-red-700'
-                                }`}>
-                                  {laborContext.certificationStatus}
-                                </span>
+                              {laborContext.certificationName ? (
+                                <>
+                                  Cert:{' '}
+                                  <span className="font-semibold text-foreground">
+                                    {laborContext.certificationName}
+                                  </span>
+                                </>
+                              ) : (
+                                'Certification required for this step'
                               )}
+                              {laborContext.certificationStatus &&
+                                laborContext.certificationStatus !==
+                                  'UNKNOWN' && (
+                                  <span
+                                    className={`ml-1.5 font-semibold text-xs px-1.5 py-0.5 rounded ${
+                                      laborContext.certificationStatus ===
+                                      'VALID'
+                                        ? 'bg-green-100 text-green-700'
+                                        : laborContext.certificationStatus ===
+                                            'EXPIRED'
+                                          ? 'bg-amber-100 text-amber-700'
+                                          : 'bg-red-100 text-red-700'
+                                    }`}
+                                  >
+                                    {laborContext.certificationStatus}
+                                  </span>
+                                )}
                             </span>
                           </div>
                         )}
 
                         {/* Cert warning — inline warning + ack (Task #1235 WARN) */}
                         {laborContext.requiresCertification && (
-                          <div className={`p-3 border rounded-lg text-left ${
-                            laborContext.certificationStatus === 'VALID'
-                              ? 'bg-green-50 border-green-200'
-                              : 'bg-amber-50 border-amber-200'
-                          }`}>
+                          <div
+                            className={`p-3 border rounded-lg text-left ${
+                              laborContext.certificationStatus === 'VALID'
+                                ? 'bg-green-50 border-green-200'
+                                : 'bg-amber-50 border-amber-200'
+                            }`}
+                          >
                             <div className="flex items-center gap-2 mb-1">
                               {laborContext.certificationStatus === 'VALID' ? (
                                 <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
                               ) : (
                                 <ShieldAlert className="h-4 w-4 text-amber-600 flex-shrink-0" />
                               )}
-                              <span className={`text-sm font-semibold ${laborContext.certificationStatus === 'VALID' ? 'text-green-800' : 'text-amber-800'}`}>
+                              <span
+                                className={`text-sm font-semibold ${laborContext.certificationStatus === 'VALID' ? 'text-green-800' : 'text-amber-800'}`}
+                              >
                                 {laborContext.certificationStatus === 'VALID'
                                   ? 'Certification Valid'
-                                  : laborContext.certificationStatus === 'EXPIRED'
+                                  : laborContext.certificationStatus ===
+                                      'EXPIRED'
                                     ? 'Certification Expired'
-                                    : laborContext.certificationStatus === 'MISSING'
+                                    : laborContext.certificationStatus ===
+                                        'MISSING'
                                       ? 'Certification Missing'
-                                      : 'Certification Required'
-                                }
+                                      : 'Certification Required'}
                               </span>
                             </div>
                             {laborContext.certificationStatus === 'VALID' ? (
-                              <p className="text-xs text-green-700">Your certification is current. It will be recorded on the punch ledger at step start.</p>
+                              <p className="text-xs text-green-700">
+                                Your certification is current. It will be
+                                recorded on the punch ledger at step start.
+                              </p>
                             ) : laborContext.certReason ? (
-                              <p className="text-xs text-amber-700">{laborContext.certReason}</p>
+                              <p className="text-xs text-amber-700">
+                                {laborContext.certReason}
+                              </p>
                             ) : (
                               <p className="text-xs text-amber-700">
-                                {laborContext.certificationName
-                                  ? <>This step requires <span className="font-semibold">{laborContext.certificationName}</span>. Scan your badge to verify cert status.</>
-                                  : 'This step requires an operator certification. Scan your badge to verify your status.'
-                                }
+                                {laborContext.certificationName ? (
+                                  <>
+                                    This step requires{' '}
+                                    <span className="font-semibold">
+                                      {laborContext.certificationName}
+                                    </span>
+                                    . Scan your badge to verify cert status.
+                                  </>
+                                ) : (
+                                  'This step requires an operator certification. Scan your badge to verify your status.'
+                                )}
                               </p>
                             )}
                             {laborContext.certificationStatus !== 'VALID' && (
                               <p className="text-xs text-amber-600 mt-1">
-                                Phase 1 policy: expired or missing certs are flagged for supervisor review, not blocked.
+                                Phase 1 policy: expired or missing certs are
+                                flagged for supervisor review, not blocked.
                               </p>
                             )}
                             {/* Acknowledgment checkbox only required for non-VALID cert status */}
-                            {(laborContext.certificationStatus === 'EXPIRED' || laborContext.certificationStatus === 'MISSING') && (
-                              !certWarnAcknowledged ? (
+                            {(laborContext.certificationStatus === 'EXPIRED' ||
+                              laborContext.certificationStatus === 'MISSING') &&
+                              (!certWarnAcknowledged ? (
                                 <div className="flex items-center gap-2 mt-2">
                                   <Checkbox
                                     id="cert-warn-ack"
                                     checked={certWarnAcknowledged}
-                                    onCheckedChange={(v) => setCertWarnAcknowledged(!!v)}
+                                    onCheckedChange={(v) =>
+                                      setCertWarnAcknowledged(!!v)
+                                    }
                                   />
-                                  <label htmlFor="cert-warn-ack" className="text-xs text-amber-700 cursor-pointer">
-                                    I understand my certification status will be flagged for supervisor review
+                                  <label
+                                    htmlFor="cert-warn-ack"
+                                    className="text-xs text-amber-700 cursor-pointer"
+                                  >
+                                    I understand my certification status will be
+                                    flagged for supervisor review
                                   </label>
                                 </div>
                               ) : (
@@ -2317,42 +3213,58 @@ export default function TravelerExecution() {
                                   <CheckCircle className="h-3.5 w-3.5" />
                                   Acknowledged
                                 </div>
-                              )
-                            )}
+                              ))}
                           </div>
                         )}
 
                         {/* Near-exhausted budget warning (WARNING status — informational, no ack needed) */}
-                        {!laborContext.isOverrun && laborContext.nearlyExhausted && laborContext.overrunReason && (
-                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-left">
-                            <div className="flex items-center gap-2 mb-1">
-                              <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
-                              <span className="text-sm font-semibold text-amber-800">Budget Nearly Exhausted</span>
+                        {!laborContext.isOverrun &&
+                          laborContext.nearlyExhausted &&
+                          laborContext.overrunReason && (
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-left">
+                              <div className="flex items-center gap-2 mb-1">
+                                <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                                <span className="text-sm font-semibold text-amber-800">
+                                  Budget Nearly Exhausted
+                                </span>
+                              </div>
+                              <p className="text-xs text-amber-700">
+                                {laborContext.overrunReason}
+                              </p>
                             </div>
-                            <p className="text-xs text-amber-700">{laborContext.overrunReason}</p>
-                          </div>
-                        )}
+                          )}
 
                         {/* Budget overrun warning (BLOCKED status — WARN: ack required) */}
                         {laborContext.isOverrun && (
                           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-left">
                             <div className="flex items-center gap-2 mb-1">
                               <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
-                              <span className="text-sm font-semibold text-red-800">Budget Overrun</span>
+                              <span className="text-sm font-semibold text-red-800">
+                                Budget Overrun
+                              </span>
                             </div>
-                            <p className="text-xs text-red-700">{laborContext.overrunReason}</p>
+                            <p className="text-xs text-red-700">
+                              {laborContext.overrunReason}
+                            </p>
                             <p className="text-xs text-red-600 mt-1">
-                              Phase 1 policy: session will be recorded and flagged for supervisor review.
+                              Phase 1 policy: session will be recorded and
+                              flagged for supervisor review.
                             </p>
                             {!laborWarnAcknowledged && (
                               <div className="flex items-center gap-2 mt-2">
                                 <Checkbox
                                   id="labor-warn-ack"
                                   checked={laborWarnAcknowledged}
-                                  onCheckedChange={(v) => setLaborWarnAcknowledged(!!v)}
+                                  onCheckedChange={(v) =>
+                                    setLaborWarnAcknowledged(!!v)
+                                  }
                                 />
-                                <label htmlFor="labor-warn-ack" className="text-xs text-red-700 cursor-pointer">
-                                  I understand this session will be flagged for review
+                                <label
+                                  htmlFor="labor-warn-ack"
+                                  className="text-xs text-red-700 cursor-pointer"
+                                >
+                                  I understand this session will be flagged for
+                                  review
                                 </label>
                               </div>
                             )}
@@ -2378,24 +3290,33 @@ export default function TravelerExecution() {
                         if (
                           startStepMutation.isPending ||
                           !(signatureData.badgeScan || activeBadge) ||
-                          (badgeLookupStatus === 'not_found' && !signatureData.signedByName) ||
+                          (badgeLookupStatus === 'not_found' &&
+                            !signatureData.signedByName) ||
                           badgeLookupStatus === 'error' ||
                           nameLookupPending ||
-                          (!!laborContext?.isOverrun && !laborWarnAcknowledged) ||
+                          (!!laborContext?.isOverrun &&
+                            !laborWarnAcknowledged) ||
                           (!!laborContext?.requiresCertification &&
-                            (laborContext.certificationStatus === 'EXPIRED' || laborContext.certificationStatus === 'MISSING') &&
+                            (laborContext.certificationStatus === 'EXPIRED' ||
+                              laborContext.certificationStatus === 'MISSING') &&
                             !certWarnAcknowledged)
-                        ) return;
+                        )
+                          return;
                         startStepMutation.mutate({
                           stepId: currentStep.id,
                           badge: signatureData.badgeScan || activeBadge,
-                          techName: resolvedEmployee?.name || activeTechName || signatureData.signedByName,
+                          techName:
+                            resolvedEmployee?.name ||
+                            activeTechName ||
+                            signatureData.signedByName,
                           employeeId: resolvedEmployee?.id,
                         });
                       }}
                     >
                       <div className="space-y-1">
-                        <Label htmlFor="step-badge-scan" className="text-sm">Scan Badge</Label>
+                        <Label htmlFor="step-badge-scan" className="text-sm">
+                          Scan Badge
+                        </Label>
                         <Input
                           id="step-badge-scan"
                           name="step-badge-scan"
@@ -2416,10 +3337,16 @@ export default function TravelerExecution() {
                         {badgeLookupStatus === 'not_found' && (
                           <div className="mt-1 space-y-2">
                             <p className="text-xs text-red-500">
-                              Badge not recognized. Enter your name manually to continue.
+                              Badge not recognized. Enter your name manually to
+                              continue.
                             </p>
                             <div className="space-y-1">
-                              <Label htmlFor="tech-name-fallback" className="text-sm">Your Name</Label>
+                              <Label
+                                htmlFor="tech-name-fallback"
+                                className="text-sm"
+                              >
+                                Your Name
+                              </Label>
                               <Input
                                 id="tech-name-fallback"
                                 name="tech-name-fallback"
@@ -2427,25 +3354,39 @@ export default function TravelerExecution() {
                                 value={signatureData.signedByName}
                                 onChange={(e) => {
                                   const name = e.target.value;
-                                  setSignatureData({ ...signatureData, signedByName: name });
+                                  setSignatureData({
+                                    ...signatureData,
+                                    signedByName: name,
+                                  });
                                   setResolvedEmployee(null);
                                   setNameLookupPending(false);
-                                  if (nameLookupTimerRef.current) clearTimeout(nameLookupTimerRef.current);
+                                  if (nameLookupTimerRef.current)
+                                    clearTimeout(nameLookupTimerRef.current);
                                   if (name.trim().length >= 2) {
                                     setNameLookupPending(true);
-                                    nameLookupTimerRef.current = setTimeout(async () => {
-                                      try {
-                                        const resp = await fetch(`/api/p2-traveler/employee-lookup?name=${encodeURIComponent(name.trim())}`);
-                                        if (resp.ok) {
-                                          const emp = await resp.json();
-                                          setResolvedEmployee({ id: emp.id, name: emp.name, employeeCode: emp.employeeCode, department: null });
+                                    nameLookupTimerRef.current = setTimeout(
+                                      async () => {
+                                        try {
+                                          const resp = await fetch(
+                                            `/api/p2-traveler/employee-lookup?name=${encodeURIComponent(name.trim())}`
+                                          );
+                                          if (resp.ok) {
+                                            const emp = await resp.json();
+                                            setResolvedEmployee({
+                                              id: emp.id,
+                                              name: emp.name,
+                                              employeeCode: emp.employeeCode,
+                                              department: null,
+                                            });
+                                          }
+                                        } catch {
+                                          // name lookup failure is non-fatal; operator continues with typed name only
+                                        } finally {
+                                          setNameLookupPending(false);
                                         }
-                                      } catch {
-                                        // name lookup failure is non-fatal; operator continues with typed name only
-                                      } finally {
-                                        setNameLookupPending(false);
-                                      }
-                                    }, 400);
+                                      },
+                                      400
+                                    );
                                   }
                                 }}
                                 data-testid="input-tech-name-fallback"
@@ -2462,7 +3403,8 @@ export default function TravelerExecution() {
                         {badgeLookupStatus === 'error' && (
                           <div className="mt-1 space-y-1">
                             <p className="text-xs text-amber-600">
-                              Could not reach the badge reader. Check your connection and try scanning again.
+                              Could not reach the badge reader. Check your
+                              connection and try scanning again.
                             </p>
                             <button
                               type="button"
@@ -2470,7 +3412,10 @@ export default function TravelerExecution() {
                               onClick={() => {
                                 setBadgeLookupStatus('idle');
                                 setNameLookupPending(false);
-                                setSignatureData((prev) => ({ ...prev, badgeScan: '' }));
+                                setSignatureData((prev) => ({
+                                  ...prev,
+                                  badgeScan: '',
+                                }));
                               }}
                             >
                               Retry
@@ -2479,52 +3424,72 @@ export default function TravelerExecution() {
                         )}
                       </div>
 
-                      {(badgeLookupStatus === 'found' || (badgeLookupStatus === 'not_found' && resolvedEmployee)) && resolvedEmployee && (
-                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                          <div className="flex items-center gap-2">
-                            <User className="h-5 w-5 text-green-600" />
-                            <div>
-                              <p className="font-medium text-green-800">{resolvedEmployee.name}</p>
-                              {resolvedEmployee.department && (
-                                <p className="text-xs text-green-600">{resolvedEmployee.department}</p>
-                              )}
+                      {(badgeLookupStatus === 'found' ||
+                        (badgeLookupStatus === 'not_found' &&
+                          resolvedEmployee)) &&
+                        resolvedEmployee && (
+                          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <User className="h-5 w-5 text-green-600" />
+                              <div>
+                                <p className="font-medium text-green-800">
+                                  {resolvedEmployee.name}
+                                </p>
+                                {resolvedEmployee.department && (
+                                  <p className="text-xs text-green-600">
+                                    {resolvedEmployee.department}
+                                  </p>
+                                )}
+                              </div>
+                              <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />
                             </div>
-                            <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {badgeLookupStatus === 'idle' && !signatureData.badgeScan && activeBadge && activeTechName && (
-                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                          <div className="flex items-center gap-2">
-                            <User className="h-5 w-5 text-green-600" />
-                            <div>
-                              <p className="font-medium text-green-800">{activeTechName}</p>
+                      {badgeLookupStatus === 'idle' &&
+                        !signatureData.badgeScan &&
+                        activeBadge &&
+                        activeTechName && (
+                          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <User className="h-5 w-5 text-green-600" />
+                              <div>
+                                <p className="font-medium text-green-800">
+                                  {activeTechName}
+                                </p>
+                              </div>
+                              <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />
                             </div>
-                            <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />
                           </div>
-                        </div>
-                      )}
+                        )}
 
                       <Button
                         type="button"
-                        onClick={() => startStepMutation.mutate({
-                          stepId: currentStep.id,
-                          badge: signatureData.badgeScan || activeBadge,
-                          techName: resolvedEmployee?.name || activeTechName || signatureData.signedByName,
-                          employeeId: resolvedEmployee?.id,
-                        })}
+                        onClick={() =>
+                          startStepMutation.mutate({
+                            stepId: currentStep.id,
+                            badge: signatureData.badgeScan || activeBadge,
+                            techName:
+                              resolvedEmployee?.name ||
+                              activeTechName ||
+                              signatureData.signedByName,
+                            employeeId: resolvedEmployee?.id,
+                          })
+                        }
                         disabled={
                           startStepMutation.isPending ||
                           !(signatureData.badgeScan || activeBadge) ||
-                          (badgeLookupStatus === 'not_found' && !signatureData.signedByName) ||
+                          (badgeLookupStatus === 'not_found' &&
+                            !signatureData.signedByName) ||
                           badgeLookupStatus === 'error' ||
                           nameLookupPending ||
                           // Require acknowledgment when budget is overrun (Task #1235)
-                          (!!laborContext?.isOverrun && !laborWarnAcknowledged) ||
+                          (!!laborContext?.isOverrun &&
+                            !laborWarnAcknowledged) ||
                           // Require cert acknowledgment only when cert is EXPIRED or MISSING (Task #1235 WARN)
                           (!!laborContext?.requiresCertification &&
-                            (laborContext.certificationStatus === 'EXPIRED' || laborContext.certificationStatus === 'MISSING') &&
+                            (laborContext.certificationStatus === 'EXPIRED' ||
+                              laborContext.certificationStatus === 'MISSING') &&
                             !certWarnAcknowledged)
                         }
                         data-testid="button-start-step"
@@ -2545,16 +3510,23 @@ export default function TravelerExecution() {
                         </p>
                         <ul className="space-y-1">
                           {stepGates.map((gate) => (
-                            <li key={gate.key} className="flex items-center gap-2 text-sm">
+                            <li
+                              key={gate.key}
+                              className="flex items-center gap-2 text-sm"
+                            >
                               {gate.passed ? (
                                 <>
                                   <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                                  <span className="text-muted-foreground">{gate.label}</span>
+                                  <span className="text-muted-foreground">
+                                    {gate.label}
+                                  </span>
                                 </>
                               ) : (
                                 <>
                                   <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                                  <span className="font-medium text-amber-700 dark:text-amber-400">{gate.label}</span>
+                                  <span className="font-medium text-amber-700 dark:text-amber-400">
+                                    {gate.label}
+                                  </span>
                                   {gate.reason && (
                                     <Popover>
                                       <PopoverTrigger asChild>
@@ -2562,7 +3534,10 @@ export default function TravelerExecution() {
                                           <Info className="h-3.5 w-3.5" />
                                         </button>
                                       </PopoverTrigger>
-                                      <PopoverContent side="top" className="max-w-xs text-sm">
+                                      <PopoverContent
+                                        side="top"
+                                        className="max-w-xs text-sm"
+                                      >
                                         {gate.reason}
                                       </PopoverContent>
                                     </Popover>
@@ -2577,967 +3552,1832 @@ export default function TravelerExecution() {
                   </div>
                 )}
 
-                {(currentStep.status === 'IN_PROGRESS' || canEditLegacyCurrentStepData) && (() => {
-                  const isLegacyBackfilledStepDataEntry =
-                    currentStep.status === 'COMPLETED' && canEditLegacyCurrentStepData;
-                  const isGateTask = (t: TravelerTask) => t.taskType === 'END_GATE' || t.taskType === 'SIGNATURE';
-                  const allRequiredNonGateComplete = currentStep.tasks
-                    .filter((t) => t.required && !isGateTask(t) && !isBadgeGateTask(t))
-                    .every((t) => t.status === 'COMPLETED');
-                  const unsignedSigTasks = currentStep.tasks.filter(
-                    (t) => t.requiresSignature && t.status !== 'COMPLETED' && !isGateTask(t)
-                  );
-                  const canSignStep =
-                    !isLegacyBackfilledStepDataEntry &&
-                    allRequiredNonGateComplete &&
-                    unsignedSigTasks.length === 0;
+                {(currentStep.status === 'IN_PROGRESS' ||
+                  canEditLegacyCurrentStepData) &&
+                  (() => {
+                    const isLegacyBackfilledStepDataEntry =
+                      currentStep.status === 'COMPLETED' &&
+                      canEditLegacyCurrentStepData;
+                    const isGateTask = (t: TravelerTask) =>
+                      t.taskType === 'END_GATE' || t.taskType === 'SIGNATURE';
+                    const allRequiredNonGateComplete = currentStep.tasks
+                      .filter(
+                        (t) =>
+                          t.required && !isGateTask(t) && !isBadgeGateTask(t)
+                      )
+                      .every((t) => t.status === 'COMPLETED');
+                    const unsignedSigTasks = currentStep.tasks.filter(
+                      (t) =>
+                        t.requiresSignature &&
+                        t.status !== 'COMPLETED' &&
+                        !isGateTask(t)
+                    );
+                    const canSignStep =
+                      !isLegacyBackfilledStepDataEntry &&
+                      allRequiredNonGateComplete &&
+                      unsignedSigTasks.length === 0;
 
-                  return (
-                  <div className="space-y-6">
-                    {isLegacyBackfilledStepDataEntry && (
-                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-                        This step was completed by the supervised legacy ROC routing backfill. Routing remains complete, and collected data fields are open for record entry with timestamped audit history.
-                      </div>
-                    )}
-
-                    {/* Step-level Work Instructions from routing (always visible) */}
-                    {(() => {
-                      const deptConfig = getDeptConfig(currentStep.departmentName);
-                      const stepPack = normalizeInstructionPack(deptConfig?.instructionPack);
-                      const anyTaskHasPack = currentStep.tasks.some(t => t.instructionPack);
-                      if (!stepPack || anyTaskHasPack) return null;
-                      return (
-                        <div className="space-y-3 rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4 mb-4">
-                          <div className="flex items-center gap-2 pb-1 border-b border-blue-200 dark:border-blue-800">
-                            <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                            <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">Work Instructions</p>
+                    return (
+                      <div className="space-y-6">
+                        {isLegacyBackfilledStepDataEntry && (
+                          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                            This step was completed by the supervised legacy ROC
+                            routing backfill. Routing remains complete, and
+                            collected data fields are open for record entry with
+                            timestamped audit history.
                           </div>
-                          {stepPack.specialNotes && (
-                            <div className="rounded-lg border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3">
-                              <div className="flex items-start gap-2">
-                                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-1">Special Notes</p>
-                                  <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">{stepPack.specialNotes}</p>
-                                </div>
+                        )}
+
+                        {/* Step-level Work Instructions from routing (always visible) */}
+                        {(() => {
+                          const deptConfig = getDeptConfig(
+                            currentStep.departmentName
+                          );
+                          const stepPack = normalizeInstructionPack(
+                            deptConfig?.instructionPack
+                          );
+                          const anyTaskHasPack = currentStep.tasks.some(
+                            (t) => t.instructionPack
+                          );
+                          if (!stepPack || anyTaskHasPack) return null;
+                          return (
+                            <div className="space-y-3 rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4 mb-4">
+                              <div className="flex items-center gap-2 pb-1 border-b border-blue-200 dark:border-blue-800">
+                                <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
+                                  Work Instructions
+                                </p>
                               </div>
-                            </div>
-                          )}
-                          {stepPack.workInstructionRefs.length > 0 && (
-                            <div className="space-y-1.5">
-                              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                                <FileText className="h-3 w-3" /> Reference Documents
-                              </p>
-                              {stepPack.workInstructionRefs.map((ref, i) => (
-                                <div key={i} className="flex items-center gap-2 p-2 rounded border bg-white dark:bg-slate-900">
-                                  <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium">{ref.title || ref.documentId}</p>
-                                    <div className="flex gap-2 text-[10px] text-muted-foreground">
-                                      {ref.pageRange && <span>Pages {ref.pageRange}</span>}
-                                      {ref.anchor && <span>Section: {ref.anchor}</span>}
+                              {stepPack.specialNotes && (
+                                <div className="rounded-lg border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3">
+                                  <div className="flex items-start gap-2">
+                                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-1">
+                                        Special Notes
+                                      </p>
+                                      <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">
+                                        {stepPack.specialNotes}
+                                      </p>
                                     </div>
                                   </div>
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                          {stepPack.aiSnippets.length > 0 && (
-                            <div className="space-y-1.5">
-                              <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 flex items-center gap-1">
-                                <Lightbulb className="h-3 w-3" /> Tips & Guidance
-                              </p>
-                              {stepPack.aiSnippets.map((snippet, i) => (
-                                <div key={i} className="p-2 rounded border bg-white dark:bg-slate-900">
-                                  <p className="text-sm font-medium mb-1">{snippet.title}</p>
-                                  <ul className="space-y-0.5 ml-3">
-                                    {snippet.bullets.map((b: string, j: number) => (
-                                      <li key={j} className="text-xs text-muted-foreground list-disc">{b}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {stepPack.media && stepPack.media.length > 0 && (
-                            <div className="space-y-1.5">
-                              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                                <ImageIcon className="h-3 w-3" /> Media References
-                              </p>
-                              {stepPack.media.map((m: any, i: number) => (
-                                <div key={i} className="p-2 rounded border bg-white dark:bg-slate-900 text-xs">
-                                  {m.caption || m.documentId}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {PHASE_ORDER.map((phase, phaseIndex) => {
-                      const allPhaseTasks = currentStep.tasks
-                        .filter((t) => t.taskPhase === phase)
-                        .sort((a, b) => a.sortOrder - b.sortOrder);
-                      const phaseTasks = allPhaseTasks.filter((t) => !isBadgeGateTask(t));
-                      
-                      if (phaseTasks.length === 0) return null;
-                      
-                      const phaseConfig = PHASE_CONFIG[phase];
-                      const PhaseIcon = phaseConfig.icon;
-                      const allPhaseTasksComplete = phaseTasks.every((t) => t.status === 'COMPLETED');
-                      
-                      const previousPhasesComplete = PHASE_ORDER.slice(0, phaseIndex).every((prevPhase) => {
-                        const prevTasks = currentStep.tasks.filter((t) => t.taskPhase === prevPhase);
-                        return prevTasks
-                          .filter((t) => t.required && t.taskType !== 'END_GATE' && t.taskType !== 'SIGNATURE' && !isBadgeGateTask(t))
-                          .every((t) => t.status === 'COMPLETED');
-                      });
-                      
-                      const phaseUnlocked = previousPhasesComplete;
-                      const completedCount = phaseTasks.filter((t) => t.status === 'COMPLETED').length;
-
-                      return (
-                        <div 
-                          key={phase} 
-                          className={`border rounded-lg overflow-hidden ${phaseConfig.borderColor} ${
-                            !phaseUnlocked ? 'opacity-60' : ''
-                          }`}
-                        >
-                          <div className={`px-4 py-3 ${phaseConfig.bgColor} border-b ${phaseConfig.borderColor}`}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-full ${allPhaseTasksComplete ? 'bg-green-100' : 'bg-white'}`}>
-                                  {allPhaseTasksComplete ? (
-                                    <CheckCircle className="h-5 w-5 text-green-600" />
-                                  ) : phaseUnlocked ? (
-                                    <PhaseIcon className={`h-5 w-5 ${phaseConfig.color}`} />
-                                  ) : (
-                                    <Lock className="h-5 w-5 text-gray-400" />
+                              )}
+                              {stepPack.workInstructionRefs.length > 0 && (
+                                <div className="space-y-1.5">
+                                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                                    <FileText className="h-3 w-3" /> Reference
+                                    Documents
+                                  </p>
+                                  {stepPack.workInstructionRefs.map(
+                                    (ref, i) => (
+                                      <div
+                                        key={i}
+                                        className="flex items-center gap-2 p-2 rounded border bg-white dark:bg-slate-900"
+                                      >
+                                        <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium">
+                                            {ref.title || ref.documentId}
+                                          </p>
+                                          <div className="flex gap-2 text-[10px] text-muted-foreground">
+                                            {ref.pageRange && (
+                                              <span>Pages {ref.pageRange}</span>
+                                            )}
+                                            {ref.anchor && (
+                                              <span>Section: {ref.anchor}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
                                   )}
                                 </div>
-                                <div>
-                                  <h3 className={`font-semibold ${phaseConfig.color}`}>
-                                    {phaseConfig.label}
-                                  </h3>
-                                  <p className="text-xs text-muted-foreground">
-                                    {phaseConfig.description}
+                              )}
+                              {stepPack.aiSnippets.length > 0 && (
+                                <div className="space-y-1.5">
+                                  <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 flex items-center gap-1">
+                                    <Lightbulb className="h-3 w-3" /> Tips &
+                                    Guidance
                                   </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className={phaseConfig.borderColor}>
-                                  {completedCount}/{phaseTasks.length} complete
-                                </Badge>
-                                {allPhaseTasksComplete && (
-                                  <Badge className="bg-green-100 text-green-700 border-green-300">
-                                    Phase Complete
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {!phaseUnlocked ? (
-                            <div className="p-6 text-center text-muted-foreground bg-gray-50">
-                              <Lock className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                              <p className="text-sm">
-                                Complete all required tasks in previous phase{phaseIndex > 1 ? 's' : ''} to unlock
-                              </p>
-                            </div>
-                          ) : (
-                            <>
-                            <Accordion 
-                              type="multiple" 
-                              defaultValue={phaseTasks.map((t) => t.id)}
-                              className="bg-white"
-                            >
-                              {phaseTasks.map((task) => {
-                                const TaskIcon = TASK_TYPE_ICONS[task.taskType] || FileText;
-                                const isComplete = task.status === 'COMPLETED';
-                                const canEditLegacyRocBackfilledData =
-                                  legacyRocBackfillEditScope.stepIds.has(task.travelerStepId) ||
-                                  legacyRocBackfillEditScope.taskIds.has(task.id);
-                                const fieldInputDisabled = isComplete && !canEditLegacyRocBackfilledData;
-
-                                return (
-                                  <AccordionItem key={task.id} value={task.id} className="border-b last:border-b-0">
-                                    <AccordionTrigger className="hover:no-underline px-4">
-                                      <div className="flex items-center gap-3">
-                                        <div
-                                          className={`p-2 rounded ${
-                                            isComplete ? 'bg-green-100' : 'bg-gray-100'
-                                          }`}
-                                        >
-                                          <TaskIcon
-                                            className={`h-4 w-4 ${
-                                              isComplete ? 'text-green-600' : 'text-gray-600'
-                                            }`}
-                                          />
-                                        </div>
-                                        <div className="text-left">
-                                          <p className="font-medium">{task.title}</p>
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-xs text-muted-foreground">
-                                              {task.taskType}
-                                              {task.required && ' • Required'}
-                                            </span>
-                                            {task.requiresSignature && (
-                                              <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">
-                                                {task.signatureRole || 'SIG'}
-                                              </span>
-                                            )}
-                                            {task.requiresCertification && (
-                                              <span className="text-[10px] bg-purple-100 text-purple-700 px-1 rounded">CERT</span>
-                                            )}
-                                            {task.timePolicy === 'MANUAL_ENTRY' && (
-                                              <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">MANUAL TIME</span>
-                                            )}
-                                            {task.instructionPack && (
-                                              <span className="text-[10px] bg-blue-50 text-blue-600 px-1 rounded flex items-center gap-0.5">
-                                                <BookOpen className="h-2.5 w-2.5" /> INSTRUCTIONS
-                                              </span>
-                                            )}
-                                          </div>
-                                        </div>
-                                        {isComplete && (
-                                          <CheckCircle className="h-5 w-5 text-green-500 ml-auto" />
+                                  {stepPack.aiSnippets.map((snippet, i) => (
+                                    <div
+                                      key={i}
+                                      className="p-2 rounded border bg-white dark:bg-slate-900"
+                                    >
+                                      <p className="text-sm font-medium mb-1">
+                                        {snippet.title}
+                                      </p>
+                                      <ul className="space-y-0.5 ml-3">
+                                        {snippet.bullets.map(
+                                          (b: string, j: number) => (
+                                            <li
+                                              key={j}
+                                              className="text-xs text-muted-foreground list-disc"
+                                            >
+                                              {b}
+                                            </li>
+                                          )
                                         )}
-                                      </div>
-                                    </AccordionTrigger>
-                                    <AccordionContent className="px-4">
-                                      <div className="pl-12 space-y-4 pb-4">
-                                        {isComplete && canEditLegacyRocBackfilledData && (
-                                          <div className="rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-800">
-                                            Legacy routing backfill is complete; collected data fields remain open for record entry.
-                                          </div>
-                                        )}
-                                        {task.instructions && (
-                                          <p className="text-sm text-muted-foreground">
-                                            {task.instructions}
-                                          </p>
-                                        )}
-
-                                        {/* Instruction Pack — Always Visible During Work */}
-                                        {(() => {
-                                          const pack = normalizeInstructionPack(task.instructionPack);
-                                          if (!pack) return null;
-                                          return (
-                                            <div className="space-y-3 rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-3">
-                                              <div className="flex items-center gap-2 pb-1 border-b border-blue-200 dark:border-blue-800">
-                                                <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                                <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">Work Instructions</p>
-                                              </div>
-
-                                              {pack.specialNotes && (
-                                                <div className="rounded-lg border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3">
-                                                  <div className="flex items-start gap-2">
-                                                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                                                    <div>
-                                                      <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-1">Special Notes</p>
-                                                      <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">{pack.specialNotes}</p>
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              )}
-
-                                              {pack.workInstructionRefs.length > 0 && (
-                                                <div className="space-y-1.5">
-                                                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                                                    <FileText className="h-3 w-3" /> Reference Documents
-                                                  </p>
-                                                  {pack.workInstructionRefs.map((ref, i) => (
-                                                    <div key={i} className="flex items-center gap-2 p-2 rounded border bg-white dark:bg-slate-900">
-                                                      <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                                      <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-medium">{ref.title || ref.documentId}</p>
-                                                        <div className="flex gap-2 text-[10px] text-muted-foreground">
-                                                          {ref.pageRange && <span>Pages {ref.pageRange}</span>}
-                                                          {ref.anchor && <span>Section: {ref.anchor}</span>}
-                                                        </div>
-                                                      </div>
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              )}
-
-                                              {pack.aiSnippets.length > 0 && (
-                                                <div className="space-y-1.5">
-                                                  <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 flex items-center gap-1">
-                                                    <Lightbulb className="h-3 w-3" /> Tips & Guidance
-                                                  </p>
-                                                  {pack.aiSnippets.map((snippet, i) => (
-                                                    <div key={i} className="p-2 rounded border bg-white dark:bg-slate-900">
-                                                      <p className="text-sm font-medium mb-1">{snippet.title}</p>
-                                                      <ul className="space-y-0.5 ml-3">
-                                                        {snippet.bullets.map((b, bi) => (
-                                                          <li key={bi} className="text-xs text-muted-foreground flex items-start gap-1">
-                                                            <span className="shrink-0 mt-0.5">•</span>
-                                                            <span>{b}</span>
-                                                          </li>
-                                                        ))}
-                                                      </ul>
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              )}
-
-                                              {pack.media.length > 0 && (
-                                                <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  className="w-full text-xs"
-                                                  onClick={() => { setInstructionSheetTaskId(task.id); setInstructionSheetOpen(true); }}
-                                                >
-                                                  <Eye className="h-3.5 w-3.5 mr-1" />
-                                                  View {pack.media.length} Attached Media
-                                                </Button>
-                                              )}
-                                            </div>
-                                          );
-                                        })()}
-
-                                        {(task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') && !fieldInputDisabled ? (
-                                          <div className="space-y-3">
-                                            <MaterialScanner
-                                              travelerId={traveler.id} p2TravelerBarcode={traveler.internalControlNumber}
-                                              travelerStepId={currentStep.id}
-                                              allowFreeTextEntry={true}
-                                              onMaterialConsumed={(result) => {
-                                              const taskFieldKeys = new Set(
-                                                task.fields.map((f) => f.fieldKey)
-                                              );
-                                              if (result?.entryMethod === 'manual') {
-                                                const today = new Date().toISOString().split('T')[0];
-                                                const icn = result.internalControlNumber || '';
-                                                const lot = result.updatedLot;
-                                                const hasInventoryMatch = !!lot;
-                                                const allManualVals: Record<string, string> = addGeneratedTraceFieldAliases({
-                                                  material_internal_control_number: icn,
-                                                  internalControlNumber: icn,
-                                                  material_icn: icn,
-                                                  material_expiration_date: lot?.expirationDate || '',
-                                                  expirationDate: lot?.expirationDate || '',
-                                                  material_batch_number: lot?.supplierLotNumber || 'N/A',
-                                                  batchLotNumber: lot?.supplierLotNumber || 'N/A',
-                                                  material_type: lot?.fabricType || 'Manual Entry',
-                                                  material_brand: lot?.supplier || lot?.manufacturer || 'Manual Entry',
-                                                  material_freezer: lot?.freezerNumber || 'N/A',
-                                                  material_lot: lot?.supplierLotNumber || '',
-                                                  qty_used: lot?.remainingQty?.toString() || '',
-                                                  unit_of_measure: lot?.unitOfMeasure || '',
-                                                  material_part_number: lot?.materialPartNumber || '',
-                                                  supplier: lot?.supplier || 'Manual Entry',
-                                                  inventoryPartNumber: lot?.materialPartNumber || 'Manual Entry',
-                                                  manufacturer: lot?.manufacturer || 'Manual Entry',
-                                                  rollNumber: lot?.rollNumber || 'N/A',
-                                                  receivedDate: lot?.receivedDate || today,
-                                                });
-                                                const traceFieldVals: Record<string, string> = {};
-                                                for (const [key, val] of Object.entries(allManualVals)) {
-                                                  if (taskFieldKeys.has(key)) {
-                                                    traceFieldVals[key] = val;
-                                                  }
-                                                }
-                                                const manualValidation = {
-                                                  source: hasInventoryMatch ? 'fabric_inventory' : 'manual_entry',
-                                                  inventoryId: lot?.id || '',
-                                                  internalControlNumber: icn,
-                                                  readonly: hasInventoryMatch,
-                                                };
-                                                const manualFieldValidations: Record<string, any> = {};
-                                                for (const key of Object.keys(traceFieldVals)) {
-                                                  manualFieldValidations[key] = manualValidation;
-                                                }
-                                                handleTraceMaterialCaptured(task, traceFieldVals, manualFieldValidations);
-                                                return;
-                                              }
-                                              const consumption = result?.consumption;
-                                              const lot = result?.updatedLot;
-                                              const packetBarcode = result?.packetBarcode || '';
-                                              const icnValue = result?.internalControlNumber || consumption?.internalControlNumber || lot?.internalControlNumber || packetBarcode || '';
-
-                                              if (packetBarcode) {
-                                                if (!packetBatchRef.current || packetBatchRef.current.packetBarcode !== packetBarcode) {
-                                                  packetBatchRef.current = { packetBarcode, rolls: [], timeoutId: null };
-                                                }
-                                                const safeIcn = icnValue || `${packetBarcode}-roll-${(packetBatchRef.current.rolls.length + 1)}`;
-                                                packetBatchRef.current.rolls.push({ icn: safeIcn, lot });
-                                                if (packetBatchRef.current.timeoutId !== null) {
-                                                  clearTimeout(packetBatchRef.current.timeoutId);
-                                                }
-                                                packetBatchRef.current.timeoutId = setTimeout(() => {
-                                                  const batch = packetBatchRef.current;
-                                                  packetBatchRef.current = null;
-                                                  if (!batch) return;
-
-                                                  const primaryRoll = batch.rolls[0];
-                                                  const primaryIcn = primaryRoll?.icn || batch.packetBarcode;
-                                                  const primaryLot = primaryRoll?.lot;
-                                                  const combinedIcns = batch.rolls.map((r) => r.icn).filter(Boolean).join(', ');
-                                                  const icnOrBarcode = combinedIcns || batch.packetBarcode;
-
-                                                  const allScanVals: Record<string, string> = addGeneratedTraceFieldAliases({
-                                                    packetBarcode: batch.packetBarcode,
-                                                    packet_barcode: batch.packetBarcode,
-                                                    material_internal_control_number: icnOrBarcode,
-                                                    internalControlNumber: icnOrBarcode,
-                                                    material_icn: icnOrBarcode,
-                                                    material_expiration_date: primaryLot?.expirationDate || '',
-                                                    expirationDate: primaryLot?.expirationDate || '',
-                                                    material_batch_number: primaryLot?.supplierLotNumber || '',
-                                                    batchLotNumber: primaryLot?.supplierLotNumber || '',
-                                                    material_type: primaryLot?.fabricType || primaryLot?.materialType || '',
-                                                    material_brand: primaryLot?.brand || primaryLot?.manufacturer || '',
-                                                    material_freezer: primaryLot?.freezerNumber || '',
-                                                    material_lot: primaryLot?.supplierLotNumber || '',
-                                                    qty_used: '',
-                                                    unit_of_measure: primaryLot?.unitOfMeasure || '',
-                                                    material_part_number: primaryLot?.materialPartNumber || '',
-                                                    inventoryPartNumber: primaryLot?.materialPartNumber || '',
-                                                    supplier: primaryLot?.supplier || '',
-                                                    manufacturer: primaryLot?.manufacturer || '',
-                                                    rollNumber: primaryLot?.rollNumber || '',
-                                                    receivedDate: primaryLot?.receivedDate || '',
-                                                  });
-                                                  batch.rolls.forEach((r, idx) => {
-                                                    allScanVals[`internalControlNumber_${idx + 1}`] = r.icn;
-                                                  });
-
-                                                  const traceFieldVals: Record<string, string> = {};
-                                                  for (const [key, val] of Object.entries(allScanVals)) {
-                                                    if (taskFieldKeys.has(key) || key === 'packetBarcode' || key === 'packet_barcode') {
-                                                      traceFieldVals[key] = val;
-                                                    }
-                                                  }
-                                                  traceFieldVals['packetBarcode'] = batch.packetBarcode;
-                                                  traceFieldVals['packet_barcode'] = batch.packetBarcode;
-                                                  if (!traceFieldVals['internalControlNumber']) {
-                                                    traceFieldVals['internalControlNumber'] = icnOrBarcode;
-                                                  }
-                                                  if (!traceFieldVals['material_icn']) {
-                                                    traceFieldVals['material_icn'] = icnOrBarcode;
-                                                  }
-                                                  if (!traceFieldVals['material_internal_control_number']) {
-                                                    traceFieldVals['material_internal_control_number'] = icnOrBarcode;
-                                                  }
-
-                                                  const inventoryValidation = {
-                                                    source: 'fabric_inventory',
-                                                    inventoryId: primaryLot?.id || '',
-                                                    internalControlNumber: primaryIcn,
-                                                    packetBarcode: batch.packetBarcode,
-                                                    batchNumber: primaryLot?.supplierLotNumber || '',
-                                                    expirationDate: primaryLot?.expirationDate || '',
-                                                    supplier: primaryLot?.supplier || '',
-                                                    manufacturer: primaryLot?.manufacturer || '',
-                                                    partNumber: primaryLot?.materialPartNumber || '',
-                                                    readonly: true,
-                                                  };
-                                                  const traceFieldValidations: Record<string, any> = {};
-                                                  for (const key of Object.keys(traceFieldVals)) {
-                                                    traceFieldValidations[key] = inventoryValidation;
-                                                  }
-                                                  handleTraceMaterialCaptured(task, traceFieldVals, traceFieldValidations);
-                                                }, 0);
-                                                return;
-                                              }
-
-                                              const allScanVals: Record<string, string> = addGeneratedTraceFieldAliases({
-                                                material_internal_control_number: icnValue,
-                                                internalControlNumber: icnValue,
-                                                material_icn: icnValue,
-                                                material_expiration_date: lot?.expirationDate || '',
-                                                expirationDate: lot?.expirationDate || '',
-                                                material_batch_number: lot?.supplierLotNumber || '',
-                                                batchLotNumber: lot?.supplierLotNumber || '',
-                                                material_type: lot?.fabricType || lot?.materialType || '',
-                                                material_brand: lot?.brand || lot?.manufacturer || '',
-                                                material_freezer: lot?.freezerNumber || '',
-                                                material_lot: lot?.supplierLotNumber || '',
-                                                qty_used: consumption?.qtyUsed?.toString() || '',
-                                                unit_of_measure: consumption?.unitOfMeasure || lot?.unitOfMeasure || '',
-                                                material_part_number: lot?.materialPartNumber || '',
-                                                inventoryPartNumber: lot?.materialPartNumber || '',
-                                                supplier: lot?.supplier || '',
-                                                manufacturer: lot?.manufacturer || '',
-                                                rollNumber: lot?.rollNumber || '',
-                                                receivedDate: lot?.receivedDate || '',
-                                              });
-                                              const traceFieldVals: Record<string, string> = {};
-                                              for (const [key, val] of Object.entries(allScanVals)) {
-                                                if (taskFieldKeys.has(key)) {
-                                                  traceFieldVals[key] = val;
-                                                }
-                                              }
-                                              const inventoryValidation = {
-                                                source: 'fabric_inventory',
-                                                inventoryId: lot?.id || consumption?.materialLotId || '',
-                                                internalControlNumber: icnValue,
-                                                batchNumber: lot?.supplierLotNumber || '',
-                                                expirationDate: lot?.expirationDate || '',
-                                                supplier: lot?.supplier || '',
-                                                manufacturer: lot?.manufacturer || '',
-                                                partNumber: lot?.materialPartNumber || '',
-                                                readonly: true,
-                                              };
-                                              const traceFieldValidations: Record<string, any> = {};
-                                              for (const key of Object.keys(traceFieldVals)) {
-                                                traceFieldValidations[key] = inventoryValidation;
-                                              }
-                                              handleTraceMaterialCaptured(task, traceFieldVals, traceFieldValidations);
-                                              }}
-                                            />
-                                            {(() => {
-                                              const currentTraceValues = collectCurrentTaskFieldValues(task);
-                                              const capturedMaterials =
-                                                currentTraceValues.material_internal_control_number ||
-                                                currentTraceValues.internalControlNumber ||
-                                                currentTraceValues.material_icn ||
-                                                currentTraceValues.packetBarcode ||
-                                                currentTraceValues.packet_barcode ||
-                                                '';
-                                              const capturedList = capturedMaterials
-                                                .split(',')
-                                                .map((value) => value.trim())
-                                                .filter(Boolean);
-                                              if (capturedList.length === 0) return null;
-
-                                              return (
-                                                <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 space-y-3">
-                                                  <div className="flex items-start justify-between gap-3">
-                                                    <div>
-                                                      <p className="text-sm font-medium text-blue-900">Captured Materials</p>
-                                                      <p className="text-xs text-blue-700">Scan or enter another material, then complete the traceability task when all materials are captured.</p>
-                                                    </div>
-                                                    <Badge variant="outline" className="border-blue-300 text-blue-800">
-                                                      {capturedList.length}
-                                                    </Badge>
-                                                  </div>
-                                                  <div className="flex flex-wrap gap-2">
-                                                    {capturedList.map((material, index) => (
-                                                      <Badge key={`${material}-${index}`} variant="secondary" className="bg-white text-blue-900 border border-blue-200">
-                                                        {material}
-                                                      </Badge>
-                                                    ))}
-                                                  </div>
-                                                  <Button
-                                                    size="sm"
-                                                    onClick={() => handleCompleteTask(task)}
-                                                    disabled={completeTaskMutation.isPending}
-                                                    data-testid={`button-complete-trace-task-${task.id}`}
-                                                  >
-                                                    {completeTaskMutation.isPending ? (
-                                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                    ) : (
-                                                      <CheckCircle className="h-4 w-4 mr-2" />
-                                                    )}
-                                                    Complete Traceability
-                                                  </Button>
-                                                </div>
-                                              );
-                                            })()}
-                                          </div>
-                                        ) : (
-                                          <>
-                                            {task.taskType === 'QC' && task.fields.length === 0 && getRoutingQcStandardsForTask(task, currentStep.departmentName).length > 0 && (
-                                              <div className="space-y-2 rounded-lg border border-green-200 bg-green-50/50 p-3">
-                                                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-green-800">
-                                                  <ClipboardCheck className="h-4 w-4" />
-                                                  Routing QC Requirements
-                                                </div>
-                                                {getRoutingQcStandardsForTask(task, currentStep.departmentName).map((qc: any, index: number) => (
-                                                  <div key={`${qc.standard}-${index}`} className="rounded-md border border-green-100 bg-white p-2">
-                                                    <p className="text-sm font-medium">{qc.standard}</p>
-                                                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                                                      {qc.tolerance && (
-                                                        <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">
-                                                          <Wrench className="h-3 w-3" />
-                                                          Tolerance: {qc.tolerance}
-                                                        </span>
-                                                      )}
-                                                      {qc.requirement && (
-                                                        <span className="inline-flex items-center gap-1 rounded border border-green-200 bg-green-50 px-2 py-0.5 text-green-700">
-                                                          <Shield className="h-3 w-3" />
-                                                          Requirement: {qc.requirement}
-                                                        </span>
-                                                      )}
-                                                      {qc.referenceLink && (
-                                                        <a href={qc.referenceLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-0.5 text-purple-700 hover:bg-purple-100 no-underline">
-                                                          <ExternalLink className="h-3 w-3" />
-                                                          Reference
-                                                        </a>
-                                                      )}
-                                                    </div>
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            )}
-                                            {task.fields.length > 0 && (
-                                              <div className="space-y-3">
-                                                {task.fields.filter((field) => {
-                                                  if (isComplete) return true;
-                                                  if (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') {
-                                                    return field.required || (field.value && field.value !== '');
-                                                  }
-                                                  return true;
-                                                }).map((field) => (
-                                                  <div key={field.id} className="space-y-1">
-                                                    <Label className="text-sm">
-                                                      {(() => {
-                                                        const labelMap: Record<string, string> = {
-                                                          internalControlNumber: 'Internal Control Number',
-                                                          supplier: 'Supplier',
-                                                          inventoryPartNumber: 'Inventory Part Number',
-                                                          batchLotNumber: 'Batch/Lot #',
-                                                          manufacturer: 'Manufacturer',
-                                                          rollNumber: 'Roll Number',
-                                                          expirationDate: 'Expiration Date',
-                                                          receivedDate: 'Received Date',
-                                                        };
-                                                        return labelMap[field.fieldKey] || field.fieldLabel;
-                                                      })()}
-                                                      {field.required && (
-                                                        <span className="text-red-500 ml-1">*</span>
-                                                      )}
-                                                    </Label>
-                                                    {field.fieldType === 'yes_no' ? (
-                                                      <div className="space-y-2">
-                                                        {field.validation && (field.validation.tolerance || field.validation.requirement || field.validation.hardQcStop) && (
-                                                          <div className="flex flex-wrap gap-2 text-xs mb-1">
-                                                            {field.validation.hardQcStop && (
-                                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-300 font-medium">
-                                                                <Flag className="h-3 w-3" />
-                                                                Hard QC Stop
-                                                              </span>
-                                                            )}
-                                                            {field.validation.tolerance && (
-                                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                                                                <Wrench className="h-3 w-3" />
-                                                                Tolerance: {field.validation.tolerance}
-                                                              </span>
-                                                            )}
-                                                            {field.validation.requirement && (
-                                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
-                                                                <Shield className="h-3 w-3" />
-                                                                Requirement: {field.validation.requirement}
-                                                              </span>
-                                                            )}
-                                                            {field.validation.referenceLink && (
-                                                              <a href={field.validation.referenceLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 cursor-pointer no-underline">
-                                                                <ExternalLink className="h-3 w-3" />
-                                                                Reference
-                                                              </a>
-                                                            )}
-                                                            {field.validation.temperature && (
-                                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
-                                                                Temp: {field.validation.temperature}
-                                                              </span>
-                                                            )}
-                                                            {field.validation.time && (
-                                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
-                                                                <Clock className="h-3 w-3" />
-                                                                Time: {field.validation.time}
-                                                              </span>
-                                                            )}
-                                                          </div>
-                                                        )}
-                                                        {task.taskType === 'QC' && (
-                                                          <div className="space-y-1">
-                                                            <Label className="text-xs font-medium text-muted-foreground">
-                                                              Measured Result {field.required && <span className="text-red-500">*</span>}
-                                                            </Label>
-                                                            <Input
-                                                              id={`qc-result-${task.id}-${field.fieldKey}`}
-                                                              name={`qc-result-${task.id}-${field.fieldKey}`}
-                                                              placeholder={field.validation?.tolerance ? `Enter result (Tolerance: ${field.validation.tolerance})` : 'Enter measured result...'}
-                                                              value={fieldValues[task.id]?.[`${field.fieldKey}_result`] || (field.value?.includes('|') ? field.value.split('|')[1] : '') || ''}
-                                                              onChange={(e) => handleFieldChange(task.id, `${field.fieldKey}_result`, e.target.value)}
-                                                              disabled={fieldInputDisabled}
-                                                              className="text-sm h-9"
-                                                            />
-                                                          </div>
-                                                        )}
-                                                        <div className="flex items-center gap-2">
-                                                          <Checkbox
-                                                            id={field.id}
-                                                            checked={
-                                                              fieldValues[task.id]?.[field.fieldKey] !== undefined
-                                                                ? fieldValues[task.id][field.fieldKey] === 'yes'
-                                                                : (field.value === 'yes' || (field.value != null && field.value.startsWith('yes|')))
-                                                            }
-                                                            onCheckedChange={(checked) =>
-                                                              handleFieldChange(
-                                                                task.id,
-                                                                field.fieldKey,
-                                                                checked ? 'yes' : 'no'
-                                                              )
-                                                            }
-                                                            disabled={fieldInputDisabled}
-                                                          />
-                                                          <Label htmlFor={field.id} className="text-sm cursor-pointer">
-                                                            Verified / Pass
-                                                          </Label>
-                                                        </div>
-                                                      </div>
-                                                    ) : field.fieldType === 'inventory_select' ? (
-                                                      <div className="space-y-1">
-                                                        <div className="flex gap-2">
-                                                          <Input
-                                                            id={`inv-${task.id}-${field.fieldKey}`}
-                                                            name={`inv-${task.id}-${field.fieldKey}`}
-                                                            value={
-                                                              fieldValues[task.id]?.[field.fieldKey] ||
-                                                              field.value ||
-                                                              ''
-                                                            }
-                                                            disabled={true}
-                                                            className="text-sm bg-muted flex-1"
-                                                            placeholder="Select from Fabric Inventory..."
-                                                          />
-                                                          {!fieldInputDisabled && (
-                                                            <Button
-                                                              size="sm"
-                                                              variant="outline"
-                                                              onClick={() => {
-                                                                setInventoryPickerTaskId(task.id);
-                                                                setShowInventoryPicker(true);
-                                                              }}
-                                                              className="shrink-0"
-                                                            >
-                                                              <Search className="h-4 w-4 mr-1" />
-                                                              Select
-                                                            </Button>
-                                                          )}
-                                                        </div>
-                                                        {(fieldValues[task.id]?.[field.fieldKey] || field.value) && (
-                                                          <span className="text-xs text-green-600 flex items-center gap-1">
-                                                            <CheckCircle className="h-3 w-3" />
-                                                            Linked to Fabric Inventory
-                                                          </span>
-                                                        )}
-                                                      </div>
-                                                    ) : field.fieldType === 'textarea' ? (
-                                                      <Textarea
-                                                        id={`ta-${task.id}-${field.fieldKey}`}
-                                                        name={`ta-${task.id}-${field.fieldKey}`}
-                                                        value={
-                                                          fieldValues[task.id]?.[field.fieldKey] ||
-                                                          field.value ||
-                                                          ''
-                                                        }
-                                                        onChange={(e) =>
-                                                          handleFieldChange(
-                                                            task.id,
-                                                            field.fieldKey,
-                                                            e.target.value
-                                                          )
-                                                        }
-                                                        disabled={fieldInputDisabled}
-                                                        className="text-sm"
-                                                      />
-                                                    ) : (
-                                                      <Input
-                                                        id={`field-${task.id}-${field.fieldKey}`}
-                                                        name={`field-${task.id}-${field.fieldKey}`}
-                                                        type={field.fieldType === 'number' ? 'number' : field.fieldType === 'date' ? 'date' : 'text'}
-                                                        value={
-                                                          fieldValues[task.id]?.[field.fieldKey] ||
-                                                          field.value ||
-                                                          ''
-                                                        }
-                                                        onChange={(e) =>
-                                                          handleFieldChange(
-                                                            task.id,
-                                                            field.fieldKey,
-                                                            e.target.value
-                                                          )
-                                                        }
-                                                        disabled={fieldInputDisabled || (field.validation?.readonly === true && !!field.value)}
-                                                        className={`text-sm ${field.validation?.readonly && field.value ? 'bg-muted' : ''}`}
-                                                        placeholder={field.validation?.readonly ? 'Auto-filled from inventory' : undefined}
-                                                      />
-                                                    )}
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            )}
-
-                                            {!isComplete && task.taskType !== 'END_GATE' && task.taskType !== 'TRACE' && task.taskType !== 'TRACEABILITY' && (
-                                              task.taskType === 'SIGNATURE' ? (
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="border-amber-300 text-amber-700 hover:bg-amber-50"
-                                                  onClick={() => {
-                                                    setSigningTaskId(task.id);
-                                                    setSigningRole(task.signatureRole);
-                                                    setSignatureData((prev) => ({
-                                                      ...prev,
-                                                      signedBy: activeBadge || prev.signedBy,
-                                                      signedByName: activeTechName || prev.signedByName,
-                                                      badgeScan: activeBadge || prev.badgeScan,
-                                                    }));
-                                                    if (activeBadge && resolvedEmployee) {
-                                                      setSignResolvedEmployee(resolvedEmployee);
-                                                      setSignBadgeLookupStatus('found');
-                                                    } else {
-                                                      setSignResolvedEmployee(null);
-                                                      setSignBadgeLookupStatus('idle');
-                                                    }
-                                                    setShowSignDialog(true);
-                                                  }}
-                                                  disabled={!phaseUnlocked}
-                                                  data-testid={`button-sign-task-${task.id}`}
-                                                >
-                                                  <PenTool className="h-4 w-4 mr-2" />
-                                                  Sign ({task.signatureRole || 'Required'})
-                                                </Button>
-                                              ) : (
-                                                <Button
-                                                  size="sm"
-                                                  onClick={() => handleCompleteTask(task)}
-                                                  disabled={completeTaskMutation.isPending}
-                                                  data-testid={`button-complete-task-${task.id}`}
-                                                >
-                                                  {completeTaskMutation.isPending ? (
-                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                  ) : (
-                                                    <CheckCircle className="h-4 w-4 mr-2" />
-                                                  )}
-                                                  Complete Task
-                                                </Button>
-                                              )
-                                            )}
-                                          </>
-                                        )}
-
-                                        {isComplete && (
-                                          <p className="text-xs text-muted-foreground">
-                                            Completed by {task.completedBy} at{' '}
-                                            {task.completedAt
-                                              ? new Date(task.completedAt).toLocaleString()
-                                              : 'N/A'}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </AccordionContent>
-                                  </AccordionItem>
-                                );
-                              })}
-                            </Accordion>
-
-                            {phase === 'WORK' && (() => {
-                              const timerConfig = getTimerConfigForDepartment(currentStep.departmentName);
-                              if (!timerConfig) return null;
-                              const stepTimerStarted = !!activeTimerRun || timerStartedForStep[currentStep.id];
-                              return (
-                                <div className="mx-4 my-3 p-3 border border-amber-200 bg-amber-50 rounded-lg">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <Timer className="h-5 w-5 text-amber-600" />
-                                      <div>
-                                        <p className="font-medium text-amber-800 text-sm">Production Timer</p>
-                                        <p className="text-xs text-amber-600">
-                                          {activeTimerRun && activeTimerProgram
-                                            ? `Running: ${activeTimerProgram.name}${activeTimerRun.serialNumber ? ` / S/N: ${activeTimerRun.serialNumber}` : ''}`
-                                            : timerConfig.defaultProgramName
-                                              ? `Program: ${timerConfig.defaultProgramName}`
-                                              : 'Start a timer on the timer station'}
-                                        </p>
-                                      </div>
+                                      </ul>
                                     </div>
-                                    {stepTimerStarted ? (
-                                      <Badge className="bg-green-100 text-green-700 border-green-300">
-                                        <CheckCircle className="h-3 w-3 mr-1" />
-                                        Timer Running
-                                      </Badge>
-                                    ) : (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="border-amber-300 text-amber-700 hover:bg-amber-100"
-                                        onClick={() => setShowTimerModal(true)}
+                                  ))}
+                                </div>
+                              )}
+                              {stepPack.media && stepPack.media.length > 0 && (
+                                <div className="space-y-1.5">
+                                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                                    <ImageIcon className="h-3 w-3" /> Media
+                                    References
+                                  </p>
+                                  {stepPack.media.map((m: any, i: number) => (
+                                    <div
+                                      key={i}
+                                      className="p-2 rounded border bg-white dark:bg-slate-900 text-xs"
+                                    >
+                                      {m.caption || m.documentId}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {PHASE_ORDER.map((phase, phaseIndex) => {
+                          const allPhaseTasks = currentStep.tasks
+                            .filter((t) => t.taskPhase === phase)
+                            .sort((a, b) => a.sortOrder - b.sortOrder);
+                          const phaseTasks = allPhaseTasks.filter(
+                            (t) => !isBadgeGateTask(t)
+                          );
+
+                          if (phaseTasks.length === 0) return null;
+
+                          const phaseConfig = PHASE_CONFIG[phase];
+                          const PhaseIcon = phaseConfig.icon;
+                          const allPhaseTasksComplete = phaseTasks.every(
+                            (t) => t.status === 'COMPLETED'
+                          );
+
+                          const previousPhasesComplete = PHASE_ORDER.slice(
+                            0,
+                            phaseIndex
+                          ).every((prevPhase) => {
+                            const prevTasks = currentStep.tasks.filter(
+                              (t) => t.taskPhase === prevPhase
+                            );
+                            return prevTasks
+                              .filter(
+                                (t) =>
+                                  t.required &&
+                                  t.taskType !== 'END_GATE' &&
+                                  t.taskType !== 'SIGNATURE' &&
+                                  !isBadgeGateTask(t)
+                              )
+                              .every((t) => t.status === 'COMPLETED');
+                          });
+
+                          const phaseUnlocked = previousPhasesComplete;
+                          const completedCount = phaseTasks.filter(
+                            (t) => t.status === 'COMPLETED'
+                          ).length;
+
+                          return (
+                            <div
+                              key={phase}
+                              className={`border rounded-lg overflow-hidden ${phaseConfig.borderColor} ${
+                                !phaseUnlocked ? 'opacity-60' : ''
+                              }`}
+                            >
+                              <div
+                                className={`px-4 py-3 ${phaseConfig.bgColor} border-b ${phaseConfig.borderColor}`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div
+                                      className={`p-2 rounded-full ${allPhaseTasksComplete ? 'bg-green-100' : 'bg-white'}`}
+                                    >
+                                      {allPhaseTasksComplete ? (
+                                        <CheckCircle className="h-5 w-5 text-green-600" />
+                                      ) : phaseUnlocked ? (
+                                        <PhaseIcon
+                                          className={`h-5 w-5 ${phaseConfig.color}`}
+                                        />
+                                      ) : (
+                                        <Lock className="h-5 w-5 text-gray-400" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <h3
+                                        className={`font-semibold ${phaseConfig.color}`}
                                       >
-                                        <Timer className="h-4 w-4 mr-1" />
-                                        Start Timer
-                                      </Button>
+                                        {phaseConfig.label}
+                                      </h3>
+                                      <p className="text-xs text-muted-foreground">
+                                        {phaseConfig.description}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge
+                                      variant="outline"
+                                      className={phaseConfig.borderColor}
+                                    >
+                                      {completedCount}/{phaseTasks.length}{' '}
+                                      complete
+                                    </Badge>
+                                    {allPhaseTasksComplete && (
+                                      <Badge className="bg-green-100 text-green-700 border-green-300">
+                                        Phase Complete
+                                      </Badge>
                                     )}
                                   </div>
                                 </div>
-                              );
-                            })()}
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
+                              </div>
 
-                    {!isLegacyBackfilledStepDataEntry && (
-                    <div className="pt-4 border-t space-y-3">
-                      {!canSignStep && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                            <div className="text-sm text-amber-800">
-                              {!allRequiredNonGateComplete && (
-                                <p>Complete all required tasks before signing off.</p>
-                              )}
-                              {allRequiredNonGateComplete && unsignedSigTasks.length > 0 && (
-                                <div>
-                                  <p className="font-medium mb-1">Signatures still needed:</p>
-                                  <ul className="list-disc list-inside text-xs space-y-0.5">
-                                    {unsignedSigTasks.map((t) => (
-                                      <li key={t.id}>
-                                        {t.title}
-                                        {t.signatureRole && (
-                                          <span className="text-amber-600 ml-1">({t.signatureRole})</span>
-                                        )}
-                                      </li>
-                                    ))}
-                                  </ul>
+                              {!phaseUnlocked ? (
+                                <div className="p-6 text-center text-muted-foreground bg-gray-50">
+                                  <Lock className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                                  <p className="text-sm">
+                                    Complete all required tasks in previous
+                                    phase{phaseIndex > 1 ? 's' : ''} to unlock
+                                  </p>
                                 </div>
+                              ) : (
+                                <>
+                                  <Accordion
+                                    type="multiple"
+                                    defaultValue={phaseTasks.map((t) => t.id)}
+                                    className="bg-white"
+                                  >
+                                    {phaseTasks.map((task) => {
+                                      const TaskIcon =
+                                        TASK_TYPE_ICONS[task.taskType] ||
+                                        FileText;
+                                      const isComplete =
+                                        task.status === 'COMPLETED';
+                                      const canEditLegacyRocBackfilledData =
+                                        legacyRocBackfillEditScope.stepIds.has(
+                                          task.travelerStepId
+                                        ) ||
+                                        legacyRocBackfillEditScope.taskIds.has(
+                                          task.id
+                                        );
+                                      const fieldInputDisabled =
+                                        isComplete &&
+                                        !canEditLegacyRocBackfilledData;
+
+                                      return (
+                                        <AccordionItem
+                                          key={task.id}
+                                          value={task.id}
+                                          className="border-b last:border-b-0"
+                                        >
+                                          <AccordionTrigger className="hover:no-underline px-4">
+                                            <div className="flex items-center gap-3">
+                                              <div
+                                                className={`p-2 rounded ${
+                                                  isComplete
+                                                    ? 'bg-green-100'
+                                                    : 'bg-gray-100'
+                                                }`}
+                                              >
+                                                <TaskIcon
+                                                  className={`h-4 w-4 ${
+                                                    isComplete
+                                                      ? 'text-green-600'
+                                                      : 'text-gray-600'
+                                                  }`}
+                                                />
+                                              </div>
+                                              <div className="text-left">
+                                                <p className="font-medium">
+                                                  {task.title}
+                                                </p>
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                  <span className="text-xs text-muted-foreground">
+                                                    {task.taskType}
+                                                    {task.required &&
+                                                      ' • Required'}
+                                                  </span>
+                                                  {task.requiresSignature && (
+                                                    <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">
+                                                      {task.signatureRole ||
+                                                        'SIG'}
+                                                    </span>
+                                                  )}
+                                                  {task.requiresCertification && (
+                                                    <span className="text-[10px] bg-purple-100 text-purple-700 px-1 rounded">
+                                                      CERT
+                                                    </span>
+                                                  )}
+                                                  {task.timePolicy ===
+                                                    'MANUAL_ENTRY' && (
+                                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">
+                                                      MANUAL TIME
+                                                    </span>
+                                                  )}
+                                                  {task.instructionPack && (
+                                                    <span className="text-[10px] bg-blue-50 text-blue-600 px-1 rounded flex items-center gap-0.5">
+                                                      <BookOpen className="h-2.5 w-2.5" />{' '}
+                                                      INSTRUCTIONS
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              {isComplete && (
+                                                <CheckCircle className="h-5 w-5 text-green-500 ml-auto" />
+                                              )}
+                                            </div>
+                                          </AccordionTrigger>
+                                          <AccordionContent className="px-4">
+                                            <div className="pl-12 space-y-4 pb-4">
+                                              {isComplete &&
+                                                canEditLegacyRocBackfilledData && (
+                                                  <div className="rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-800">
+                                                    Legacy routing backfill is
+                                                    complete; collected data
+                                                    fields remain open for
+                                                    record entry.
+                                                  </div>
+                                                )}
+                                              {task.instructions && (
+                                                <p className="text-sm text-muted-foreground">
+                                                  {task.instructions}
+                                                </p>
+                                              )}
+
+                                              {/* Instruction Pack — Always Visible During Work */}
+                                              {(() => {
+                                                const pack =
+                                                  normalizeInstructionPack(
+                                                    task.instructionPack
+                                                  );
+                                                if (!pack) return null;
+                                                return (
+                                                  <div className="space-y-3 rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-3">
+                                                    <div className="flex items-center gap-2 pb-1 border-b border-blue-200 dark:border-blue-800">
+                                                      <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                                      <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
+                                                        Work Instructions
+                                                      </p>
+                                                    </div>
+
+                                                    {pack.specialNotes && (
+                                                      <div className="rounded-lg border-2 border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3">
+                                                        <div className="flex items-start gap-2">
+                                                          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                                          <div>
+                                                            <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-1">
+                                                              Special Notes
+                                                            </p>
+                                                            <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">
+                                                              {
+                                                                pack.specialNotes
+                                                              }
+                                                            </p>
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                    )}
+
+                                                    {pack.workInstructionRefs
+                                                      .length > 0 && (
+                                                      <div className="space-y-1.5">
+                                                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                                                          <FileText className="h-3 w-3" />{' '}
+                                                          Reference Documents
+                                                        </p>
+                                                        {pack.workInstructionRefs.map(
+                                                          (ref, i) => (
+                                                            <div
+                                                              key={i}
+                                                              className="flex items-center gap-2 p-2 rounded border bg-white dark:bg-slate-900"
+                                                            >
+                                                              <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                                              <div className="flex-1 min-w-0">
+                                                                <p className="text-sm font-medium">
+                                                                  {ref.title ||
+                                                                    ref.documentId}
+                                                                </p>
+                                                                <div className="flex gap-2 text-[10px] text-muted-foreground">
+                                                                  {ref.pageRange && (
+                                                                    <span>
+                                                                      Pages{' '}
+                                                                      {
+                                                                        ref.pageRange
+                                                                      }
+                                                                    </span>
+                                                                  )}
+                                                                  {ref.anchor && (
+                                                                    <span>
+                                                                      Section:{' '}
+                                                                      {
+                                                                        ref.anchor
+                                                                      }
+                                                                    </span>
+                                                                  )}
+                                                                </div>
+                                                              </div>
+                                                            </div>
+                                                          )
+                                                        )}
+                                                      </div>
+                                                    )}
+
+                                                    {pack.aiSnippets.length >
+                                                      0 && (
+                                                      <div className="space-y-1.5">
+                                                        <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 flex items-center gap-1">
+                                                          <Lightbulb className="h-3 w-3" />{' '}
+                                                          Tips & Guidance
+                                                        </p>
+                                                        {pack.aiSnippets.map(
+                                                          (snippet, i) => (
+                                                            <div
+                                                              key={i}
+                                                              className="p-2 rounded border bg-white dark:bg-slate-900"
+                                                            >
+                                                              <p className="text-sm font-medium mb-1">
+                                                                {snippet.title}
+                                                              </p>
+                                                              <ul className="space-y-0.5 ml-3">
+                                                                {snippet.bullets.map(
+                                                                  (b, bi) => (
+                                                                    <li
+                                                                      key={bi}
+                                                                      className="text-xs text-muted-foreground flex items-start gap-1"
+                                                                    >
+                                                                      <span className="shrink-0 mt-0.5">
+                                                                        •
+                                                                      </span>
+                                                                      <span>
+                                                                        {b}
+                                                                      </span>
+                                                                    </li>
+                                                                  )
+                                                                )}
+                                                              </ul>
+                                                            </div>
+                                                          )
+                                                        )}
+                                                      </div>
+                                                    )}
+
+                                                    {pack.media.length > 0 && (
+                                                      <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="w-full text-xs"
+                                                        onClick={() => {
+                                                          setInstructionSheetTaskId(
+                                                            task.id
+                                                          );
+                                                          setInstructionSheetOpen(
+                                                            true
+                                                          );
+                                                        }}
+                                                      >
+                                                        <Eye className="h-3.5 w-3.5 mr-1" />
+                                                        View {pack.media.length}{' '}
+                                                        Attached Media
+                                                      </Button>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })()}
+
+                                              {(task.taskType === 'TRACE' ||
+                                                task.taskType ===
+                                                  'TRACEABILITY') &&
+                                              !fieldInputDisabled ? (
+                                                <div className="space-y-3">
+                                                  <MaterialScanner
+                                                    travelerId={traveler.id}
+                                                    p2TravelerBarcode={
+                                                      traveler.internalControlNumber
+                                                    }
+                                                    travelerStepId={
+                                                      currentStep.id
+                                                    }
+                                                    allowFreeTextEntry={true}
+                                                    onMaterialConsumed={(
+                                                      result
+                                                    ) => {
+                                                      const taskFieldKeys =
+                                                        new Set(
+                                                          task.fields.map(
+                                                            (f) => f.fieldKey
+                                                          )
+                                                        );
+                                                      if (
+                                                        result?.entryMethod ===
+                                                        'manual'
+                                                      ) {
+                                                        const today = new Date()
+                                                          .toISOString()
+                                                          .split('T')[0];
+                                                        const icn =
+                                                          result.internalControlNumber ||
+                                                          '';
+                                                        const lot =
+                                                          result.updatedLot;
+                                                        const hasInventoryMatch =
+                                                          !!lot;
+                                                        const allManualVals: Record<
+                                                          string,
+                                                          string
+                                                        > =
+                                                          addGeneratedTraceFieldAliases(
+                                                            {
+                                                              material_internal_control_number:
+                                                                icn,
+                                                              internalControlNumber:
+                                                                icn,
+                                                              material_icn: icn,
+                                                              material_expiration_date:
+                                                                lot?.expirationDate ||
+                                                                '',
+                                                              expirationDate:
+                                                                lot?.expirationDate ||
+                                                                '',
+                                                              material_batch_number:
+                                                                lot?.supplierLotNumber ||
+                                                                'N/A',
+                                                              batchLotNumber:
+                                                                lot?.supplierLotNumber ||
+                                                                'N/A',
+                                                              material_type:
+                                                                lot?.fabricType ||
+                                                                'Manual Entry',
+                                                              material_brand:
+                                                                lot?.supplier ||
+                                                                lot?.manufacturer ||
+                                                                'Manual Entry',
+                                                              material_freezer:
+                                                                lot?.freezerNumber ||
+                                                                'N/A',
+                                                              material_lot:
+                                                                lot?.supplierLotNumber ||
+                                                                '',
+                                                              qty_used:
+                                                                lot?.remainingQty?.toString() ||
+                                                                '',
+                                                              unit_of_measure:
+                                                                lot?.unitOfMeasure ||
+                                                                '',
+                                                              material_part_number:
+                                                                lot?.materialPartNumber ||
+                                                                '',
+                                                              supplier:
+                                                                lot?.supplier ||
+                                                                'Manual Entry',
+                                                              inventoryPartNumber:
+                                                                lot?.materialPartNumber ||
+                                                                'Manual Entry',
+                                                              manufacturer:
+                                                                lot?.manufacturer ||
+                                                                'Manual Entry',
+                                                              rollNumber:
+                                                                lot?.rollNumber ||
+                                                                'N/A',
+                                                              receivedDate:
+                                                                lot?.receivedDate ||
+                                                                today,
+                                                            }
+                                                          );
+                                                        const traceFieldVals: Record<
+                                                          string,
+                                                          string
+                                                        > = {};
+                                                        for (const [
+                                                          key,
+                                                          val,
+                                                        ] of Object.entries(
+                                                          allManualVals
+                                                        )) {
+                                                          if (
+                                                            taskFieldKeys.has(
+                                                              key
+                                                            )
+                                                          ) {
+                                                            traceFieldVals[
+                                                              key
+                                                            ] = val;
+                                                          }
+                                                        }
+                                                        const manualValidation =
+                                                          {
+                                                            source:
+                                                              hasInventoryMatch
+                                                                ? 'fabric_inventory'
+                                                                : 'manual_entry',
+                                                            inventoryId:
+                                                              lot?.id || '',
+                                                            internalControlNumber:
+                                                              icn,
+                                                            readonly:
+                                                              hasInventoryMatch,
+                                                          };
+                                                        const manualFieldValidations: Record<
+                                                          string,
+                                                          any
+                                                        > = {};
+                                                        for (const key of Object.keys(
+                                                          traceFieldVals
+                                                        )) {
+                                                          manualFieldValidations[
+                                                            key
+                                                          ] = manualValidation;
+                                                        }
+                                                        handleTraceMaterialCaptured(
+                                                          task,
+                                                          traceFieldVals,
+                                                          manualFieldValidations
+                                                        );
+                                                        return;
+                                                      }
+                                                      const consumption =
+                                                        result?.consumption;
+                                                      const lot =
+                                                        result?.updatedLot;
+                                                      const packetBarcode =
+                                                        result?.packetBarcode ||
+                                                        '';
+                                                      const icnValue =
+                                                        result?.internalControlNumber ||
+                                                        consumption?.internalControlNumber ||
+                                                        lot?.internalControlNumber ||
+                                                        packetBarcode ||
+                                                        '';
+
+                                                      if (packetBarcode) {
+                                                        if (
+                                                          !packetBatchRef.current ||
+                                                          packetBatchRef.current
+                                                            .packetBarcode !==
+                                                            packetBarcode
+                                                        ) {
+                                                          packetBatchRef.current =
+                                                            {
+                                                              packetBarcode,
+                                                              rolls: [],
+                                                              timeoutId: null,
+                                                            };
+                                                        }
+                                                        const safeIcn =
+                                                          icnValue ||
+                                                          `${packetBarcode}-roll-${packetBatchRef.current.rolls.length + 1}`;
+                                                        packetBatchRef.current.rolls.push(
+                                                          { icn: safeIcn, lot }
+                                                        );
+                                                        if (
+                                                          packetBatchRef.current
+                                                            .timeoutId !== null
+                                                        ) {
+                                                          clearTimeout(
+                                                            packetBatchRef
+                                                              .current.timeoutId
+                                                          );
+                                                        }
+                                                        packetBatchRef.current.timeoutId =
+                                                          setTimeout(() => {
+                                                            const batch =
+                                                              packetBatchRef.current;
+                                                            packetBatchRef.current =
+                                                              null;
+                                                            if (!batch) return;
+
+                                                            const primaryRoll =
+                                                              batch.rolls[0];
+                                                            const primaryIcn =
+                                                              primaryRoll?.icn ||
+                                                              batch.packetBarcode;
+                                                            const primaryLot =
+                                                              primaryRoll?.lot;
+                                                            const combinedIcns =
+                                                              batch.rolls
+                                                                .map(
+                                                                  (r) => r.icn
+                                                                )
+                                                                .filter(Boolean)
+                                                                .join(', ');
+                                                            const icnOrBarcode =
+                                                              combinedIcns ||
+                                                              batch.packetBarcode;
+
+                                                            const allScanVals: Record<
+                                                              string,
+                                                              string
+                                                            > =
+                                                              addGeneratedTraceFieldAliases(
+                                                                {
+                                                                  packetBarcode:
+                                                                    batch.packetBarcode,
+                                                                  packet_barcode:
+                                                                    batch.packetBarcode,
+                                                                  material_internal_control_number:
+                                                                    icnOrBarcode,
+                                                                  internalControlNumber:
+                                                                    icnOrBarcode,
+                                                                  material_icn:
+                                                                    icnOrBarcode,
+                                                                  material_expiration_date:
+                                                                    primaryLot?.expirationDate ||
+                                                                    '',
+                                                                  expirationDate:
+                                                                    primaryLot?.expirationDate ||
+                                                                    '',
+                                                                  material_batch_number:
+                                                                    primaryLot?.supplierLotNumber ||
+                                                                    '',
+                                                                  batchLotNumber:
+                                                                    primaryLot?.supplierLotNumber ||
+                                                                    '',
+                                                                  material_type:
+                                                                    primaryLot?.fabricType ||
+                                                                    primaryLot?.materialType ||
+                                                                    '',
+                                                                  material_brand:
+                                                                    primaryLot?.brand ||
+                                                                    primaryLot?.manufacturer ||
+                                                                    '',
+                                                                  material_freezer:
+                                                                    primaryLot?.freezerNumber ||
+                                                                    '',
+                                                                  material_lot:
+                                                                    primaryLot?.supplierLotNumber ||
+                                                                    '',
+                                                                  qty_used: '',
+                                                                  unit_of_measure:
+                                                                    primaryLot?.unitOfMeasure ||
+                                                                    '',
+                                                                  material_part_number:
+                                                                    primaryLot?.materialPartNumber ||
+                                                                    '',
+                                                                  inventoryPartNumber:
+                                                                    primaryLot?.materialPartNumber ||
+                                                                    '',
+                                                                  supplier:
+                                                                    primaryLot?.supplier ||
+                                                                    '',
+                                                                  manufacturer:
+                                                                    primaryLot?.manufacturer ||
+                                                                    '',
+                                                                  rollNumber:
+                                                                    primaryLot?.rollNumber ||
+                                                                    '',
+                                                                  receivedDate:
+                                                                    primaryLot?.receivedDate ||
+                                                                    '',
+                                                                }
+                                                              );
+                                                            batch.rolls.forEach(
+                                                              (r, idx) => {
+                                                                allScanVals[
+                                                                  `internalControlNumber_${idx + 1}`
+                                                                ] = r.icn;
+                                                              }
+                                                            );
+
+                                                            const traceFieldVals: Record<
+                                                              string,
+                                                              string
+                                                            > = {};
+                                                            for (const [
+                                                              key,
+                                                              val,
+                                                            ] of Object.entries(
+                                                              allScanVals
+                                                            )) {
+                                                              if (
+                                                                taskFieldKeys.has(
+                                                                  key
+                                                                ) ||
+                                                                key ===
+                                                                  'packetBarcode' ||
+                                                                key ===
+                                                                  'packet_barcode'
+                                                              ) {
+                                                                traceFieldVals[
+                                                                  key
+                                                                ] = val;
+                                                              }
+                                                            }
+                                                            traceFieldVals[
+                                                              'packetBarcode'
+                                                            ] =
+                                                              batch.packetBarcode;
+                                                            traceFieldVals[
+                                                              'packet_barcode'
+                                                            ] =
+                                                              batch.packetBarcode;
+                                                            if (
+                                                              !traceFieldVals[
+                                                                'internalControlNumber'
+                                                              ]
+                                                            ) {
+                                                              traceFieldVals[
+                                                                'internalControlNumber'
+                                                              ] = icnOrBarcode;
+                                                            }
+                                                            if (
+                                                              !traceFieldVals[
+                                                                'material_icn'
+                                                              ]
+                                                            ) {
+                                                              traceFieldVals[
+                                                                'material_icn'
+                                                              ] = icnOrBarcode;
+                                                            }
+                                                            if (
+                                                              !traceFieldVals[
+                                                                'material_internal_control_number'
+                                                              ]
+                                                            ) {
+                                                              traceFieldVals[
+                                                                'material_internal_control_number'
+                                                              ] = icnOrBarcode;
+                                                            }
+
+                                                            const inventoryValidation =
+                                                              {
+                                                                source:
+                                                                  'fabric_inventory',
+                                                                inventoryId:
+                                                                  primaryLot?.id ||
+                                                                  '',
+                                                                internalControlNumber:
+                                                                  primaryIcn,
+                                                                packetBarcode:
+                                                                  batch.packetBarcode,
+                                                                batchNumber:
+                                                                  primaryLot?.supplierLotNumber ||
+                                                                  '',
+                                                                expirationDate:
+                                                                  primaryLot?.expirationDate ||
+                                                                  '',
+                                                                supplier:
+                                                                  primaryLot?.supplier ||
+                                                                  '',
+                                                                manufacturer:
+                                                                  primaryLot?.manufacturer ||
+                                                                  '',
+                                                                partNumber:
+                                                                  primaryLot?.materialPartNumber ||
+                                                                  '',
+                                                                readonly: true,
+                                                              };
+                                                            const traceFieldValidations: Record<
+                                                              string,
+                                                              any
+                                                            > = {};
+                                                            for (const key of Object.keys(
+                                                              traceFieldVals
+                                                            )) {
+                                                              traceFieldValidations[
+                                                                key
+                                                              ] =
+                                                                inventoryValidation;
+                                                            }
+                                                            handleTraceMaterialCaptured(
+                                                              task,
+                                                              traceFieldVals,
+                                                              traceFieldValidations
+                                                            );
+                                                          }, 0);
+                                                        return;
+                                                      }
+
+                                                      const allScanVals: Record<
+                                                        string,
+                                                        string
+                                                      > =
+                                                        addGeneratedTraceFieldAliases(
+                                                          {
+                                                            material_internal_control_number:
+                                                              icnValue,
+                                                            internalControlNumber:
+                                                              icnValue,
+                                                            material_icn:
+                                                              icnValue,
+                                                            material_expiration_date:
+                                                              lot?.expirationDate ||
+                                                              '',
+                                                            expirationDate:
+                                                              lot?.expirationDate ||
+                                                              '',
+                                                            material_batch_number:
+                                                              lot?.supplierLotNumber ||
+                                                              '',
+                                                            batchLotNumber:
+                                                              lot?.supplierLotNumber ||
+                                                              '',
+                                                            material_type:
+                                                              lot?.fabricType ||
+                                                              lot?.materialType ||
+                                                              '',
+                                                            material_brand:
+                                                              lot?.brand ||
+                                                              lot?.manufacturer ||
+                                                              '',
+                                                            material_freezer:
+                                                              lot?.freezerNumber ||
+                                                              '',
+                                                            material_lot:
+                                                              lot?.supplierLotNumber ||
+                                                              '',
+                                                            qty_used:
+                                                              consumption?.qtyUsed?.toString() ||
+                                                              '',
+                                                            unit_of_measure:
+                                                              consumption?.unitOfMeasure ||
+                                                              lot?.unitOfMeasure ||
+                                                              '',
+                                                            material_part_number:
+                                                              lot?.materialPartNumber ||
+                                                              '',
+                                                            inventoryPartNumber:
+                                                              lot?.materialPartNumber ||
+                                                              '',
+                                                            supplier:
+                                                              lot?.supplier ||
+                                                              '',
+                                                            manufacturer:
+                                                              lot?.manufacturer ||
+                                                              '',
+                                                            rollNumber:
+                                                              lot?.rollNumber ||
+                                                              '',
+                                                            receivedDate:
+                                                              lot?.receivedDate ||
+                                                              '',
+                                                          }
+                                                        );
+                                                      const traceFieldVals: Record<
+                                                        string,
+                                                        string
+                                                      > = {};
+                                                      for (const [
+                                                        key,
+                                                        val,
+                                                      ] of Object.entries(
+                                                        allScanVals
+                                                      )) {
+                                                        if (
+                                                          taskFieldKeys.has(key)
+                                                        ) {
+                                                          traceFieldVals[key] =
+                                                            val;
+                                                        }
+                                                      }
+                                                      const inventoryValidation =
+                                                        {
+                                                          source:
+                                                            'fabric_inventory',
+                                                          inventoryId:
+                                                            lot?.id ||
+                                                            consumption?.materialLotId ||
+                                                            '',
+                                                          internalControlNumber:
+                                                            icnValue,
+                                                          batchNumber:
+                                                            lot?.supplierLotNumber ||
+                                                            '',
+                                                          expirationDate:
+                                                            lot?.expirationDate ||
+                                                            '',
+                                                          supplier:
+                                                            lot?.supplier || '',
+                                                          manufacturer:
+                                                            lot?.manufacturer ||
+                                                            '',
+                                                          partNumber:
+                                                            lot?.materialPartNumber ||
+                                                            '',
+                                                          readonly: true,
+                                                        };
+                                                      const traceFieldValidations: Record<
+                                                        string,
+                                                        any
+                                                      > = {};
+                                                      for (const key of Object.keys(
+                                                        traceFieldVals
+                                                      )) {
+                                                        traceFieldValidations[
+                                                          key
+                                                        ] = inventoryValidation;
+                                                      }
+                                                      handleTraceMaterialCaptured(
+                                                        task,
+                                                        traceFieldVals,
+                                                        traceFieldValidations
+                                                      );
+                                                    }}
+                                                  />
+                                                  {(() => {
+                                                    const currentTraceValues =
+                                                      collectCurrentTaskFieldValues(
+                                                        task
+                                                      );
+                                                    const capturedMaterials =
+                                                      currentTraceValues.material_internal_control_number ||
+                                                      currentTraceValues.internalControlNumber ||
+                                                      currentTraceValues.material_icn ||
+                                                      currentTraceValues.packetBarcode ||
+                                                      currentTraceValues.packet_barcode ||
+                                                      '';
+                                                    const capturedList =
+                                                      capturedMaterials
+                                                        .split(',')
+                                                        .map((value) =>
+                                                          value.trim()
+                                                        )
+                                                        .filter(Boolean);
+                                                    if (
+                                                      capturedList.length === 0
+                                                    )
+                                                      return null;
+
+                                                    return (
+                                                      <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 space-y-3">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                          <div>
+                                                            <p className="text-sm font-medium text-blue-900">
+                                                              Captured Materials
+                                                            </p>
+                                                            <p className="text-xs text-blue-700">
+                                                              Scan or enter
+                                                              another material,
+                                                              then complete the
+                                                              traceability task
+                                                              when all materials
+                                                              are captured.
+                                                            </p>
+                                                          </div>
+                                                          <Badge
+                                                            variant="outline"
+                                                            className="border-blue-300 text-blue-800"
+                                                          >
+                                                            {
+                                                              capturedList.length
+                                                            }
+                                                          </Badge>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-2">
+                                                          {capturedList.map(
+                                                            (
+                                                              material,
+                                                              index
+                                                            ) => (
+                                                              <Badge
+                                                                key={`${material}-${index}`}
+                                                                variant="secondary"
+                                                                className="bg-white text-blue-900 border border-blue-200"
+                                                              >
+                                                                {material}
+                                                              </Badge>
+                                                            )
+                                                          )}
+                                                        </div>
+                                                        <Button
+                                                          size="sm"
+                                                          onClick={() =>
+                                                            handleCompleteTask(
+                                                              task
+                                                            )
+                                                          }
+                                                          disabled={
+                                                            completeTaskMutation.isPending
+                                                          }
+                                                          data-testid={`button-complete-trace-task-${task.id}`}
+                                                        >
+                                                          {completeTaskMutation.isPending ? (
+                                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                          ) : (
+                                                            <CheckCircle className="h-4 w-4 mr-2" />
+                                                          )}
+                                                          Complete Traceability
+                                                        </Button>
+                                                      </div>
+                                                    );
+                                                  })()}
+                                                </div>
+                                              ) : (
+                                                <>
+                                                  {task.taskType === 'QC' &&
+                                                    task.fields.length === 0 &&
+                                                    getRoutingQcStandardsForTask(
+                                                      task,
+                                                      currentStep.departmentName
+                                                    ).length > 0 && (
+                                                      <div className="space-y-2 rounded-lg border border-green-200 bg-green-50/50 p-3">
+                                                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-green-800">
+                                                          <ClipboardCheck className="h-4 w-4" />
+                                                          Routing QC
+                                                          Requirements
+                                                        </div>
+                                                        {getRoutingQcStandardsForTask(
+                                                          task,
+                                                          currentStep.departmentName
+                                                        ).map(
+                                                          (
+                                                            qc: any,
+                                                            index: number
+                                                          ) => (
+                                                            <div
+                                                              key={`${qc.standard}-${index}`}
+                                                              className="rounded-md border border-green-100 bg-white p-2"
+                                                            >
+                                                              <p className="text-sm font-medium">
+                                                                {qc.standard}
+                                                              </p>
+                                                              <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                                                                {qc.tolerance && (
+                                                                  <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">
+                                                                    <Wrench className="h-3 w-3" />
+                                                                    Tolerance:{' '}
+                                                                    {
+                                                                      qc.tolerance
+                                                                    }
+                                                                  </span>
+                                                                )}
+                                                                {qc.requirement && (
+                                                                  <span className="inline-flex items-center gap-1 rounded border border-green-200 bg-green-50 px-2 py-0.5 text-green-700">
+                                                                    <Shield className="h-3 w-3" />
+                                                                    Requirement:{' '}
+                                                                    {
+                                                                      qc.requirement
+                                                                    }
+                                                                  </span>
+                                                                )}
+                                                                {qc.referenceLink && (
+                                                                  <a
+                                                                    href={
+                                                                      qc.referenceLink
+                                                                    }
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-0.5 text-purple-700 hover:bg-purple-100 no-underline"
+                                                                  >
+                                                                    <ExternalLink className="h-3 w-3" />
+                                                                    Reference
+                                                                  </a>
+                                                                )}
+                                                              </div>
+                                                            </div>
+                                                          )
+                                                        )}
+                                                      </div>
+                                                    )}
+                                                  {task.fields.length > 0 && (
+                                                    <div className="space-y-3">
+                                                      {task.fields
+                                                        .filter((field) => {
+                                                          if (isComplete)
+                                                            return true;
+                                                          if (
+                                                            task.taskType ===
+                                                              'TRACE' ||
+                                                            task.taskType ===
+                                                              'TRACEABILITY'
+                                                          ) {
+                                                            return (
+                                                              field.required ||
+                                                              (field.value &&
+                                                                field.value !==
+                                                                  '')
+                                                            );
+                                                          }
+                                                          return true;
+                                                        })
+                                                        .map((field) => (
+                                                          <div
+                                                            key={field.id}
+                                                            className="space-y-1"
+                                                          >
+                                                            <Label className="text-sm">
+                                                              {(() => {
+                                                                const labelMap: Record<
+                                                                  string,
+                                                                  string
+                                                                > = {
+                                                                  internalControlNumber:
+                                                                    'Internal Control Number',
+                                                                  supplier:
+                                                                    'Supplier',
+                                                                  inventoryPartNumber:
+                                                                    'Inventory Part Number',
+                                                                  batchLotNumber:
+                                                                    'Batch/Lot #',
+                                                                  manufacturer:
+                                                                    'Manufacturer',
+                                                                  rollNumber:
+                                                                    'Roll Number',
+                                                                  expirationDate:
+                                                                    'Expiration Date',
+                                                                  receivedDate:
+                                                                    'Received Date',
+                                                                };
+                                                                return (
+                                                                  labelMap[
+                                                                    field
+                                                                      .fieldKey
+                                                                  ] ||
+                                                                  field.fieldLabel
+                                                                );
+                                                              })()}
+                                                              {field.required && (
+                                                                <span className="text-red-500 ml-1">
+                                                                  *
+                                                                </span>
+                                                              )}
+                                                            </Label>
+                                                            {field.fieldType ===
+                                                            'yes_no' ? (
+                                                              <div className="space-y-2">
+                                                                {field.validation &&
+                                                                  (field
+                                                                    .validation
+                                                                    .tolerance ||
+                                                                    field
+                                                                      .validation
+                                                                      .requirement ||
+                                                                    field
+                                                                      .validation
+                                                                      .hardQcStop) && (
+                                                                    <div className="flex flex-wrap gap-2 text-xs mb-1">
+                                                                      {field
+                                                                        .validation
+                                                                        .hardQcStop && (
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-300 font-medium">
+                                                                          <Flag className="h-3 w-3" />
+                                                                          Hard
+                                                                          QC
+                                                                          Stop
+                                                                        </span>
+                                                                      )}
+                                                                      {field
+                                                                        .validation
+                                                                        .tolerance && (
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                                                          <Wrench className="h-3 w-3" />
+                                                                          Tolerance:{' '}
+                                                                          {
+                                                                            field
+                                                                              .validation
+                                                                              .tolerance
+                                                                          }
+                                                                        </span>
+                                                                      )}
+                                                                      {field
+                                                                        .validation
+                                                                        .requirement && (
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                                                                          <Shield className="h-3 w-3" />
+                                                                          Requirement:{' '}
+                                                                          {
+                                                                            field
+                                                                              .validation
+                                                                              .requirement
+                                                                          }
+                                                                        </span>
+                                                                      )}
+                                                                      {field
+                                                                        .validation
+                                                                        .referenceLink && (
+                                                                        <a
+                                                                          href={
+                                                                            field
+                                                                              .validation
+                                                                              .referenceLink
+                                                                          }
+                                                                          target="_blank"
+                                                                          rel="noopener noreferrer"
+                                                                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 cursor-pointer no-underline"
+                                                                        >
+                                                                          <ExternalLink className="h-3 w-3" />
+                                                                          Reference
+                                                                        </a>
+                                                                      )}
+                                                                      {field
+                                                                        .validation
+                                                                        .temperature && (
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                                                          Temp:{' '}
+                                                                          {
+                                                                            field
+                                                                              .validation
+                                                                              .temperature
+                                                                          }
+                                                                        </span>
+                                                                      )}
+                                                                      {field
+                                                                        .validation
+                                                                        .time && (
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                                                          <Clock className="h-3 w-3" />
+                                                                          Time:{' '}
+                                                                          {
+                                                                            field
+                                                                              .validation
+                                                                              .time
+                                                                          }
+                                                                        </span>
+                                                                      )}
+                                                                    </div>
+                                                                  )}
+                                                                {task.taskType ===
+                                                                  'QC' && (
+                                                                  <div className="space-y-1">
+                                                                    <Label className="text-xs font-medium text-muted-foreground">
+                                                                      Measured
+                                                                      Result{' '}
+                                                                      {field.required && (
+                                                                        <span className="text-red-500">
+                                                                          *
+                                                                        </span>
+                                                                      )}
+                                                                    </Label>
+                                                                    <Input
+                                                                      id={`qc-result-${task.id}-${field.fieldKey}`}
+                                                                      name={`qc-result-${task.id}-${field.fieldKey}`}
+                                                                      placeholder={
+                                                                        field
+                                                                          .validation
+                                                                          ?.tolerance
+                                                                          ? `Enter result (Tolerance: ${field.validation.tolerance})`
+                                                                          : 'Enter measured result...'
+                                                                      }
+                                                                      value={
+                                                                        fieldValues[
+                                                                          task
+                                                                            .id
+                                                                        ]?.[
+                                                                          `${field.fieldKey}_result`
+                                                                        ] ||
+                                                                        (field.value?.includes(
+                                                                          '|'
+                                                                        )
+                                                                          ? field.value.split(
+                                                                              '|'
+                                                                            )[1]
+                                                                          : '') ||
+                                                                        ''
+                                                                      }
+                                                                      onChange={(
+                                                                        e
+                                                                      ) =>
+                                                                        handleFieldChange(
+                                                                          task.id,
+                                                                          `${field.fieldKey}_result`,
+                                                                          e
+                                                                            .target
+                                                                            .value
+                                                                        )
+                                                                      }
+                                                                      disabled={
+                                                                        fieldInputDisabled
+                                                                      }
+                                                                      className="text-sm h-9"
+                                                                    />
+                                                                  </div>
+                                                                )}
+                                                                <div className="flex items-center gap-2">
+                                                                  <Checkbox
+                                                                    id={
+                                                                      field.id
+                                                                    }
+                                                                    checked={
+                                                                      fieldValues[
+                                                                        task.id
+                                                                      ]?.[
+                                                                        field
+                                                                          .fieldKey
+                                                                      ] !==
+                                                                      undefined
+                                                                        ? fieldValues[
+                                                                            task
+                                                                              .id
+                                                                          ][
+                                                                            field
+                                                                              .fieldKey
+                                                                          ] ===
+                                                                          'yes'
+                                                                        : field.value ===
+                                                                            'yes' ||
+                                                                          (field.value !=
+                                                                            null &&
+                                                                            field.value.startsWith(
+                                                                              'yes|'
+                                                                            ))
+                                                                    }
+                                                                    onCheckedChange={(
+                                                                      checked
+                                                                    ) =>
+                                                                      handleFieldChange(
+                                                                        task.id,
+                                                                        field.fieldKey,
+                                                                        checked
+                                                                          ? 'yes'
+                                                                          : 'no'
+                                                                      )
+                                                                    }
+                                                                    disabled={
+                                                                      fieldInputDisabled
+                                                                    }
+                                                                  />
+                                                                  <Label
+                                                                    htmlFor={
+                                                                      field.id
+                                                                    }
+                                                                    className="text-sm cursor-pointer"
+                                                                  >
+                                                                    Verified /
+                                                                    Pass
+                                                                  </Label>
+                                                                </div>
+                                                              </div>
+                                                            ) : field.fieldType ===
+                                                              'inventory_select' ? (
+                                                              <div className="space-y-1">
+                                                                <div className="flex gap-2">
+                                                                  <Input
+                                                                    id={`inv-${task.id}-${field.fieldKey}`}
+                                                                    name={`inv-${task.id}-${field.fieldKey}`}
+                                                                    value={
+                                                                      fieldValues[
+                                                                        task.id
+                                                                      ]?.[
+                                                                        field
+                                                                          .fieldKey
+                                                                      ] ||
+                                                                      field.value ||
+                                                                      ''
+                                                                    }
+                                                                    disabled={
+                                                                      true
+                                                                    }
+                                                                    className="text-sm bg-muted flex-1"
+                                                                    placeholder="Select from Fabric Inventory..."
+                                                                  />
+                                                                  {!fieldInputDisabled && (
+                                                                    <Button
+                                                                      size="sm"
+                                                                      variant="outline"
+                                                                      onClick={() => {
+                                                                        setInventoryPickerTaskId(
+                                                                          task.id
+                                                                        );
+                                                                        setShowInventoryPicker(
+                                                                          true
+                                                                        );
+                                                                      }}
+                                                                      className="shrink-0"
+                                                                    >
+                                                                      <Search className="h-4 w-4 mr-1" />
+                                                                      Select
+                                                                    </Button>
+                                                                  )}
+                                                                </div>
+                                                                {(fieldValues[
+                                                                  task.id
+                                                                ]?.[
+                                                                  field.fieldKey
+                                                                ] ||
+                                                                  field.value) && (
+                                                                  <span className="text-xs text-green-600 flex items-center gap-1">
+                                                                    <CheckCircle className="h-3 w-3" />
+                                                                    Linked to
+                                                                    Fabric
+                                                                    Inventory
+                                                                  </span>
+                                                                )}
+                                                              </div>
+                                                            ) : field.fieldType ===
+                                                              'textarea' ? (
+                                                              <Textarea
+                                                                id={`ta-${task.id}-${field.fieldKey}`}
+                                                                name={`ta-${task.id}-${field.fieldKey}`}
+                                                                value={
+                                                                  fieldValues[
+                                                                    task.id
+                                                                  ]?.[
+                                                                    field
+                                                                      .fieldKey
+                                                                  ] ||
+                                                                  field.value ||
+                                                                  ''
+                                                                }
+                                                                onChange={(e) =>
+                                                                  handleFieldChange(
+                                                                    task.id,
+                                                                    field.fieldKey,
+                                                                    e.target
+                                                                      .value
+                                                                  )
+                                                                }
+                                                                disabled={
+                                                                  fieldInputDisabled
+                                                                }
+                                                                className="text-sm"
+                                                              />
+                                                            ) : (
+                                                              <Input
+                                                                id={`field-${task.id}-${field.fieldKey}`}
+                                                                name={`field-${task.id}-${field.fieldKey}`}
+                                                                type={
+                                                                  field.fieldType ===
+                                                                  'number'
+                                                                    ? 'number'
+                                                                    : field.fieldType ===
+                                                                        'date'
+                                                                      ? 'date'
+                                                                      : 'text'
+                                                                }
+                                                                value={
+                                                                  fieldValues[
+                                                                    task.id
+                                                                  ]?.[
+                                                                    field
+                                                                      .fieldKey
+                                                                  ] ||
+                                                                  field.value ||
+                                                                  ''
+                                                                }
+                                                                onChange={(e) =>
+                                                                  handleFieldChange(
+                                                                    task.id,
+                                                                    field.fieldKey,
+                                                                    e.target
+                                                                      .value
+                                                                  )
+                                                                }
+                                                                disabled={
+                                                                  fieldInputDisabled ||
+                                                                  (field
+                                                                    .validation
+                                                                    ?.readonly ===
+                                                                    true &&
+                                                                    !!field.value)
+                                                                }
+                                                                className={`text-sm ${field.validation?.readonly && field.value ? 'bg-muted' : ''}`}
+                                                                placeholder={
+                                                                  field
+                                                                    .validation
+                                                                    ?.readonly
+                                                                    ? 'Auto-filled from inventory'
+                                                                    : undefined
+                                                                }
+                                                              />
+                                                            )}
+                                                          </div>
+                                                        ))}
+                                                    </div>
+                                                  )}
+
+                                                  {!isComplete &&
+                                                    task.taskType !==
+                                                      'END_GATE' &&
+                                                    task.taskType !== 'TRACE' &&
+                                                    task.taskType !==
+                                                      'TRACEABILITY' &&
+                                                    (task.taskType ===
+                                                    'SIGNATURE' ? (
+                                                      <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                                                        onClick={() => {
+                                                          setSigningTaskId(
+                                                            task.id
+                                                          );
+                                                          setSigningRole(
+                                                            task.signatureRole
+                                                          );
+                                                          setSignatureData(
+                                                            (prev) => ({
+                                                              ...prev,
+                                                              signedBy:
+                                                                activeBadge ||
+                                                                prev.signedBy,
+                                                              signedByName:
+                                                                activeTechName ||
+                                                                prev.signedByName,
+                                                              badgeScan:
+                                                                activeBadge ||
+                                                                prev.badgeScan,
+                                                            })
+                                                          );
+                                                          if (
+                                                            activeBadge &&
+                                                            resolvedEmployee
+                                                          ) {
+                                                            setSignResolvedEmployee(
+                                                              resolvedEmployee
+                                                            );
+                                                            setSignBadgeLookupStatus(
+                                                              'found'
+                                                            );
+                                                          } else {
+                                                            setSignResolvedEmployee(
+                                                              null
+                                                            );
+                                                            setSignBadgeLookupStatus(
+                                                              'idle'
+                                                            );
+                                                          }
+                                                          setShowSignDialog(
+                                                            true
+                                                          );
+                                                        }}
+                                                        disabled={
+                                                          !phaseUnlocked
+                                                        }
+                                                        data-testid={`button-sign-task-${task.id}`}
+                                                      >
+                                                        <PenTool className="h-4 w-4 mr-2" />
+                                                        Sign (
+                                                        {task.signatureRole ||
+                                                          'Required'}
+                                                        )
+                                                      </Button>
+                                                    ) : (
+                                                      <Button
+                                                        size="sm"
+                                                        onClick={() =>
+                                                          handleCompleteTask(
+                                                            task
+                                                          )
+                                                        }
+                                                        disabled={
+                                                          completeTaskMutation.isPending
+                                                        }
+                                                        data-testid={`button-complete-task-${task.id}`}
+                                                      >
+                                                        {completeTaskMutation.isPending ? (
+                                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                        ) : (
+                                                          <CheckCircle className="h-4 w-4 mr-2" />
+                                                        )}
+                                                        Complete Task
+                                                      </Button>
+                                                    ))}
+                                                </>
+                                              )}
+
+                                              {isComplete && (
+                                                <p className="text-xs text-muted-foreground">
+                                                  Completed by{' '}
+                                                  {task.completedBy} at{' '}
+                                                  {task.completedAt
+                                                    ? new Date(
+                                                        task.completedAt
+                                                      ).toLocaleString()
+                                                    : 'N/A'}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </AccordionContent>
+                                        </AccordionItem>
+                                      );
+                                    })}
+                                  </Accordion>
+
+                                  {phase === 'WORK' &&
+                                    (() => {
+                                      const timerConfig =
+                                        getTimerConfigForDepartment(
+                                          currentStep.departmentName
+                                        );
+                                      if (!timerConfig) return null;
+                                      const stepTimerStarted =
+                                        !!activeTimerRun ||
+                                        timerStartedForStep[currentStep.id];
+                                      return (
+                                        <div className="mx-4 my-3 p-3 border border-amber-200 bg-amber-50 rounded-lg">
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                              <Timer className="h-5 w-5 text-amber-600" />
+                                              <div>
+                                                <p className="font-medium text-amber-800 text-sm">
+                                                  Production Timer
+                                                </p>
+                                                <p className="text-xs text-amber-600">
+                                                  {activeTimerRun &&
+                                                  activeTimerProgram
+                                                    ? `Running: ${activeTimerProgram.name}${activeTimerRun.serialNumber ? ` / S/N: ${activeTimerRun.serialNumber}` : ''}`
+                                                    : timerConfig.defaultProgramName
+                                                      ? `Program: ${timerConfig.defaultProgramName}`
+                                                      : 'Start a timer on the timer station'}
+                                                </p>
+                                              </div>
+                                            </div>
+                                            {stepTimerStarted ? (
+                                              <Badge className="bg-green-100 text-green-700 border-green-300">
+                                                <CheckCircle className="h-3 w-3 mr-1" />
+                                                Timer Running
+                                              </Badge>
+                                            ) : (
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                                                onClick={() =>
+                                                  setShowTimerModal(true)
+                                                }
+                                              >
+                                                <Timer className="h-4 w-4 mr-1" />
+                                                Start Timer
+                                              </Button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                </>
                               )}
                             </div>
+                          );
+                        })}
+
+                        {!isLegacyBackfilledStepDataEntry && (
+                          <div className="pt-4 border-t space-y-3">
+                            {!canSignStep && (
+                              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                <div className="flex items-start gap-2">
+                                  <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                                  <div className="text-sm text-amber-800">
+                                    {!allRequiredNonGateComplete && (
+                                      <p>
+                                        Complete all required tasks before
+                                        signing off.
+                                      </p>
+                                    )}
+                                    {allRequiredNonGateComplete &&
+                                      unsignedSigTasks.length > 0 && (
+                                        <div>
+                                          <p className="font-medium mb-1">
+                                            Signatures still needed:
+                                          </p>
+                                          <ul className="list-disc list-inside text-xs space-y-0.5">
+                                            {unsignedSigTasks.map((t) => (
+                                              <li key={t.id}>
+                                                {t.title}
+                                                {t.signatureRole && (
+                                                  <span className="text-amber-600 ml-1">
+                                                    ({t.signatureRole})
+                                                  </span>
+                                                )}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex justify-end">
+                              <Button
+                                onClick={() => {
+                                  setSigningTaskId(null);
+                                  setSigningRole(null);
+                                  setSignatureData((prev) => ({
+                                    ...prev,
+                                    signedBy: activeBadge || prev.signedBy,
+                                    signedByName:
+                                      activeTechName || prev.signedByName,
+                                    badgeScan: activeBadge || prev.badgeScan,
+                                  }));
+                                  if (activeBadge && resolvedEmployee) {
+                                    setSignResolvedEmployee(resolvedEmployee);
+                                    setSignBadgeLookupStatus('found');
+                                  } else {
+                                    setSignResolvedEmployee(null);
+                                    setSignBadgeLookupStatus('idle');
+                                  }
+                                  setShowSignDialog(true);
+                                }}
+                                disabled={!canSignStep}
+                                data-testid="button-sign-step"
+                              >
+                                <PenTool className="h-4 w-4 mr-2" />
+                                Sign & Complete Step
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      <div className="flex justify-end">
-                        <Button
-                          onClick={() => {
-                            setSigningTaskId(null);
-                            setSigningRole(null);
-                            setSignatureData((prev) => ({
-                              ...prev,
-                              signedBy: activeBadge || prev.signedBy,
-                              signedByName: activeTechName || prev.signedByName,
-                              badgeScan: activeBadge || prev.badgeScan,
-                            }));
-                            if (activeBadge && resolvedEmployee) {
-                              setSignResolvedEmployee(resolvedEmployee);
-                              setSignBadgeLookupStatus('found');
-                            } else {
-                              setSignResolvedEmployee(null);
-                              setSignBadgeLookupStatus('idle');
-                            }
-                            setShowSignDialog(true);
-                          }}
-                          disabled={!canSignStep}
-                          data-testid="button-sign-step"
-                        >
-                          <PenTool className="h-4 w-4 mr-2" />
-                          Sign & Complete Step
-                        </Button>
+                        )}
                       </div>
-                    </div>
-                    )}
-                  </div>
-                  );
-                })()}
+                    );
+                  })()}
 
                 <Separator />
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Department Notes</Label>
+                  <Label className="text-sm font-medium">
+                    Department Notes
+                  </Label>
                   <Textarea
                     placeholder="Add notes for this department step..."
                     value={stepNotes}
@@ -3548,8 +5388,16 @@ export default function TravelerExecution() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={saveStepNotesMutation.isPending || stepNotes === (currentStep.notes ?? '')}
-                    onClick={() => saveStepNotesMutation.mutate({ stepId: currentStep.id, notes: stepNotes })}
+                    disabled={
+                      saveStepNotesMutation.isPending ||
+                      stepNotes === (currentStep.notes ?? '')
+                    }
+                    onClick={() =>
+                      saveStepNotesMutation.mutate({
+                        stepId: currentStep.id,
+                        notes: stepNotes,
+                      })
+                    }
                   >
                     {saveStepNotesMutation.isPending ? (
                       <Loader2 className="h-3 w-3 mr-2 animate-spin" />
@@ -3564,41 +5412,56 @@ export default function TravelerExecution() {
                     <p className="font-medium text-green-700">Step Completed</p>
                     {currentStep.signatures.length > 0 && (
                       <div className="mt-4 p-4 bg-gray-50 rounded-lg max-w-md mx-auto">
-                        <p className="text-sm text-muted-foreground mb-2">Signed by:</p>
-                        {currentStep.signatures.map((sig: TravelerSignature) => (
-                          <div key={sig.id} className="text-sm border-b last:border-b-0 py-2">
-                            <div className="flex items-start gap-3">
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Signed by:
+                        </p>
+                        {currentStep.signatures.map(
+                          (sig: TravelerSignature) => (
+                            <div
+                              key={sig.id}
+                              className="text-sm border-b last:border-b-0 py-2"
+                            >
+                              <div className="flex items-start gap-3">
+                                {sig.signatureData && (
+                                  <img
+                                    src={sig.signatureData}
+                                    alt={`Signature by ${displaySignerName(sig.signedByName, sig.signedBy)}`}
+                                    className="h-10 w-24 object-contain border rounded bg-white"
+                                  />
+                                )}
+                                <div className="flex-1">
+                                  <p className="font-medium">
+                                    {displaySignerName(
+                                      sig.signedByName,
+                                      sig.signedBy
+                                    )}
+                                    {sig.signatureRole && (
+                                      <Badge
+                                        variant="outline"
+                                        className="ml-2 text-[10px]"
+                                      >
+                                        {sig.signatureRole}
+                                      </Badge>
+                                    )}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(sig.signedAt).toLocaleString()} -{' '}
+                                    {sig.meaning}
+                                  </p>
+                                </div>
+                              </div>
                               {sig.signatureData && (
-                                <img
-                                  src={sig.signatureData}
-                                  alt={`Signature by ${displaySignerName(sig.signedByName, sig.signedBy)}`}
-                                  className="h-10 w-24 object-contain border rounded bg-white"
-                                />
+                                <div className="border rounded bg-white p-1">
+                                  <img
+                                    src={sig.signatureData}
+                                    alt={`Signature by ${displaySignerName(sig.signedByName, sig.signedBy)}`}
+                                    className="h-12 object-contain mx-auto"
+                                  />
+                                </div>
                               )}
-                              <div className="flex-1">
-
-                                <p className="font-medium">
-                                  {displaySignerName(sig.signedByName, sig.signedBy)}
-                                  {sig.signatureRole && (
-                                    <Badge variant="outline" className="ml-2 text-[10px]">{sig.signatureRole}</Badge>
-                                  )}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(sig.signedAt).toLocaleString()} - {sig.meaning}
-                                </p>
-                              </div>
                             </div>
-                            {sig.signatureData && (
-                              <div className="border rounded bg-white p-1">
-                                <img
-                                  src={sig.signatureData}
-                                  alt={`Signature by ${displaySignerName(sig.signedByName, sig.signedBy)}`}
-                                  className="h-12 object-contain mx-auto"
-                                />
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                          )
+                        )}
                       </div>
                     )}
                   </div>
@@ -3609,18 +5472,21 @@ export default function TravelerExecution() {
         </div>
       </div>
 
-      <Dialog open={showSignDialog} onOpenChange={(open) => {
-        setShowSignDialog(open);
-        if (!open) {
-          if (sigPadRef.current) sigPadRef.current.clear();
-          if (signBadgeLookupTimerRef.current) {
-            clearTimeout(signBadgeLookupTimerRef.current);
-            signBadgeLookupTimerRef.current = null;
+      <Dialog
+        open={showSignDialog}
+        onOpenChange={(open) => {
+          setShowSignDialog(open);
+          if (!open) {
+            if (sigPadRef.current) sigPadRef.current.clear();
+            if (signBadgeLookupTimerRef.current) {
+              clearTimeout(signBadgeLookupTimerRef.current);
+              signBadgeLookupTimerRef.current = null;
+            }
+            setSignBadgeLookupStatus('idle');
+            setSignResolvedEmployee(null);
           }
-          setSignBadgeLookupStatus('idle');
-          setSignResolvedEmployee(null);
-        }
-      }}>
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
@@ -3640,25 +5506,34 @@ export default function TravelerExecution() {
               lookupStatus={signBadgeLookupStatus}
               resolvedEmployee={signResolvedEmployee}
               onBadgeChange={handleSignBadgeScanInput}
-              onNameChange={(name) => setSignatureData({ ...signatureData, signedByName: name })}
+              onNameChange={(name) =>
+                setSignatureData({ ...signatureData, signedByName: name })
+              }
             />
 
             <div className="space-y-2">
               <Label>Signature *</Label>
-              <div className={`border-2 rounded-lg overflow-hidden ${signatureData.signatureData ? 'border-green-500' : 'border-dashed border-muted-foreground/30'}`}>
+              <div
+                className={`border-2 rounded-lg overflow-hidden ${signatureData.signatureData ? 'border-green-500' : 'border-dashed border-muted-foreground/30'}`}
+              >
                 <SignatureCanvas
                   ref={sigPadRef}
                   clearOnResize={false}
                   canvasProps={{
                     className: 'w-full h-[150px] bg-white cursor-crosshair',
-                    style: { width: '100%', height: '150px', touchAction: 'none' },
+                    style: {
+                      width: '100%',
+                      height: '150px',
+                      touchAction: 'none',
+                    },
                   }}
                   penColor="black"
                   onEnd={() => {
                     if (sigPadRef.current && !sigPadRef.current.isEmpty()) {
-                      setSignatureData(prev => ({
+                      setSignatureData((prev) => ({
                         ...prev,
-                        signatureData: sigPadRef.current!.toDataURL('image/png'),
+                        signatureData:
+                          sigPadRef.current!.toDataURL('image/png'),
                       }));
                     }
                   }}
@@ -3666,7 +5541,9 @@ export default function TravelerExecution() {
               </div>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
-                  {signatureData.signatureData ? 'Signature captured' : 'Draw your signature above'}
+                  {signatureData.signatureData
+                    ? 'Signature captured'
+                    : 'Draw your signature above'}
                 </p>
                 <Button
                   type="button"
@@ -3674,7 +5551,10 @@ export default function TravelerExecution() {
                   size="sm"
                   onClick={() => {
                     if (sigPadRef.current) sigPadRef.current.clear();
-                    setSignatureData(prev => ({ ...prev, signatureData: '' }));
+                    setSignatureData((prev) => ({
+                      ...prev,
+                      signatureData: '',
+                    }));
                   }}
                 >
                   Clear
@@ -3708,17 +5588,27 @@ export default function TravelerExecution() {
               Cancel
             </Button>
             <Button
-              onClick={() => currentStep && signStepMutation.mutate({ stepId: currentStep.id, taskId: signingTaskId, role: signingRole })}
+              onClick={() =>
+                currentStep &&
+                signStepMutation.mutate({
+                  stepId: currentStep.id,
+                  taskId: signingTaskId,
+                  role: signingRole,
+                })
+              }
               disabled={
                 signStepMutation.isPending ||
                 !signatureData.signedBy ||
                 !signatureData.signatureData ||
                 signBadgeLookupStatus === 'loading' ||
-                (signBadgeLookupStatus === 'not_found' && !signatureData.signedByName.trim())
+                (signBadgeLookupStatus === 'not_found' &&
+                  !signatureData.signedByName.trim())
               }
               data-testid="button-confirm-sign"
             >
-              {signStepMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {signStepMutation.isPending && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
               <PenTool className="h-4 w-4 mr-2" />
               Sign & Complete
             </Button>
@@ -3757,7 +5647,9 @@ export default function TravelerExecution() {
               disabled={blockMutation.isPending || !blockReason}
               data-testid="button-confirm-block"
             >
-              {blockMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {blockMutation.isPending && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
               Block Traveler
             </Button>
           </DialogFooter>
@@ -3765,15 +5657,18 @@ export default function TravelerExecution() {
       </Dialog>
 
       {/* Gate Override Dialog */}
-      <Dialog open={showGateOverrideDialog} onOpenChange={(open) => {
-        if (!open) {
-          setShowGateOverrideDialog(false);
-          setGateOverridePendingStep(null);
-          setGateOverrideBlockedReason('');
-          setGateOverrideSupervisorBadge('');
-          setGateOverrideReason('');
-        }
-      }}>
+      <Dialog
+        open={showGateOverrideDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowGateOverrideDialog(false);
+            setGateOverridePendingStep(null);
+            setGateOverrideBlockedReason('');
+            setGateOverrideSupervisorBadge('');
+            setGateOverrideReason('');
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-600">
@@ -3781,20 +5676,28 @@ export default function TravelerExecution() {
               Supervisor Gate Override
             </DialogTitle>
             <DialogDescription>
-              A process gate is blocking this step. A supervisor with the gate override capability can bypass it. Every override is permanently recorded in the audit log.
+              A process gate is blocking this step. A supervisor with the gate
+              override capability can bypass it. Every override is permanently
+              recorded in the audit log.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             {gateOverrideBlockedReason && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <p className="text-sm font-medium text-amber-800 mb-1">Blocked reason:</p>
-                <p className="text-sm text-amber-700">{gateOverrideBlockedReason}</p>
+                <p className="text-sm font-medium text-amber-800 mb-1">
+                  Blocked reason:
+                </p>
+                <p className="text-sm text-amber-700">
+                  {gateOverrideBlockedReason}
+                </p>
               </div>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="override-supervisor-badge">Supervisor Badge Scan *</Label>
+              <Label htmlFor="override-supervisor-badge">
+                Supervisor Badge Scan *
+              </Label>
               <Input
                 id="override-supervisor-badge"
                 name="override-supervisor-badge"
@@ -3803,7 +5706,10 @@ export default function TravelerExecution() {
                 placeholder="Scan or type supervisor badge code..."
                 autoFocus
               />
-              <p className="text-xs text-muted-foreground">The supervisor must have the <code>traveler_gate_override</code> capability assigned in their employee profile.</p>
+              <p className="text-xs text-muted-foreground">
+                The supervisor must have the <code>traveler_gate_override</code>{' '}
+                capability assigned in their employee profile.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -3820,13 +5726,16 @@ export default function TravelerExecution() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setShowGateOverrideDialog(false);
-              setGateOverridePendingStep(null);
-              setGateOverrideBlockedReason('');
-              setGateOverrideSupervisorBadge('');
-              setGateOverrideReason('');
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowGateOverrideDialog(false);
+                setGateOverridePendingStep(null);
+                setGateOverrideBlockedReason('');
+                setGateOverrideSupervisorBadge('');
+                setGateOverrideReason('');
+              }}
+            >
               Cancel
             </Button>
             <Button
@@ -3847,7 +5756,9 @@ export default function TravelerExecution() {
                 gateOverrideMutation.isPending
               }
             >
-              {gateOverrideMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {gateOverrideMutation.isPending && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
               <Shield className="h-4 w-4 mr-2" />
               Apply Override
             </Button>
@@ -3855,14 +5766,17 @@ export default function TravelerExecution() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showQcApprovalDialog} onOpenChange={(open) => {
-        if (!open) {
-          setShowQcApprovalDialog(false);
-          setQcApprovalData(null);
-          setQcApproverName('');
-          setQcApprovalNotes('');
-        }
-      }}>
+      <Dialog
+        open={showQcApprovalDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowQcApprovalDialog(false);
+            setQcApprovalData(null);
+            setQcApproverName('');
+            setQcApprovalNotes('');
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -3870,7 +5784,8 @@ export default function TravelerExecution() {
               Hard QC Stop - Approval Required
             </DialogTitle>
             <DialogDescription>
-              One or more quality checks failed with a Hard QC Stop flag. Authorized approval is required to proceed.
+              One or more quality checks failed with a Hard QC Stop flag.
+              Authorized approval is required to proceed.
             </DialogDescription>
           </DialogHeader>
 
@@ -3878,12 +5793,17 @@ export default function TravelerExecution() {
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
               <p className="text-sm font-medium text-red-800">Failed Checks:</p>
               {qcApprovalData?.failedChecks.map((check, i) => (
-                <div key={i} className="flex items-start gap-2 text-sm text-red-700">
+                <div
+                  key={i}
+                  className="flex items-start gap-2 text-sm text-red-700"
+                >
                   <XCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <div>
                     <span className="font-medium">{check.fieldLabel}</span>
                     {check.measuredResult && (
-                      <span className="text-red-500 ml-1">(Measured: {check.measuredResult})</span>
+                      <span className="text-red-500 ml-1">
+                        (Measured: {check.measuredResult})
+                      </span>
                     )}
                   </div>
                 </div>
@@ -3891,7 +5811,9 @@ export default function TravelerExecution() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="qc-approver-name">Authorized Approver Name *</Label>
+              <Label htmlFor="qc-approver-name">
+                Authorized Approver Name *
+              </Label>
               <Input
                 id="qc-approver-name"
                 name="qc-approver-name"
@@ -3902,7 +5824,9 @@ export default function TravelerExecution() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="qc-approval-notes">Approval Notes / Justification *</Label>
+              <Label htmlFor="qc-approval-notes">
+                Approval Notes / Justification *
+              </Label>
               <Textarea
                 id="qc-approval-notes"
                 name="qc-approval-notes"
@@ -3915,19 +5839,24 @@ export default function TravelerExecution() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setShowQcApprovalDialog(false);
-              setQcApprovalData(null);
-              setQcApproverName('');
-              setQcApprovalNotes('');
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowQcApprovalDialog(false);
+                setQcApprovalData(null);
+                setQcApproverName('');
+                setQcApprovalNotes('');
+              }}
+            >
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={() => {
                 if (!qcApprovalData) return;
-                const task = steps.flatMap((s) => s.tasks || []).find((t) => t.id === qcApprovalData.taskId);
+                const task = steps
+                  .flatMap((s) => s.tasks || [])
+                  .find((t) => t.id === qcApprovalData.taskId);
                 if (task) {
                   handleCompleteTask(task, {
                     approvedBy: qcApproverName,
@@ -3935,9 +5864,15 @@ export default function TravelerExecution() {
                   });
                 }
               }}
-              disabled={!qcApproverName.trim() || !qcApprovalNotes.trim() || completeTaskMutation.isPending}
+              disabled={
+                !qcApproverName.trim() ||
+                !qcApprovalNotes.trim() ||
+                completeTaskMutation.isPending
+              }
             >
-              {completeTaskMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {completeTaskMutation.isPending && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
               Approve & Complete
             </Button>
           </DialogFooter>
@@ -3958,9 +5893,18 @@ export default function TravelerExecution() {
           </SheetHeader>
 
           {(() => {
-            const sheetTask = currentStep?.tasks?.find((t: TravelerTask) => t.id === instructionSheetTaskId);
-            const pack = sheetTask ? normalizeInstructionPack(sheetTask.instructionPack) : null;
-            if (!pack) return <p className="text-sm text-muted-foreground mt-4">No instructions available.</p>;
+            const sheetTask = currentStep?.tasks?.find(
+              (t: TravelerTask) => t.id === instructionSheetTaskId
+            );
+            const pack = sheetTask
+              ? normalizeInstructionPack(sheetTask.instructionPack)
+              : null;
+            if (!pack)
+              return (
+                <p className="text-sm text-muted-foreground mt-4">
+                  No instructions available.
+                </p>
+              );
 
             return (
               <div className="space-y-6 mt-6">
@@ -3969,8 +5913,12 @@ export default function TravelerExecution() {
                     <div className="flex items-start gap-3">
                       <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-2">Special Notes</p>
-                        <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">{pack.specialNotes}</p>
+                        <p className="text-sm font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider mb-2">
+                          Special Notes
+                        </p>
+                        <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">
+                          {pack.specialNotes}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -3985,12 +5933,19 @@ export default function TravelerExecution() {
                     <Separator />
                     <div className="space-y-2">
                       {pack.workInstructionRefs.map((ref, i) => (
-                        <div key={i} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                        <div
+                          key={i}
+                          className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                        >
                           <FileText className="h-5 w-5 text-blue-500 shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{ref.title || ref.documentId}</p>
+                            <p className="text-sm font-medium truncate">
+                              {ref.title || ref.documentId}
+                            </p>
                             <div className="flex gap-2 text-xs text-muted-foreground mt-0.5">
-                              {ref.pageRange && <span>Pages {ref.pageRange}</span>}
+                              {ref.pageRange && (
+                                <span>Pages {ref.pageRange}</span>
+                              )}
                               {ref.anchor && <span>§ {ref.anchor}</span>}
                             </div>
                           </div>
@@ -4019,16 +5974,32 @@ export default function TravelerExecution() {
                       <p className="text-sm font-semibold">AI Tips</p>
                     </div>
                     <Separator />
-                    <Accordion type="multiple" defaultValue={pack.aiSnippets.map((_, i) => `snippet-${i}`)} className="space-y-2">
+                    <Accordion
+                      type="multiple"
+                      defaultValue={pack.aiSnippets.map(
+                        (_, i) => `snippet-${i}`
+                      )}
+                      className="space-y-2"
+                    >
                       {pack.aiSnippets.map((snippet, i) => (
-                        <AccordionItem key={i} value={`snippet-${i}`} className="border rounded-lg px-3">
+                        <AccordionItem
+                          key={i}
+                          value={`snippet-${i}`}
+                          className="border rounded-lg px-3"
+                        >
                           <AccordionTrigger className="py-2 hover:no-underline">
                             <div className="flex items-center gap-2 text-sm">
                               <Lightbulb className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
-                              <span className="font-medium">{snippet.title}</span>
+                              <span className="font-medium">
+                                {snippet.title}
+                              </span>
                               {snippet.confidence != null && (
-                                <Badge variant="outline" className="text-[10px] ml-auto mr-2">
-                                  {Math.round(snippet.confidence * 100)}% confidence
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] ml-auto mr-2"
+                                >
+                                  {Math.round(snippet.confidence * 100)}%
+                                  confidence
                                 </Badge>
                               )}
                             </div>
@@ -4036,8 +6007,13 @@ export default function TravelerExecution() {
                           <AccordionContent>
                             <ul className="space-y-1.5 pb-2">
                               {snippet.bullets.map((b, bi) => (
-                                <li key={bi} className="text-sm text-muted-foreground flex items-start gap-2">
-                                  <span className="text-yellow-500 shrink-0 mt-0.5">•</span>
+                                <li
+                                  key={bi}
+                                  className="text-sm text-muted-foreground flex items-start gap-2"
+                                >
+                                  <span className="text-yellow-500 shrink-0 mt-0.5">
+                                    •
+                                  </span>
                                   <span>{b}</span>
                                 </li>
                               ))}
@@ -4064,22 +6040,32 @@ export default function TravelerExecution() {
                     <Separator />
                     <div className="space-y-2">
                       {pack.media.map((m, i) => (
-                        <div key={i} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+                        <div
+                          key={i}
+                          className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                        >
                           {m.type === 'image' ? (
                             <ImageIcon className="h-5 w-5 text-green-500 shrink-0" />
                           ) : (
                             <FileText className="h-5 w-5 text-red-500 shrink-0" />
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{m.caption || m.documentId}</p>
-                            <p className="text-xs text-muted-foreground uppercase">{m.type}</p>
+                            <p className="text-sm font-medium truncate">
+                              {m.caption || m.documentId}
+                            </p>
+                            <p className="text-xs text-muted-foreground uppercase">
+                              {m.type}
+                            </p>
                           </div>
                           <Button
                             variant="outline"
                             size="sm"
                             className="shrink-0"
                             onClick={() => {
-                              setWiModalRef({ documentId: m.documentId, title: m.caption });
+                              setWiModalRef({
+                                documentId: m.documentId,
+                                title: m.caption,
+                              });
                               setWiModalOpen(true);
                             }}
                           >
@@ -4105,27 +6091,35 @@ export default function TravelerExecution() {
               <FileText className="h-5 w-5 text-blue-600" />
               {wiModalRef?.title || 'Work Instruction'}
             </DialogTitle>
-            <DialogDescription>
-              Document reference viewer
-            </DialogDescription>
+            <DialogDescription>Document reference viewer</DialogDescription>
           </DialogHeader>
 
           {wiModalRef && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Document ID</p>
-                  <p className="font-mono text-xs bg-muted p-2 rounded">{wiModalRef.documentId}</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                    Document ID
+                  </p>
+                  <p className="font-mono text-xs bg-muted p-2 rounded">
+                    {wiModalRef.documentId}
+                  </p>
                 </div>
                 {wiModalRef.pageRange && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Page Range</p>
-                    <p className="text-sm font-medium">Pages {wiModalRef.pageRange}</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                      Page Range
+                    </p>
+                    <p className="text-sm font-medium">
+                      Pages {wiModalRef.pageRange}
+                    </p>
                   </div>
                 )}
                 {wiModalRef.anchor && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Section</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                      Section
+                    </p>
                     <p className="text-sm font-medium">§ {wiModalRef.anchor}</p>
                   </div>
                 )}
@@ -4138,7 +6132,9 @@ export default function TravelerExecution() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setWiModalOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setWiModalOpen(false)}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -4147,16 +6143,24 @@ export default function TravelerExecution() {
         <StartProductionTimerModal
           open={showTimerModal}
           onOpenChange={setShowTimerModal}
-          defaultSerialNumber={traveler.serialNumber || traveler.lotNumber || ''}
-          defaultProgramId={getTimerConfigForDepartment(currentStep.departmentName)?.defaultProgramId}
+          defaultSerialNumber={
+            traveler.serialNumber || traveler.lotNumber || ''
+          }
+          defaultProgramId={
+            getTimerConfigForDepartment(currentStep.departmentName)
+              ?.defaultProgramId
+          }
           navigateToStation={false}
           badgeId={activeBadge || undefined}
           travelerId={traveler.id}
           travelerStepId={currentStep.id}
           travelerTaskId={
-            currentStep.tasks?.find((t: any) =>
-              t.taskType === 'TIMER' ||
-              (t.taskType === 'PROCESS' && t.title === 'Production Timer' && (t.instructionPack as any)?.timerConfig)
+            currentStep.tasks?.find(
+              (t: any) =>
+                t.taskType === 'TIMER' ||
+                (t.taskType === 'PROCESS' &&
+                  t.title === 'Production Timer' &&
+                  (t.instructionPack as any)?.timerConfig)
             )?.id
           }
           departmentName={currentStep.departmentName}
@@ -4168,7 +6172,8 @@ export default function TravelerExecution() {
             refetchActiveTimer();
             toast({
               title: 'Timer Started',
-              description: 'Timer is now running on the timer station. You may continue with traveler tasks.',
+              description:
+                'Timer is now running on the timer station. You may continue with traveler tasks.',
             });
           }}
         />
@@ -4182,14 +6187,19 @@ export default function TravelerExecution() {
         }}
         onSelect={(selectedItem) => {
           if (!inventoryPickerTaskId || !traveler) return;
-          const step = (traveler as any).steps?.find((s: any) => s.id === currentStepId);
+          const step = (traveler as any).steps?.find(
+            (s: any) => s.id === currentStepId
+          );
           if (!step) return;
-          const task = step.tasks?.find((t: any) => t.id === inventoryPickerTaskId);
+          const task = step.tasks?.find(
+            (t: any) => t.id === inventoryPickerTaskId
+          );
           if (!task) return;
 
           const valueMap: Record<string, string> = {
             internalControlNumber: selectedItem.internalControlNumber,
-            material_internal_control_number: selectedItem.internalControlNumber,
+            material_internal_control_number:
+              selectedItem.internalControlNumber,
             expirationDate: selectedItem.expirationDate,
             material_expiration_date: selectedItem.expirationDate,
             batchNumber: selectedItem.batchNumber,
@@ -4223,9 +6233,14 @@ export default function TravelerExecution() {
               handleFieldChange(task.id, field.fieldKey, mappedVal);
             }
           }
-          setPickerValidations(prev => ({ ...prev, [task.id]: taskValidations }));
+          setPickerValidations((prev) => ({
+            ...prev,
+            [task.id]: taskValidations,
+          }));
 
-          const expired = selectedItem.expirationDate && new Date(selectedItem.expirationDate) < new Date();
+          const expired =
+            selectedItem.expirationDate &&
+            new Date(selectedItem.expirationDate) < new Date();
           if (expired) {
             toast({
               title: 'Material Expired',
@@ -4245,7 +6260,11 @@ export default function TravelerExecution() {
 }
 
 function WiDocumentViewer({ documentId }: { documentId: string }) {
-  const { data: doc, isLoading, error } = useQuery<{
+  const {
+    data: doc,
+    isLoading,
+    error,
+  } = useQuery<{
     id: string;
     title: string;
     description?: string;
@@ -4269,7 +6288,9 @@ function WiDocumentViewer({ documentId }: { documentId: string }) {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">Loading document...</span>
+        <span className="ml-2 text-sm text-muted-foreground">
+          Loading document...
+        </span>
       </div>
     );
   }
@@ -4280,8 +6301,9 @@ function WiDocumentViewer({ documentId }: { documentId: string }) {
         <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
         <p className="text-sm font-medium">Document Not Linked</p>
         <p className="text-xs text-muted-foreground mt-1">
-          This reference (ID: {documentId.slice(0, 8)}...) is not yet linked to a routing document.
-          The document ID will resolve when the routing document system is populated.
+          This reference (ID: {documentId.slice(0, 8)}...) is not yet linked to
+          a routing document. The document ID will resolve when the routing
+          document system is populated.
         </p>
       </div>
     );
@@ -4296,11 +6318,15 @@ function WiDocumentViewer({ documentId }: { documentId: string }) {
             <p className="text-base font-semibold">{doc.title}</p>
             <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
               <span>Version {doc.version}</span>
-              <span className="capitalize">{doc.documentType?.replace(/_/g, ' ')}</span>
+              <span className="capitalize">
+                {doc.documentType?.replace(/_/g, ' ')}
+              </span>
               {doc.fileName && <span>{doc.fileName}</span>}
             </div>
             {doc.description && (
-              <p className="text-sm text-muted-foreground mt-2">{doc.description}</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {doc.description}
+              </p>
             )}
           </div>
         </div>
@@ -4319,7 +6345,9 @@ function WiDocumentViewer({ documentId }: { documentId: string }) {
 
       {doc.aiExtractedContent && (
         <div className="rounded-lg border bg-muted/50 p-3">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">AI-Extracted Content</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            AI-Extracted Content
+          </p>
           <p className="text-sm whitespace-pre-wrap">
             {typeof doc.aiExtractedContent === 'string'
               ? doc.aiExtractedContent

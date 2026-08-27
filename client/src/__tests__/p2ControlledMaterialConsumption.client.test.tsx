@@ -38,8 +38,8 @@ describe('Phase 9 controlled material scanner client gate', () => {
     expect(scanner).toContain(
       "apiRequest('/api/p2-material-consumption/consume'"
     );
-    expect(traveler).toContain(
-      'p2TravelerBarcode={traveler.internalControlNumber}'
+    expect(traveler).toMatch(
+      /p2TravelerBarcode=\{\s*traveler\.internalControlNumber\s*\}/
     );
   });
 });

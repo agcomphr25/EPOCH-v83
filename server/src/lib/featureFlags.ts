@@ -218,6 +218,14 @@ export function areP2ManufacturedComponentIssueWritesEnabled(): boolean {
   return envBool('P2_MANUFACTURED_COMPONENT_ISSUE_WRITES_ENABLED', false);
 }
 
+/** Phase 12 Quality and shipment-release authority; disabled by default. */
+export function areP2QualityShipmentReleaseReadsEnabled(): boolean {
+  return envBool('P2_QUALITY_SHIPMENT_RELEASE_READS_ENABLED', false);
+}
+export function areP2QualityShipmentReleaseWritesEnabled(): boolean {
+  return envBool('P2_QUALITY_SHIPMENT_RELEASE_WRITES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

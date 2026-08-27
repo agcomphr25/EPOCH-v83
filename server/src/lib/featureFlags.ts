@@ -200,6 +200,15 @@ export function areP2ManufacturedOutputWritesEnabled(): boolean {
   return envBool('P2_MANUFACTURED_OUTPUT_WRITES_ENABLED', false);
 }
 
+/** Phase 10 custody correction; exact true opt-in and disabled by default. */
+export function areP2ManufacturedOutputCustodyReadsEnabled(): boolean {
+  return envBool('P2_MANUFACTURED_OUTPUT_CUSTODY_READS_ENABLED', false);
+}
+
+export function areP2ManufacturedOutputCustodyWritesEnabled(): boolean {
+  return envBool('P2_MANUFACTURED_OUTPUT_CUSTODY_WRITES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

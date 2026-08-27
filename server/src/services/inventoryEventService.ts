@@ -1,6 +1,7 @@
 import { db } from '../../db';
 import { inventoryItems, inventoryTransactions, inventoryBalances } from '../../schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { isInventoryBalanceEligible, inventoryBalanceIneligibilityReason } from '@shared/inventoryBalanceEligibility';
 import {
   recordInventoryBalanceLedgerChange,
   type InventoryLedgerTransactionType,
@@ -91,12 +92,23 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
 
   await db.transaction(async (tx) => {
   const [item] = await tx
-    .select({ agPartNumber: inventoryItems.agPartNumber })
+    .select({
+      agPartNumber: inventoryItems.agPartNumber,
+      utilizedInNonInventory: inventoryItems.utilizedInNonInventory,
+      utilizedInServices: inventoryItems.utilizedInServices,
+      type: inventoryItems.type,
+    })
     .from(inventoryItems)
     .where(eq(inventoryItems.agPartNumber, agPartNumber));
 
   if (!item) {
     throw new Error(`Part number ${agPartNumber} not found in inventory_items`);
+  }
+  if (eventType !== 'receipt_pending' && !isInventoryBalanceEligible(item)) {
+    const reason = inventoryBalanceIneligibilityReason(item);
+    throw new Error(
+      `${reason === 'NON_INVENTORY' ? 'Non-Inventory' : 'Service'} item ${agPartNumber} cannot create or change an inventory balance`
+    );
   }
 
   const totalCost =

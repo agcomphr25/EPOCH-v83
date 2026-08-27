@@ -18,6 +18,7 @@ import {
   areP2ManufacturedComponentIssueWritesEnabled,
   areP2QualityShipmentReleaseReadsEnabled,
   areP2QualityShipmentReleaseWritesEnabled,
+  isP2GenealogyViewerEnabled,
   areP2TravelerProvisioningWritesEnabled,
 } from '../lib/featureFlags';
 import {
@@ -59,6 +60,10 @@ import {
   recordP2OutputQualityDisposition,
   releaseP2OutputForShipment,
 } from '../services/p2QualityShipmentReleaseService';
+import {
+  P2GenealogyViewerError,
+  searchP2Genealogy,
+} from '../services/p2GenealogyViewerService';
 
 const router = Router();
 const materializeBody = z.object({
@@ -186,6 +191,11 @@ const fail = (res: Response, error: unknown) => {
       error: error.code,
       message: error.message,
     });
+  if (error instanceof P2GenealogyViewerError)
+    return res.status(error.status).json({
+      error: error.code,
+      message: error.message,
+    });
   if (error instanceof P2ManufacturedOutputError)
     return res
       .status(error.status)
@@ -193,6 +203,20 @@ const fail = (res: Response, error: unknown) => {
   console.error('[p2-manufacturing-work-orders]', error);
   return res.status(500).json({ error: 'P2_WORK_ORDER_FAILED' });
 };
+
+router.get(
+  '/p2-genealogy/search',
+  authenticateToken,
+  requirePermission('p2.work_orders.view'),
+  async (req, res) => {
+    try {
+      enabled(isP2GenealogyViewerEnabled());
+      res.json(await searchP2Genealogy(String(req.query.q ?? '')));
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
 
 router.get(
   '/p2-work-orders/queues/:departmentId',

@@ -226,6 +226,11 @@ export function areP2QualityShipmentReleaseWritesEnabled(): boolean {
   return envBool('P2_QUALITY_SHIPMENT_RELEASE_WRITES_ENABLED', false);
 }
 
+/** Phase 13 read-only P2 genealogy search, viewer, and reporting. */
+export function isP2GenealogyViewerEnabled(): boolean {
+  return envBool('P2_GENEALOGY_VIEWER_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

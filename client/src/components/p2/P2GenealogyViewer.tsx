@@ -56,9 +56,9 @@ export default function P2GenealogyViewer() {
   const [result, setResult] = useState<GenealogyResult | null>(null);
   const search = useMutation({
     mutationFn: () =>
-      apiRequest<GenealogyResult>(
+      apiRequest(
         `/api/p2-genealogy/search?q=${encodeURIComponent(query.trim())}`
-      ),
+      ) as Promise<GenealogyResult>,
     onSuccess: setResult,
   });
 

@@ -50,7 +50,9 @@ export async function searchP2Genealogy(rawQuery: string) {
       'Search matched more than 100 authoritative outputs. Use a more specific identity.'
     );
 
-  const projectIds = [...new Set(seeds.rows.map((row) => row.project_id))];
+  const projectIds = Array.from(
+    new Set(seeds.rows.map((row) => row.project_id))
+  );
   const outputs = await pool.query(
     `SELECT o.id,o.work_order_authority_id,o.project_id,o.inventory_item_id,o.output_identity,
             o.output_quantity,o.assembly_path_identity,o.part_number_snapshot,o.traceability_snapshot,

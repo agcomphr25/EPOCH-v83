@@ -307,8 +307,6 @@ export const safeMigrationFiles = [
   '0250_epoch_validation_wizard_phase1.sql',
   '0251_design_project_configuration_workspace.sql',
   '0252_potential_order_duplicate_reviews.sql',
-  // 0253 and 0257 are one-time controlled data corrections intentionally
-  // excluded from recurring safe boot; see scripts/sync-safe-migrations.js.
   '0254_controlled_document_reconciliation_certification_controls.sql',
   '0255_p2_v2_definition_v3_handoff.sql',
   '0256_controlled_document_atomic_approval_release.sql',
@@ -321,7 +319,6 @@ export const safeMigrationFiles = [
   '0264_p2_recursive_production_demand_foundation.sql',
   '0265_p2_demand_planning_foundation.sql',
   '0266_p2_production_launch_persistence.sql',
-  // 0267 is a guarded one-time row repair intentionally excluded from boot.
   '0268_replit_p2_demand_composite_fk_repair.sql',
   '0269_repair_composite_po_item_demand_fks.sql',
   '0270_certification_authorization_matrix.sql',
@@ -335,14 +332,13 @@ export const safeMigrationFiles = [
   '0278_p2_component_traveler_provisioning.sql',
   '0279_vendor_international_contact_fields.sql',
   '0280_move_forward.sql',
-  // 0281 and 0301 are one-time order-state reconciliations intentionally
-  // excluded from recurring safe boot; see scripts/sync-safe-migrations.js.
   '0282_car_form_data.sql',
   '0283_remove_legacy_rma_change_control_projections.sql',
   '0284_p2_customer_contacts.sql',
   '0285_p2_material_deposits_and_payment_settlements.sql',
   '0286_vendor_po_flowdown_applicability.sql',
   '0287_p2_deposit_invoice_clin_contact.sql',
+  '0288_p2_order_draft_progress.sql',
   '0289_correct_po00021498_customer_line_numbers.sql',
   '0290_p2_po_line_and_clin_distinction.sql',
   '0291_renumber_astrion_material_deposit_invoice.sql',

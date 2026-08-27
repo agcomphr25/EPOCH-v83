@@ -256,7 +256,10 @@ export class MaterialIssueError extends Error {
   }
 }
 
-const ACTION_TO_LEDGER_TYPE: Record<MaterialIssueAction, InventoryLedgerTransactionType> = {
+const ACTION_TO_LEDGER_TYPE: Record<
+  MaterialIssueAction,
+  InventoryLedgerTransactionType
+> = {
   reserve: 'RESERVE',
   issue: 'ISSUE',
   consume: 'CONSUME',
@@ -303,9 +306,10 @@ export function isHighRiskRequest(req: MaterialIssueRequest): boolean {
   return true; // OVERRIDE / EXPIRED_LOT_RELEASE / QUARANTINE_RELEASE always high-risk.
 }
 
-async function resolveOperatorSession(
-  req: MaterialIssueRequest,
-): Promise<{ session: OperatorAuthSession | null; blocker: MaterialIssueBlocker | null }> {
+async function resolveOperatorSession(req: MaterialIssueRequest): Promise<{
+  session: OperatorAuthSession | null;
+  blocker: MaterialIssueBlocker | null;
+}> {
   const requireFresh = isHighRiskRequest(req);
   const token = req.operatorAuth?.sessionToken;
   if (!token) {
@@ -348,7 +352,7 @@ async function resolveOperatorSession(
 }
 
 export async function validateIssueEligibility(
-  req: MaterialIssueRequest,
+  req: MaterialIssueRequest
 ): Promise<MaterialIssueBlocker[]> {
   const blockers: MaterialIssueBlocker[] = [];
 
@@ -356,11 +360,16 @@ export async function validateIssueEligibility(
   // nothing else matters. We still preserve the legacy displayName/badge
   // shape check (gate 6) so callers that haven't migrated to session
   // tokens fail with the same well-known structured error.
-  const { session, blocker: sessionBlocker } = await resolveOperatorSession(req);
+  const { session, blocker: sessionBlocker } =
+    await resolveOperatorSession(req);
   if (sessionBlocker) blockers.push(sessionBlocker);
 
   const legacyOperator = session
-    ? { displayName: session.employeeDisplayName, userId: session.employeeId, badge: null }
+    ? {
+        displayName: session.employeeDisplayName,
+        userId: session.employeeId,
+        badge: null,
+      }
     : req.operator;
   const operatorBlocker = validateOperatorAuthorization(legacyOperator);
   if (operatorBlocker && !sessionBlocker) blockers.push(operatorBlocker);
@@ -386,14 +395,19 @@ export async function validateIssueEligibility(
   let pendingLotBlocker: MaterialIssueBlocker | null = null;
   if (lotBlocker) {
     const isOverridableLotBlock =
-      lotBlocker.code === 'LOT_QUARANTINED' || lotBlocker.code === 'LOT_EXPIRED';
+      lotBlocker.code === 'LOT_QUARANTINED' ||
+      lotBlocker.code === 'LOT_EXPIRED';
     if (isOverridableLotBlock) {
       pendingLotBlocker = lotBlocker;
     } else if (lotBlocker.code === 'LOT_DOCUMENT_HELD') {
-      const verified = await applyOverrideIfAuthorized(lotBlocker, req.override, {
-        materialLotId: req.materialLotId,
-        travelerId: req.travelerId ?? null,
-      });
+      const verified = await applyOverrideIfAuthorized(
+        lotBlocker,
+        req.override,
+        {
+          materialLotId: req.materialLotId,
+          travelerId: req.travelerId ?? null,
+        }
+      );
       if (verified) {
         (req as MaterialIssueRequest).override = verified;
         (req as MutableInternal)._overrideVerifiedForBlocker = true;
@@ -420,14 +434,18 @@ export async function validateIssueEligibility(
   }
 
   // Traveler + WAD + step are required for every other action.
-  const traveler = req.travelerId ? await storage.getTraveler(req.travelerId) : null;
+  const traveler = req.travelerId
+    ? await storage.getTraveler(req.travelerId)
+    : null;
   const travelerBlocker = validateTravelerIssueEligibility(traveler);
   if (travelerBlocker) blockers.push(travelerBlocker);
 
   // Resolve WAD: explicit > traveler.productionWorkOrderId.
   const resolvedWadId =
-    req.productionWorkOrderId ?? (traveler?.productionWorkOrderId ?? null);
-  const workOrder = resolvedWadId ? await storage.getWorkOrderById(resolvedWadId) : null;
+    req.productionWorkOrderId ?? traveler?.productionWorkOrderId ?? null;
+  const workOrder = resolvedWadId
+    ? await storage.getWorkOrderById(resolvedWadId)
+    : null;
   const wadBlocker = validateWadApproved(workOrder);
   if (wadBlocker) blockers.push(wadBlocker);
 
@@ -439,7 +457,9 @@ export async function validateIssueEligibility(
   let reservationIntent: string | null = null;
   if (
     req.reservationId != null &&
-    (req.action === 'consume' || req.action === 'issue' || req.action === 'transferToJob')
+    (req.action === 'consume' ||
+      req.action === 'issue' ||
+      req.action === 'transferToJob')
   ) {
     try {
       const [resv] = await db
@@ -469,7 +489,11 @@ export async function validateIssueEligibility(
             blockingField: 'allocation',
           });
         }
-        if (req.travelerId && resv.travelerId && resv.travelerId !== req.travelerId) {
+        if (
+          req.travelerId &&
+          resv.travelerId &&
+          resv.travelerId !== req.travelerId
+        ) {
           blockers.push({
             code: 'ALLOCATION_EXCEEDED',
             message:
@@ -508,10 +532,14 @@ export async function validateIssueEligibility(
           'Traveler has no active routing step. Start a step before reserving material.',
         blockingField: 'routingStep',
       };
-      const verified = await applyOverrideIfAuthorized(stepBlocker, req.override, {
-        materialLotId: req.materialLotId,
-        travelerId: req.travelerId ?? null,
-      });
+      const verified = await applyOverrideIfAuthorized(
+        stepBlocker,
+        req.override,
+        {
+          materialLotId: req.materialLotId,
+          travelerId: req.travelerId ?? null,
+        }
+      );
       if (verified) {
         (req as MaterialIssueRequest).override = verified;
         (req as MutableInternal)._overrideVerifiedForBlocker = true;
@@ -532,10 +560,14 @@ export async function validateIssueEligibility(
           `caller asserted "${req.intendedRoutingStepId}".`,
         blockingField: 'routingStep',
       };
-      const verified = await applyOverrideIfAuthorized(stepBlocker, req.override, {
-        materialLotId: req.materialLotId,
-        travelerId: req.travelerId ?? null,
-      });
+      const verified = await applyOverrideIfAuthorized(
+        stepBlocker,
+        req.override,
+        {
+          materialLotId: req.materialLotId,
+          travelerId: req.travelerId ?? null,
+        }
+      );
       if (verified) {
         (req as MaterialIssueRequest).override = verified;
         (req as MutableInternal)._overrideVerifiedForBlocker = true;
@@ -587,7 +619,9 @@ export async function validateIssueEligibility(
     if (req.packetId) {
       try {
         const [packet] = await db
-          .select({ intendedRoutingStepId: cuttingBuiltPackets.intendedRoutingStepId })
+          .select({
+            intendedRoutingStepId: cuttingBuiltPackets.intendedRoutingStepId,
+          })
           .from(cuttingBuiltPackets)
           .where(eq(cuttingBuiltPackets.id, req.packetId))
           .limit(1);
@@ -626,13 +660,17 @@ export async function validateIssueEligibility(
       step,
       req.travelerId ?? null,
       active?.inProgress ? active.step : active === null ? null : undefined,
-      packetIntent,
+      packetIntent
     );
     if (stepBlocker) {
-      const verified = await applyOverrideIfAuthorized(stepBlocker, req.override, {
-        materialLotId: req.materialLotId,
-        travelerId: req.travelerId ?? null,
-      });
+      const verified = await applyOverrideIfAuthorized(
+        stepBlocker,
+        req.override,
+        {
+          materialLotId: req.materialLotId,
+          travelerId: req.travelerId ?? null,
+        }
+      );
       if (verified) {
         // Replace the caller-asserted override on the request with the
         // server-verified payload so executeMaterialIssue stamps DB-resolved
@@ -662,7 +700,8 @@ export async function validateIssueEligibility(
       reservedByOthers = allRes
         .filter(
           (r) =>
-            r.status === 'active' && (!req.travelerId || r.travelerId !== req.travelerId),
+            r.status === 'active' &&
+            (!req.travelerId || r.travelerId !== req.travelerId)
         )
         .reduce((s, r) => s + parseFloat(String(r.quantityReserved)), 0);
     } catch (err: unknown) {
@@ -706,8 +745,10 @@ export async function validateIssueEligibility(
       // held blocker still applies.
       if (pendingLotBlocker) {
         const overrides =
-          (pendingLotBlocker.code === 'LOT_QUARANTINED' && requiredClass === 'QUARANTINE_RELEASE') ||
-          (pendingLotBlocker.code === 'LOT_EXPIRED' && requiredClass === 'EXPIRED_LOT_USE');
+          (pendingLotBlocker.code === 'LOT_QUARANTINED' &&
+            requiredClass === 'QUARANTINE_RELEASE') ||
+          (pendingLotBlocker.code === 'LOT_EXPIRED' &&
+            requiredClass === 'EXPIRED_LOT_USE');
         if (!overrides) blockers.push(pendingLotBlocker);
       }
     }
@@ -721,14 +762,19 @@ export async function validateIssueEligibility(
 
 function classifyRequiredSignatureForRequest(
   req: MaterialIssueRequest,
-  lot: { status?: string | null; expirationDate?: Date | null } | null | undefined,
+  lot:
+    | { status?: string | null; expirationDate?: Date | null }
+    | null
+    | undefined
 ): SignatureTransactionClass | null {
   if (req.action === 'unreserve' || req.action === 'reserve') {
     // Reservations and their cancellations don't draw material; no signature
     // required even if the reason code looks override-y.
     if (!req.isOverride) return null;
   }
-  const expiration = lot?.expirationDate ? new Date(lot.expirationDate as any) : null;
+  const expiration = lot?.expirationDate
+    ? new Date(lot.expirationDate as any)
+    : null;
   const lotIsExpired = expiration ? expiration.getTime() < Date.now() : false;
   return classifyRequiredSignature(
     {
@@ -739,13 +785,13 @@ function classifyRequiredSignatureForRequest(
       lotIsExpired,
       isOverride: req.isOverride ?? false,
     },
-    loadSignaturePolicy(),
+    loadSignaturePolicy()
   );
 }
 
 async function validateSignatureGate(
   req: MaterialIssueRequest,
-  requiredClass: SignatureTransactionClass,
+  requiredClass: SignatureTransactionClass
 ): Promise<MaterialIssueBlocker | null> {
   if (!req.digitalSignature?.signatureId) {
     return {
@@ -770,7 +816,10 @@ async function validateSignatureGate(
     signerDisplayName: req.operator.displayName,
   });
   try {
-    const result = await verifyAgainstPayload(req.digitalSignature.signatureId, expected);
+    const result = await verifyAgainstPayload(
+      req.digitalSignature.signatureId,
+      expected
+    );
     if (!result.valid) {
       return {
         code: 'INVALID_SIGNATURE',
@@ -815,7 +864,7 @@ async function validateSignatureGate(
  * lot state.
  */
 export async function executeMaterialIssue(
-  req: MaterialIssueRequest,
+  req: MaterialIssueRequest
 ): Promise<MaterialIssueResult> {
   const blockers = await validateIssueEligibility(req);
   if (blockers.length > 0) {
@@ -832,7 +881,7 @@ export async function executeMaterialIssue(
     try {
       const { session } = await validateAndTouchSession(
         req.operatorAuth.sessionToken,
-        { touch: true },
+        { touch: true }
       );
       effectiveOperator = {
         userId: session.employeeId,
@@ -897,305 +946,309 @@ export async function executeMaterialIssue(
     resolvedWadId = traveler?.productionWorkOrderId ?? null;
   }
 
-  return db.transaction(async (tx) => {
-    // Defaults are overwritten in every branch below; the locked-row read
-    // is the source of truth for ledger before/after, NOT the preflight
-    // snapshot, so a concurrent mutation between gate validation and
-    // execution cannot trip `assertQuantityMath`.
-    let quantityDelta = 0;
-    let lockedQuantityBefore = parseFloat(String(lot.remainingQty));
-    let lockedStatusBefore = lot.status;
-    let quantityAfter = lockedQuantityBefore;
-    let statusAfter = lot.status;
+  return db
+    .transaction(async (tx) => {
+      // Defaults are overwritten in every branch below; the locked-row read
+      // is the source of truth for ledger before/after, NOT the preflight
+      // snapshot, so a concurrent mutation between gate validation and
+      // execution cannot trip `assertQuantityMath`.
+      let quantityDelta = 0;
+      let lockedQuantityBefore = parseFloat(String(lot.remainingQty));
+      let lockedStatusBefore = lot.status;
+      let quantityAfter = lockedQuantityBefore;
+      let statusAfter = lot.status;
 
-    if (
-      req.action === 'consume' ||
-      req.action === 'issue' ||
-      req.action === 'transferToJob'
-    ) {
-      if (req.p2MaterialRequirementId) {
-        const requirementResult = await tx.execute(sql`
+      if (
+        req.action === 'consume' ||
+        req.action === 'issue' ||
+        req.action === 'transferToJob'
+      ) {
+        if (req.p2MaterialRequirementId) {
+          const requirementResult = await tx.execute(sql`
           SELECT required_quantity,issued_quantity,status
           FROM p2_manufacturing_work_order_material_requirements
           WHERE id=${req.p2MaterialRequirementId} FOR UPDATE
         `);
-        const requirement = requirementResult.rows[0];
-        const nextIssued =
-          Number(requirement?.issued_quantity ?? 0) + req.quantity;
-        if (
-          !requirement ||
-          requirement.status === 'CANCELLED' ||
-          nextIssued > Number(requirement.required_quantity)
-        )
-          throw new MaterialIssueRaceError({
-            code: 'ALLOCATION_EXCEEDED',
-            message: 'The released BOM demand no longer has enough outstanding quantity.',
-            blockingField: 'allocation',
-          });
-        await tx.execute(sql`
+          const requirement = requirementResult.rows[0];
+          const nextIssued =
+            Number(requirement?.issued_quantity ?? 0) + req.quantity;
+          if (
+            !requirement ||
+            requirement.status === 'CANCELLED' ||
+            nextIssued > Number(requirement.required_quantity)
+          )
+            throw new MaterialIssueRaceError({
+              code: 'ALLOCATION_EXCEEDED',
+              message:
+                'The released BOM demand no longer has enough outstanding quantity.',
+              blockingField: 'allocation',
+            });
+          await tx.execute(sql`
           UPDATE p2_manufacturing_work_order_material_requirements
           SET issued_quantity=${nextIssued},
               status=CASE WHEN ${nextIssued}>=required_quantity THEN 'SATISFIED' ELSE 'OPEN' END,
               updated_at=now()
           WHERE id=${req.p2MaterialRequirementId}
         `);
-      }
-      // Re-read the lot under FOR UPDATE so the transaction sees the
-      // latest remainingQty and another concurrent draw cannot race past
-      // the allocation check.
-      const [locked] = await tx
-        .select()
-        .from(materialLots)
-        .where(eq(materialLots.id, lot.id))
-        .for('update');
-      if (!locked) {
-        throw new MaterialIssueError(
-          `lot ${lot.id} disappeared between gate validation and execution`,
-        );
-      }
-      lockedQuantityBefore = parseFloat(String(locked.remainingQty));
-      lockedStatusBefore = locked.status;
-      const lockedRemaining = lockedQuantityBefore;
-      if (req.quantity > lockedRemaining) {
-        // Race detected — abort the transaction with a structured blocker
-        // rather than corrupt the lot.
-        throw new MaterialIssueRaceError({
-          code: 'LOT_INSUFFICIENT_QTY',
-          message:
-            `Lot has only ${lockedRemaining} ${locked.unitOfMeasure ?? 'EA'} ` +
-            `remaining (changed since validation); ${req.quantity} requested.`,
-          blockingField: 'quantity',
-        });
-      }
-
-      quantityDelta = -req.quantity;
-      quantityAfter = Math.max(0, lockedRemaining + quantityDelta);
-      statusAfter = quantityAfter <= 0 ? 'CONSUMED' : lockedStatusBefore;
-
-      await tx
-        .update(materialLots)
-        .set({
-          remainingQty: quantityAfter.toString(),
-          status: statusAfter,
-          updatedAt: new Date(),
-        })
-        .where(eq(materialLots.id, lot.id));
-
-      if (req.p2ReceivedUnitId != null) {
-        const [physicalUnit] = await tx
+        }
+        // Re-read the lot under FOR UPDATE so the transaction sees the
+        // latest remainingQty and another concurrent draw cannot race past
+        // the allocation check.
+        const [locked] = await tx
           .select()
-          .from(receivedUnits)
-          .where(
-            and(
-              eq(receivedUnits.id, req.p2ReceivedUnitId),
-              eq(receivedUnits.materialLotId, lot.id),
-            ),
-          )
+          .from(materialLots)
+          .where(eq(materialLots.id, lot.id))
           .for('update');
-        const physicalQuantity = Number(physicalUnit?.quantity ?? 0);
-        if (!physicalUnit || physicalQuantity < req.quantity) {
+        if (!locked) {
+          throw new MaterialIssueError(
+            `lot ${lot.id} disappeared between gate validation and execution`
+          );
+        }
+        lockedQuantityBefore = parseFloat(String(locked.remainingQty));
+        lockedStatusBefore = locked.status;
+        const lockedRemaining = lockedQuantityBefore;
+        if (req.quantity > lockedRemaining) {
+          // Race detected — abort the transaction with a structured blocker
+          // rather than corrupt the lot.
           throw new MaterialIssueRaceError({
             code: 'LOT_INSUFFICIENT_QTY',
-            message: 'The accepted Receiving unit no longer has enough physical custody quantity.',
+            message:
+              `Lot has only ${lockedRemaining} ${locked.unitOfMeasure ?? 'EA'} ` +
+              `remaining (changed since validation); ${req.quantity} requested.`,
             blockingField: 'quantity',
           });
         }
+
+        quantityDelta = -req.quantity;
+        quantityAfter = Math.max(0, lockedRemaining + quantityDelta);
+        statusAfter = quantityAfter <= 0 ? 'CONSUMED' : lockedStatusBefore;
+
         await tx
-          .update(receivedUnits)
+          .update(materialLots)
           .set({
-            quantity: (physicalQuantity - req.quantity).toString(),
+            remainingQty: quantityAfter.toString(),
+            status: statusAfter,
             updatedAt: new Date(),
           })
-          .where(eq(receivedUnits.id, req.p2ReceivedUnitId));
-      }
+          .where(eq(materialLots.id, lot.id));
 
-      await tx.insert(materialLotTransactions).values({
-        materialLotId: lot.id,
-        internalControlNumber: lot.internalControlNumber,
-        transactionType: ACTION_TO_LOT_TXN_TYPE[req.action],
-        qtyBefore: lockedRemaining.toString(),
-        qtyChange: quantityDelta.toString(),
-        qtyAfter: quantityAfter.toString(),
-        referenceType: 'TRAVELER',
-        referenceId: req.travelerId ?? null,
-        performedBy: req.operator.displayName,
-        notes:
-          req.notes ??
-          `material-issue-service ${req.action} for traveler ${req.travelerId ?? 'n/a'}` +
-            (req.travelerStepId ? ` step ${req.travelerStepId}` : ''),
-        wasOverride: false,
-      });
-    } else if (req.action === 'reserve') {
-      const [reservation] = await tx
-        .insert(materialLotReservations)
-        .values({
+        if (req.p2ReceivedUnitId != null) {
+          const [physicalUnit] = await tx
+            .select()
+            .from(receivedUnits)
+            .where(
+              and(
+                eq(receivedUnits.id, req.p2ReceivedUnitId),
+                eq(receivedUnits.materialLotId, lot.id)
+              )
+            )
+            .for('update');
+          const physicalQuantity = Number(physicalUnit?.quantity ?? 0);
+          if (!physicalUnit || physicalQuantity < req.quantity) {
+            throw new MaterialIssueRaceError({
+              code: 'LOT_INSUFFICIENT_QTY',
+              message:
+                'The accepted Receiving unit no longer has enough physical custody quantity.',
+              blockingField: 'quantity',
+            });
+          }
+          await tx
+            .update(receivedUnits)
+            .set({
+              quantity: (physicalQuantity - req.quantity).toString(),
+              updatedAt: new Date(),
+            })
+            .where(eq(receivedUnits.id, req.p2ReceivedUnitId));
+        }
+
+        await tx.insert(materialLotTransactions).values({
           materialLotId: lot.id,
-          travelerId: req.travelerId ?? null,
-          quantityReserved: req.quantity.toString(),
+          internalControlNumber: lot.internalControlNumber,
+          transactionType: ACTION_TO_LOT_TXN_TYPE[req.action],
+          qtyBefore: lockedRemaining.toString(),
+          qtyChange: quantityDelta.toString(),
+          qtyAfter: quantityAfter.toString(),
+          referenceType: 'TRAVELER',
+          referenceId: req.travelerId ?? null,
+          performedBy: req.operator.displayName,
+          notes:
+            req.notes ??
+            `material-issue-service ${req.action} for traveler ${req.travelerId ?? 'n/a'}` +
+              (req.travelerStepId ? ` step ${req.travelerStepId}` : ''),
+          wasOverride: false,
+        });
+      } else if (req.action === 'reserve') {
+        const [reservation] = await tx
+          .insert(materialLotReservations)
+          .values({
+            materialLotId: lot.id,
+            travelerId: req.travelerId ?? null,
+            quantityReserved: req.quantity.toString(),
+            unitOfMeasure: lot.unitOfMeasure,
+            status: 'active',
+            // Phase-2 (Task #144): pin the reservation to a specific
+            // routing step so any subsequent consume call must match.
+            intendedRoutingStepId: req.intendedRoutingStepId ?? null,
+            notes: req.notes ?? null,
+            createdBy: req.operator.displayName,
+          })
+          .returning();
+        createdReservationId = reservation.id;
+        // Reservations don't change physical remaining qty.
+      } else if (req.action === 'unreserve') {
+        if (req.reservationId == null) {
+          throw new MaterialIssueError('unreserve requires reservationId');
+        }
+        // Cancel ONLY when the reservation belongs to the supplied lot AND
+        // is still active. Cancelling by id alone would let a caller
+        // accidentally (or maliciously) cancel a reservation against a
+        // different lot while writing a ledger row against the wrong context.
+        const [cancelled] = await tx
+          .update(materialLotReservations)
+          .set({ status: 'cancelled', updatedAt: new Date() })
+          .where(
+            and(
+              eq(materialLotReservations.id, req.reservationId),
+              eq(materialLotReservations.materialLotId, lot.id),
+              eq(materialLotReservations.status, 'active')
+            )
+          )
+          .returning();
+        if (!cancelled) {
+          throw new MaterialIssueRaceError({
+            code: 'ALLOCATION_EXCEEDED',
+            message:
+              `Reservation ${req.reservationId} not found, not on lot ${lot.id}, ` +
+              'or already fulfilled / cancelled.',
+            blockingField: 'allocation',
+          });
+        }
+        createdReservationId = cancelled.id;
+      }
+
+      // Phase-2: atomically claim the override approval row inside the
+      // same transaction as the ledger write. The conditional UPDATE matches
+      // only an APPROVED row with the right id — a concurrent transaction
+      // that already consumed it would lose the race here and we abort.
+      // We do the claim BEFORE the ledger insert so a race aborts cheaply,
+      // then back-fill `consumedByLedgerEntryId` AFTER the ledger row is
+      // written so the approval -> ledger linkage is one-hop in audit.
+      if (
+        req.override?.approvalId &&
+        (req as MutableInternal)._overrideVerifiedForBlocker
+      ) {
+        const [claimed] = await tx
+          .update(materialIssueApprovals)
+          .set({ status: 'CONSUMED', consumedAt: new Date() })
+          .where(
+            and(
+              eq(materialIssueApprovals.id, req.override.approvalId),
+              eq(materialIssueApprovals.status, 'APPROVED')
+            )
+          )
+          .returning();
+        if (!claimed) {
+          throw new MaterialIssueRaceError({
+            code: 'WRONG_ROUTING_STEP',
+            message:
+              `Override approval ${req.override.approvalId} could not be consumed ` +
+              '(already consumed, revoked, or expired between validation and execution).',
+            blockingField: 'routingStep',
+          });
+        }
+      }
+
+      const ledgerEntry = await recordInventoryLedgerEntry(
+        {
+          transactionType: ACTION_TO_LEDGER_TYPE[req.action],
+          inventoryItemId: lot.inventoryItemId,
+          agPartNumber: lot.materialPartNumber,
+          lotId: lot.id,
+          locationId,
+          quantityDelta,
+          quantityBefore: lockedQuantityBefore,
+          quantityAfter,
           unitOfMeasure: lot.unitOfMeasure,
-          status: 'active',
-          // Phase-2 (Task #144): pin the reservation to a specific
-          // routing step so any subsequent consume call must match.
-          intendedRoutingStepId: req.intendedRoutingStepId ?? null,
+          statusBefore: lockedStatusBefore,
+          statusAfter,
+          performedByUserId: req.operator.userId ?? null,
+          performedByDisplayName: req.operator.displayName,
+          productionWorkOrderId: resolvedWadId,
+          travelerId: req.travelerId ?? null,
+          travelerStepId: req.travelerStepId ?? null,
+          chargeCodeId: req.chargeCodeId ?? null,
+          reasonCode: req.reasonCode ?? `MATERIAL_${req.action.toUpperCase()}`,
           notes: req.notes ?? null,
-          createdBy: req.operator.displayName,
-        })
-        .returning();
-      createdReservationId = reservation.id;
-      // Reservations don't change physical remaining qty.
-    } else if (req.action === 'unreserve') {
-      if (req.reservationId == null) {
-        throw new MaterialIssueError('unreserve requires reservationId');
-      }
-      // Cancel ONLY when the reservation belongs to the supplied lot AND
-      // is still active. Cancelling by id alone would let a caller
-      // accidentally (or maliciously) cancel a reservation against a
-      // different lot while writing a ledger row against the wrong context.
-      const [cancelled] = await tx
-        .update(materialLotReservations)
-        .set({ status: 'cancelled', updatedAt: new Date() })
-        .where(
-          and(
-            eq(materialLotReservations.id, req.reservationId),
-            eq(materialLotReservations.materialLotId, lot.id),
-            eq(materialLotReservations.status, 'active'),
-          ),
-        )
-        .returning();
-      if (!cancelled) {
-        throw new MaterialIssueRaceError({
-          code: 'ALLOCATION_EXCEEDED',
-          message:
-            `Reservation ${req.reservationId} not found, not on lot ${lot.id}, ` +
-            'or already fulfilled / cancelled.',
-          blockingField: 'allocation',
-        });
-      }
-      createdReservationId = cancelled.id;
-    }
-
-    // Phase-2: atomically claim the override approval row inside the
-    // same transaction as the ledger write. The conditional UPDATE matches
-    // only an APPROVED row with the right id — a concurrent transaction
-    // that already consumed it would lose the race here and we abort.
-    // We do the claim BEFORE the ledger insert so a race aborts cheaply,
-    // then back-fill `consumedByLedgerEntryId` AFTER the ledger row is
-    // written so the approval -> ledger linkage is one-hop in audit.
-    if (
-      req.override?.approvalId &&
-      (req as MutableInternal)._overrideVerifiedForBlocker
-    ) {
-      const [claimed] = await tx
-        .update(materialIssueApprovals)
-        .set({ status: 'CONSUMED', consumedAt: new Date() })
-        .where(
-          and(
-            eq(materialIssueApprovals.id, req.override.approvalId),
-            eq(materialIssueApprovals.status, 'APPROVED'),
-          ),
-        )
-        .returning();
-      if (!claimed) {
-        throw new MaterialIssueRaceError({
-          code: 'WRONG_ROUTING_STEP',
-          message:
-            `Override approval ${req.override.approvalId} could not be consumed ` +
-            '(already consumed, revoked, or expired between validation and execution).',
-          blockingField: 'routingStep',
-        });
-      }
-    }
-
-    const ledgerEntry = await recordInventoryLedgerEntry(
-      {
-        transactionType: ACTION_TO_LEDGER_TYPE[req.action],
-        inventoryItemId: lot.inventoryItemId,
-        agPartNumber: lot.materialPartNumber,
-        lotId: lot.id,
-        locationId,
-        quantityDelta,
-        quantityBefore: lockedQuantityBefore,
-        quantityAfter,
-        unitOfMeasure: lot.unitOfMeasure,
-        statusBefore: lockedStatusBefore,
-        statusAfter,
-        performedByUserId: req.operator.userId ?? null,
-        performedByDisplayName: req.operator.displayName,
-        productionWorkOrderId: resolvedWadId,
-        travelerId: req.travelerId ?? null,
-        travelerStepId: req.travelerStepId ?? null,
-        chargeCodeId: req.chargeCodeId ?? null,
-        reasonCode: req.reasonCode ?? `MATERIAL_${req.action.toUpperCase()}`,
-        notes: req.notes ?? null,
-        digitalSignatureId: req.digitalSignature?.signatureId ?? null,
-        sourceModule: SOURCE_MODULE,
-        sourceRecordId: req.materialLotId,
-        metadata: {
-          action: req.action,
-          p2MaterialConsumptionRequestKey:
-            req.p2MaterialConsumptionRequestKey ?? null,
-          p2MaterialConsumptionRequestHash:
-            req.p2MaterialConsumptionRequestHash ?? null,
-          p2ReceivedUnitId: req.p2ReceivedUnitId ?? null,
-          p2MaterialRequirementId: req.p2MaterialRequirementId ?? null,
-          requestedQty: req.quantity,
-          reservationId: createdReservationId,
           digitalSignatureId: req.digitalSignature?.signatureId ?? null,
-          isOverride: req.isOverride ?? false,
-          packetId: req.packetId ?? null,
-          intendedRoutingStepId: req.intendedRoutingStepId ?? null,
-          // Phase-2: stamp the override payload (without secrets) so
-          // audit can reconstruct WHO authorized the bypass and WHY.
-          override: req.override
-            ? {
-                reason: req.override.reason,
-                approvalId: req.override.approvalId,
-                approverUserId: req.override.approverUserId ?? null,
-                approverDisplayName: req.override.approverDisplayName,
-                approverRole: req.override.approverRole,
-                writtenReason: req.override.writtenReason,
-              }
-            : null,
-          operator: {
-            userId: req.operator.userId ?? null,
-            displayName: req.operator.displayName,
-            badge: req.operator.badge ?? null,
-            workstation: req.operator.workstation ?? null,
-            deviceIp: req.operator.deviceIp ?? null,
-            authMethod: req.operator.authMethod ?? null,
+          sourceModule: SOURCE_MODULE,
+          sourceRecordId: req.materialLotId,
+          metadata: {
+            action: req.action,
+            p2MaterialConsumptionRequestKey:
+              req.p2MaterialConsumptionRequestKey ?? null,
+            p2MaterialConsumptionRequestHash:
+              req.p2MaterialConsumptionRequestHash ?? null,
+            p2ReceivedUnitId: req.p2ReceivedUnitId ?? null,
+            p2MaterialRequirementId: req.p2MaterialRequirementId ?? null,
+            requestedQty: req.quantity,
+            reservationId: createdReservationId,
+            digitalSignatureId: req.digitalSignature?.signatureId ?? null,
+            isOverride: req.isOverride ?? false,
+            packetId: req.packetId ?? null,
+            intendedRoutingStepId: req.intendedRoutingStepId ?? null,
+            // Phase-2: stamp the override payload (without secrets) so
+            // audit can reconstruct WHO authorized the bypass and WHY.
+            override: req.override
+              ? {
+                  reason: req.override.reason,
+                  approvalId: req.override.approvalId,
+                  approverUserId: req.override.approverUserId ?? null,
+                  approverDisplayName: req.override.approverDisplayName,
+                  approverRole: req.override.approverRole,
+                  writtenReason: req.override.writtenReason,
+                }
+              : null,
+            operator: {
+              userId: req.operator.userId ?? null,
+              displayName: req.operator.displayName,
+              badge: req.operator.badge ?? null,
+              workstation: req.operator.workstation ?? null,
+              deviceIp: req.operator.deviceIp ?? null,
+              authMethod: req.operator.authMethod ?? null,
+            },
           },
         },
-      },
-      tx,
-    );
+        tx
+      );
 
-    // Phase-2: back-fill the consumed approval row with the ledger entry
-    // id so audit can hop directly from approval -> ledger evidence.
-    if (
-      req.override?.approvalId &&
-      (req as MutableInternal)._overrideVerifiedForBlocker
-    ) {
-      await tx
-        .update(materialIssueApprovals)
-        .set({ consumedByLedgerEntryId: ledgerEntry.id })
-        .where(eq(materialIssueApprovals.id, req.override.approvalId));
-    }
+      // Phase-2: back-fill the consumed approval row with the ledger entry
+      // id so audit can hop directly from approval -> ledger evidence.
+      if (
+        req.override?.approvalId &&
+        (req as MutableInternal)._overrideVerifiedForBlocker
+      ) {
+        await tx
+          .update(materialIssueApprovals)
+          .set({ consumedByLedgerEntryId: ledgerEntry.id })
+          .where(eq(materialIssueApprovals.id, req.override.approvalId));
+      }
 
-    return {
-      ok: true as const,
-      ledgerEntryId: ledgerEntry.id,
-      transactionNumber: ledgerEntry.transactionNumber,
-      newRemainingQty: quantityAfter,
-      reservationId: createdReservationId,
-    };
-  }).catch((err: unknown) => {
-    // Race-condition aborts inside the transaction surface as structured
-    // blockers, not as 500s.
-    if (err instanceof MaterialIssueRaceError) {
-      return { ok: false as const, blockers: [err.blocker] };
-    }
-    throw err;
-  });
+      return {
+        ok: true as const,
+        ledgerEntryId: ledgerEntry.id,
+        transactionNumber: ledgerEntry.transactionNumber,
+        newRemainingQty: quantityAfter,
+        reservationId: createdReservationId,
+      };
+    })
+    .catch((err: unknown) => {
+      // Race-condition aborts inside the transaction surface as structured
+      // blockers, not as 500s.
+      if (err instanceof MaterialIssueRaceError) {
+        return { ok: false as const, blockers: [err.blocker] };
+      }
+      throw err;
+    });
 }
 
 /**
@@ -1224,7 +1277,7 @@ interface UserApproverProjection {
 async function applyOverrideIfAuthorized(
   blocker: MaterialIssueBlocker,
   override: MaterialIssueOverridePayload | null | undefined,
-  context: { materialLotId?: string | null; travelerId?: string | null } = {},
+  context: { materialLotId?: string | null; travelerId?: string | null } = {}
 ): Promise<MaterialIssueOverridePayload | null> {
   if (!override) return null;
   // Only routing-step gates and a small whitelist may be bypassed via
@@ -1271,14 +1324,23 @@ async function applyOverrideIfAuthorized(
   }
   if (!approval) return null;
   if (approval.status !== 'APPROVED') return null;
-  if (approval.expiresAt && approval.expiresAt.getTime() < Date.now()) return null;
+  if (approval.expiresAt && approval.expiresAt.getTime() < Date.now())
+    return null;
   if (approval.approverUserId !== override.approverUserId) return null;
   if (approval.reason !== override.reason) return null;
   if (approval.bypassesBlocker !== blocker.code) return null;
-  if (approval.materialLotId && context.materialLotId &&
-      approval.materialLotId !== context.materialLotId) return null;
-  if (approval.travelerId && context.travelerId &&
-      approval.travelerId !== context.travelerId) return null;
+  if (
+    approval.materialLotId &&
+    context.materialLotId &&
+    approval.materialLotId !== context.materialLotId
+  )
+    return null;
+  if (
+    approval.travelerId &&
+    context.travelerId &&
+    approval.travelerId !== context.travelerId
+  )
+    return null;
 
   // `storage.getUser` returns the typed `User` row (`users.$inferSelect`).
   // We narrow once here so the verified payload below is fully type-safe.

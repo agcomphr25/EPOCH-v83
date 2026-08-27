@@ -5273,13 +5273,14 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="avery-5160">Avery 5160 — 2⅝ × 1 in</SelectItem>
-            <SelectItem value="avery-5163">Avery 5163 — 4 × 2 in</SelectItem>
+            <SelectItem value="avery-5160">Avery 5160 sheet — 30 labels</SelectItem>
+            <SelectItem value="avery-5163">Avery 5163 sheet — 10 labels</SelectItem>
             <SelectItem value="receiving-4x6">Receiving — 4 × 6 in</SelectItem>
           </SelectContent>
         </Select>
         <div className="mt-1 text-[11px] text-gray-500">
           Every size includes the AG part number and description.
+          {labelSize !== 'receiving-4x6' && ' Print Avery sheets at Actual size / 100%.'}
         </div>
         {controlledReceivingBarcodes && (
           <div className="mt-2 grid gap-2">
@@ -5494,13 +5495,58 @@ type ReceivingLabel = {
   vendorName?: string | null;
 };
 
-const RECEIVING_LABEL_DIMENSIONS: Record<
+const RECEIVING_LABEL_LAYOUTS: Record<
   ReceivingLabelSize,
-  { width: number; height: number }
+  {
+    pageWidth: number;
+    pageHeight: number;
+    labelWidth: number;
+    labelHeight: number;
+    columns: number;
+    rows: number;
+    leftMargin: number;
+    topMargin: number;
+    horizontalGap: number;
+    verticalGap: number;
+  }
 > = {
-  'avery-5160': { width: 2.625, height: 1 },
-  'avery-5163': { width: 4, height: 2 },
-  'receiving-4x6': { width: 4, height: 6 },
+  // Avery sheet geometry is based on US Letter stock at actual size (100%).
+  'avery-5160': {
+    pageWidth: 8.5,
+    pageHeight: 11,
+    labelWidth: 2.625,
+    labelHeight: 1,
+    columns: 3,
+    rows: 10,
+    leftMargin: 0.1875,
+    topMargin: 0.5,
+    horizontalGap: 0.125,
+    verticalGap: 0,
+  },
+  'avery-5163': {
+    pageWidth: 8.5,
+    pageHeight: 11,
+    labelWidth: 4,
+    labelHeight: 2,
+    columns: 2,
+    rows: 5,
+    leftMargin: 0.15625,
+    topMargin: 0.5,
+    horizontalGap: 0.1875,
+    verticalGap: 0,
+  },
+  'receiving-4x6': {
+    pageWidth: 4,
+    pageHeight: 6,
+    labelWidth: 4,
+    labelHeight: 6,
+    columns: 1,
+    rows: 1,
+    leftMargin: 0,
+    topMargin: 0,
+    horizontalGap: 0,
+    verticalGap: 0,
+  },
 };
 
 async function printLabelPDF(
@@ -5512,19 +5558,28 @@ async function printLabelPDF(
     toast.error('No labels to print');
     return;
   }
-  const dimensions = RECEIVING_LABEL_DIMENSIONS[labelSize];
+  const layout = RECEIVING_LABEL_LAYOUTS[labelSize];
   const isCompact = labelSize !== 'receiving-4x6';
   const margin = isCompact ? 0.08 : 0.2;
+  const labelsPerPage = layout.columns * layout.rows;
   const pdf = new jsPDF({
-    orientation:
-      dimensions.width >= dimensions.height ? 'landscape' : 'portrait',
+    orientation: 'portrait',
     unit: 'in',
-    format: [dimensions.width, dimensions.height],
+    format: [layout.pageWidth, layout.pageHeight],
   });
 
   for (let idx = 0; idx < labels.length; idx++) {
     const label = labels[idx];
-    if (idx > 0) pdf.addPage([dimensions.width, dimensions.height]);
+    const pageIndex = idx % labelsPerPage;
+    if (idx > 0 && pageIndex === 0) {
+      pdf.addPage([layout.pageWidth, layout.pageHeight], 'portrait');
+    }
+    const column = pageIndex % layout.columns;
+    const rowIndex = Math.floor(pageIndex / layout.columns);
+    const labelX =
+      layout.leftMargin + column * (layout.labelWidth + layout.horizontalGap);
+    const labelY =
+      layout.topMargin + rowIndex * (layout.labelHeight + layout.verticalGap);
 
     if (isCompact) {
       const partNumber =
@@ -5534,7 +5589,7 @@ async function printLabelPDF(
       const descriptionLines = pdf
         .splitTextToSize(
           `Description: ${description}`,
-          dimensions.width - margin * 2
+          layout.labelWidth - margin * 2
         )
         .slice(0, labelSize === 'avery-5160' ? 1 : 2);
 
@@ -5542,16 +5597,16 @@ async function printLabelPDF(
       pdf.setFontSize(labelSize === 'avery-5160' ? 7 : 10);
       pdf.text(
         `AG Part #: ${partNumber}`,
-        margin,
-        labelSize === 'avery-5160' ? 0.15 : 0.22
+        labelX + margin,
+        labelY + (labelSize === 'avery-5160' ? 0.15 : 0.22)
       );
 
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(labelSize === 'avery-5160' ? 5.5 : 8);
       pdf.text(
         descriptionLines,
-        margin,
-        labelSize === 'avery-5160' ? 0.28 : 0.42
+        labelX + margin,
+        labelY + (labelSize === 'avery-5160' ? 0.28 : 0.42)
       );
 
       const barcodeY = labelSize === 'avery-5160' ? 0.38 : 0.78;
@@ -5561,17 +5616,17 @@ async function printLabelPDF(
           pdf.addImage(
             label.barcodeImage,
             'PNG',
-            margin,
-            barcodeY,
-            dimensions.width - margin * 2,
+            labelX + margin,
+            labelY + barcodeY,
+            layout.labelWidth - margin * 2,
             barcodeHeight
           );
         } catch (_) {
           pdf.setFont('courier', 'normal');
           pdf.text(
             `| ${label.barcode} |`,
-            dimensions.width / 2,
-            barcodeY + 0.2,
+            labelX + layout.labelWidth / 2,
+            labelY + barcodeY + 0.2,
             { align: 'center' }
           );
         }
@@ -5581,20 +5636,23 @@ async function printLabelPDF(
       pdf.setFontSize(labelSize === 'avery-5160' ? 5.5 : 7);
       pdf.text(
         String(label.barcode ?? ''),
-        dimensions.width / 2,
-        barcodeY + barcodeHeight + 0.1,
+        labelX + layout.labelWidth / 2,
+        labelY + barcodeY + barcodeHeight + 0.1,
         { align: 'center' }
       );
       if (labelSize === 'avery-5163') {
         pdf.text(
           `Qty: ${label.quantity ?? ''} ${label.uom ?? ''}`,
-          margin,
-          1.72
+          labelX + margin,
+          labelY + 1.72
         );
         if (label.lotNumber)
-          pdf.text(`Lot: ${label.lotNumber}`, dimensions.width - margin, 1.72, {
-            align: 'right',
-          });
+          pdf.text(
+            `Lot: ${label.lotNumber}`,
+            labelX + layout.labelWidth - margin,
+            labelY + 1.72,
+            { align: 'right' }
+          );
       }
       continue;
     }

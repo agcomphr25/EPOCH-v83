@@ -1989,6 +1989,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
         const openRequestQuantity = getOpenPartsRequestQuantity(data?.rows ?? [], row.itemCode);
         const shortage = Math.max(row.qtyRequired - row.qtyOnHand - openRequestQuantity, 0);
         if (shortage <= 0) throw new Error(`${row.itemCode} has no uncovered demand.`);
+        const requestQuantity = Math.ceil(shortage);
         return apiRequest('/api/inventory/parts-requests', {
           method: 'POST',
           body: {
@@ -1998,7 +1999,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
             requestedBy,
             productionLine: 'P2',
             projectId,
-            quantity: shortage,
+            quantity: requestQuantity,
             urgency: 'MEDIUM',
             estimatedCost: row.unitCost > 0 ? row.unitCost : null,
             reason: `Uncovered P2 project demand: ${row.qtyRequired} required, ${row.qtyOnHand} on hand, ${openRequestQuantity} already requested.`,
@@ -2297,7 +2298,9 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                                   onCheckedChange={(checked) => setRequestSelected(row.inventoryItemId, checked === true)}
                                 />
                                 <Label htmlFor={`request-${rowKey}`} className="leading-tight">
-                                  {shortage > 0 ? `Create parts request for ${shortage}` : 'Demand covered by on-hand inventory or open requests'}
+                                  {shortage > 0
+                                    ? `Create parts request for ${Math.ceil(shortage)}${Math.ceil(shortage) !== shortage ? ` (covers ${shortage} shortage)` : ''}`
+                                    : 'Demand covered by on-hand inventory or open requests'}
                                 </Label>
                               </div>
                             ) : (

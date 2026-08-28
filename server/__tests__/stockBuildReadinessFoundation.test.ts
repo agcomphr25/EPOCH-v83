@@ -15,7 +15,11 @@ describe('stock-build readiness foundation', () => {
     expect(service).toContain('released_bom_count');
     expect(service).toContain('active_routing_count');
     expect(service).toContain('released_traceability_policy_count');
-    expect(service).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/);
+    const listSection = service.slice(
+      service.indexOf('async function loadActiveManufacturedStockBuildParts'),
+      service.indexOf('export type StockBuildActor')
+    );
+    expect(listSection).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/);
   });
 
   it('fails closed when P1 or P2 classification authority is ambiguous', () => {
@@ -29,11 +33,51 @@ describe('stock-build readiness foundation', () => {
     expect(service).toContain('assigned to both P1 and P2');
   });
 
-  it('keeps release disabled in the first UI increment', () => {
+  it('creates only a gated controlled draft from the UI', () => {
     const page = read('client/src/pages/ManufacturingQueue.tsx');
     expect(page).toContain('Search active manufactured parts');
     expect(page).toContain('readyForStockBuildPreview');
-    expect(page).toContain('Release Stock Work Order (coming next)');
-    expect(page).toContain('<Button type="button" disabled');
+    expect(page).toContain('VITE_STOCK_BUILD_REQUEST_WRITES_ENABLED');
+    expect(page).toContain('Save Controlled Draft');
+    expect(page).not.toContain('Release Stock Work Order');
+  });
+
+  it('shows all active production queues instead of three hard-coded filters', () => {
+    const page = read('client/src/pages/ManufacturingQueue.tsx');
+    expect(page).toContain("const ALL_MANUFACTURING_QUEUES = '__ALL__'");
+    expect(page).toContain('/api/shared-departments?routingOnly=true');
+    expect(page).toContain('department.productionEnabled !== false');
+    expect(page).toContain('All Queues');
+    expect(page).toContain('manufacturingQueues.map');
+  });
+
+  it('registers an additive immutable request and event authority', () => {
+    const migration = read('migrations/0311_stock_build_request_authority.sql');
+    const registry = read('server/scripts/migrations/runSafeBootMigrations.ts');
+    expect(migration).toContain(
+      'CREATE TABLE IF NOT EXISTS stock_build_requests'
+    );
+    expect(migration).toContain(
+      'CREATE TABLE IF NOT EXISTS stock_build_request_events'
+    );
+    expect(migration).toContain('Stock-build request events are append-only');
+    expect(migration).not.toMatch(
+      /UPDATE\s+(inventory_items|manufacturing_queue|production_work_orders)/i
+    );
+    expect(
+      registry.match(/0311_stock_build_request_authority\.sql/g)
+    ).toHaveLength(2);
+  });
+
+  it('keeps release and inventory posting out of the draft service', () => {
+    const service = read('server/src/services/stockBuildReadinessService.ts');
+    const route = read('server/src/routes/stockBuildReadiness.ts');
+    expect(route).toContain('areStockBuildRequestWritesEnabled()');
+    expect(service).not.toMatch(
+      /INSERT INTO (production_work_orders|manufacturing_queue|inventory_balances)/i
+    );
+    expect(service).not.toMatch(
+      /UPDATE\s+(inventory_balances|production_work_orders|manufacturing_queue)/i
+    );
   });
 });

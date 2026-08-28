@@ -821,6 +821,7 @@ export const inventoryItems = pgTable('inventory_items', {
   utilizedInPL1: boolean('utilized_in_pl1').default(false), // Used in Production Line 1
   utilizedInPL2: boolean('utilized_in_pl2').default(false), // Used in Production Line 2
   utilizedInPL3: boolean('utilized_in_pl3').default(false), // Used in Production Line 3
+  stockBuildProductionSystem: text('stock_build_production_system'), // Explicit P1 | P2 authority for prospective stock builds
   traceabilityRequired: boolean('traceability_required').default(false), // Traceability required for P2 items
   traceabilityFields: jsonb('traceability_fields')
     .$type<string[]>()

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import {
@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   Command,
@@ -87,6 +88,17 @@ type StockBuildPart = {
   blockers: string[];
 };
 
+type SharedManufacturingDepartment = {
+  id: number;
+  name: string;
+  isActive?: boolean;
+  productionEnabled?: boolean;
+  sortOrder?: number;
+};
+
+const ALL_MANUFACTURING_QUEUES = '__ALL__';
+const LEGACY_MANUFACTURING_QUEUES = ['Cutting Table', 'CNC', 'Cores'];
+
 type QueueItemWithInventory = ManufacturingQueue & {
   inventoryItem: {
     id: number;
@@ -101,10 +113,35 @@ type QueueItemWithInventory = ManufacturingQueue & {
 
 export default function ManufacturingQueue() {
   const { toast } = useToast();
-  const [selectedDepartment, setSelectedDepartment] =
-    useState<string>('Cutting Table');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>(
+    ALL_MANUFACTURING_QUEUES
+  );
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const { data: sharedDepartments = [] } = useQuery<
+    SharedManufacturingDepartment[]
+  >({
+    queryKey: ['/api/shared-departments', 'manufacturing-queue-filter'],
+    queryFn: () => apiRequest('/api/shared-departments?routingOnly=true'),
+  });
+  const manufacturingQueues = useMemo(() => {
+    const departments = sharedDepartments
+      .filter(
+        (department) =>
+          department.isActive !== false &&
+          department.productionEnabled !== false &&
+          department.name.trim().length > 0
+      )
+      .sort(
+        (left, right) =>
+          (left.sortOrder ?? 0) - (right.sortOrder ?? 0) ||
+          left.name.localeCompare(right.name)
+      )
+      .map((department) => department.name.trim());
+    return Array.from(
+      new Set([...LEGACY_MANUFACTURING_QUEUES, ...departments])
+    );
+  }, [sharedDepartments]);
 
   // Fetch queue items
   const { data: queueItems = [], isLoading } = useQuery<
@@ -113,7 +150,8 @@ export default function ManufacturingQueue() {
     queryKey: ['/api/manufacturing-queue', selectedDepartment, selectedStatus],
     queryFn: () => {
       const params = new URLSearchParams();
-      if (selectedDepartment) params.append('department', selectedDepartment);
+      if (selectedDepartment !== ALL_MANUFACTURING_QUEUES)
+        params.append('department', selectedDepartment);
       if (selectedStatus && selectedStatus !== 'ALL')
         params.append('status', selectedStatus);
       return apiRequest(`/api/manufacturing-queue?${params.toString()}`);
@@ -275,9 +313,14 @@ export default function ManufacturingQueue() {
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                  <SelectItem value="Cutting Table">Cutting Table</SelectItem>
-                  <SelectItem value="CNC">CNC</SelectItem>
-                  <SelectItem value="Cores">Cores</SelectItem>
+                  <SelectItem value={ALL_MANUFACTURING_QUEUES}>
+                    All Queues
+                  </SelectItem>
+                  {manufacturingQueues.map((department) => (
+                    <SelectItem key={department} value={department}>
+                      {department}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
@@ -445,11 +488,17 @@ function AddQueueItemDialog({
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { toast } = useToast();
   const [partPickerOpen, setPartPickerOpen] = useState(false);
   const [selectedPartId, setSelectedPartId] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [priority, setPriority] = useState(50);
   const [dueDate, setDueDate] = useState('');
+  const [targetStockLocation, setTargetStockLocation] = useState('');
+  const [notes, setNotes] = useState('');
+  const [draftIdempotencyKey] = useState(() => crypto.randomUUID());
+  const stockBuildWritesEnabled =
+    import.meta.env.VITE_STOCK_BUILD_REQUEST_WRITES_ENABLED === 'true';
   const { data, isLoading, isError } = useQuery<{ parts: StockBuildPart[] }>({
     queryKey: ['/api/stock-build-readiness/parts'],
     queryFn: () => apiRequest('/api/stock-build-readiness/parts'),
@@ -457,6 +506,35 @@ function AddQueueItemDialog({
   });
   const parts = data?.parts ?? [];
   const selectedPart = parts.find((part) => part.id === selectedPartId);
+  const createDraft = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/stock-build-readiness/drafts', {
+        method: 'POST',
+        body: JSON.stringify({
+          inventoryItemId: selectedPartId,
+          requestedQuantity: quantity,
+          priority,
+          dueDate: dueDate || undefined,
+          targetStockLocation: targetStockLocation || undefined,
+          notes: notes || undefined,
+          idempotencyKey: draftIdempotencyKey,
+        }),
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Stock-build draft saved',
+        description:
+          'The controlled request was saved. It has not released work or changed inventory.',
+      });
+      onOpenChange(false);
+    },
+    onError: (error: Error) =>
+      toast({
+        title: 'Unable to save stock-build draft',
+        description: error.message,
+        variant: 'destructive',
+      }),
+  });
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -588,6 +666,27 @@ function AddQueueItemDialog({
               />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="targetStockLocation">Target stock location</Label>
+              <Input
+                id="targetStockLocation"
+                value={targetStockLocation}
+                onChange={(event) => setTargetStockLocation(event.target.value)}
+                placeholder="Optional inventory location"
+              />
+            </div>
+            <div>
+              <Label htmlFor="stockBuildNotes">Notes</Label>
+              <Textarea
+                id="stockBuildNotes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Optional request notes"
+                rows={2}
+              />
+            </div>
+          </div>
           {selectedPart && (
             <Card
               className={
@@ -636,10 +735,17 @@ function AddQueueItemDialog({
             </Button>
             <Button
               type="button"
-              disabled
-              data-testid="button-preview-stock-work-order"
+              disabled={
+                !stockBuildWritesEnabled ||
+                !selectedPart?.readyForStockBuildPreview ||
+                createDraft.isPending
+              }
+              onClick={() => createDraft.mutate()}
+              data-testid="button-save-stock-work-draft"
             >
-              Release Stock Work Order (coming next)
+              {createDraft.isPending
+                ? 'Saving Draft…'
+                : 'Save Controlled Draft'}
             </Button>
           </DialogFooter>
         </div>

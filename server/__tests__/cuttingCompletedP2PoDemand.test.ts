@@ -13,4 +13,13 @@ describe('weekly cutting queue P2 demand lifecycle', () => {
       /COALESCE\(UPPER\(p2\.status\), ''\) NOT IN \(\s*'CLOSED', 'COMPLETE', 'COMPLETED', 'SHIPPED', 'CANCELLED', 'CANCELED'\s*\)/
     );
   });
+
+  it('reconciles shipment evidence across the complete PO revision family', () => {
+    expect(routeSource).toMatch(
+      /COALESCE\(family\.parent_po_id, family\.id\)\s*= COALESCE\(requested\.parent_po_id, requested\.id\)/
+    );
+    expect(routeSource).toMatch(
+      /P2_SHIPPED_SERIALIZED_ITEM_MEMBERSHIP_SQL[\s\S]*\[shipmentEvidencePoIds\]/
+    );
+  });
 });

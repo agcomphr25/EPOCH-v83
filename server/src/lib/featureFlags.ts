@@ -240,6 +240,10 @@ export function areStockBuildRequestWritesEnabled(): boolean {
   return envBool('STOCK_BUILD_REQUEST_WRITES_ENABLED', false);
 }
 
+export function areStockBuildReleaseReadinessWritesEnabled(): boolean {
+  return envBool('STOCK_BUILD_RELEASE_READINESS_WRITES_ENABLED', false);
+}
+
 /** Phase 14 read-only activation readiness controller; never enables other flags. */
 export function isP2ControlledActivationReadinessEnabled(): boolean {
   return envBool('P2_CONTROLLED_ACTIVATION_READINESS_ENABLED', false);

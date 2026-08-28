@@ -80,4 +80,38 @@ describe('stock-build readiness foundation', () => {
       /UPDATE\s+(inventory_balances|production_work_orders|manufacturing_queue)/i
     );
   });
+
+  it('records only a gated signed release-readiness decision', () => {
+    const service = read('server/src/services/stockBuildReadinessService.ts');
+    const route = read('server/src/routes/stockBuildReadiness.ts');
+    const migration = read('migrations/0312_stock_build_release_readiness.sql');
+    const registry = read('server/scripts/migrations/runSafeBootMigrations.ts');
+    expect(service).toContain('evaluateReleaseReadiness');
+    expect(service).toContain('STOCK_BUILD_STALE_VERSION');
+    expect(service).toContain('releasedBomRevisionId');
+    expect(service).toContain('activeRoutingId');
+    expect(service).toContain('releasedTraceabilityPolicyId');
+    expect(service).toContain('recreate it before release');
+    expect(service).toContain("status='READY_FOR_RELEASE'");
+    expect(service).toContain('authoritativeOpenSupplyQuantity = 0');
+    expect(route).toContain('areStockBuildReleaseReadinessWritesEnabled()');
+    expect(route).toContain('manufacturing.stock_build.release');
+    expect(migration).toContain(
+      'CREATE TABLE IF NOT EXISTS stock_build_release_decisions'
+    );
+    expect(migration).toContain('release decisions are append-only');
+    expect(
+      registry.match(/0312_stock_build_release_readiness\.sql/g)
+    ).toHaveLength(2);
+    expect(service).not.toMatch(
+      /INSERT INTO (production_work_orders|manufacturing_queue|inventory_balances)/i
+    );
+  });
+
+  it('keeps the raw stock-build classification column out of the global inventory type', () => {
+    const schema = read('server/schema.ts');
+    expect(schema).not.toContain(
+      "stockBuildProductionSystem: text('stock_build_production_system')"
+    );
+  });
 });

@@ -497,8 +497,12 @@ function AddQueueItemDialog({
   const [targetStockLocation, setTargetStockLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [draftIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [savedDraft, setSavedDraft] = useState<any>(null);
   const stockBuildWritesEnabled =
     import.meta.env.VITE_STOCK_BUILD_REQUEST_WRITES_ENABLED === 'true';
+  const releaseReadinessWritesEnabled =
+    import.meta.env.VITE_STOCK_BUILD_RELEASE_READINESS_WRITES_ENABLED ===
+    'true';
   const { data, isLoading, isError } = useQuery<{ parts: StockBuildPart[] }>({
     queryKey: ['/api/stock-build-readiness/parts'],
     queryFn: () => apiRequest('/api/stock-build-readiness/parts'),
@@ -520,17 +524,57 @@ function AddQueueItemDialog({
           idempotencyKey: draftIdempotencyKey,
         }),
       }),
-    onSuccess: () => {
+    onSuccess: (result: any) => {
+      setSavedDraft(result.request);
       toast({
         title: 'Stock-build draft saved',
         description:
           'The controlled request was saved. It has not released work or changed inventory.',
       });
-      onOpenChange(false);
     },
     onError: (error: Error) =>
       toast({
         title: 'Unable to save stock-build draft',
+        description: error.message,
+        variant: 'destructive',
+      }),
+  });
+  const { data: releaseReadiness, isFetching: isCheckingReleaseReadiness } =
+    useQuery<any>({
+      queryKey: [
+        '/api/stock-build-readiness/requests',
+        savedDraft?.id,
+        'release-readiness',
+      ],
+      queryFn: () =>
+        apiRequest(
+          `/api/stock-build-readiness/requests/${savedDraft.id}/release-readiness`
+        ),
+      enabled: Boolean(savedDraft?.id),
+    });
+  const authorizeReleaseReadiness = useMutation({
+    mutationFn: () =>
+      apiRequest(
+        `/api/stock-build-readiness/requests/${savedDraft.id}/release-readiness/authorize`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedConcurrencyVersion: Number(savedDraft.concurrency_version),
+            idempotencyKey: crypto.randomUUID(),
+            signatureMeaning:
+              'I authorize this controlled stock-build request as ready for work-order release.',
+          }),
+        }
+      ),
+    onSuccess: () =>
+      toast({
+        title: 'Release readiness authorized',
+        description:
+          'The signed decision is recorded. No work order or inventory transaction was created.',
+      }),
+    onError: (error: Error) =>
+      toast({
+        title: 'Unable to authorize release readiness',
         description: error.message,
         variant: 'destructive',
       }),
@@ -547,11 +591,11 @@ function AddQueueItemDialog({
       <DialogContent className="dark:bg-gray-900 dark:border-gray-800">
         <DialogHeader>
           <DialogTitle className="dark:text-white">
-            Create Stock Work Order
+            Create Stock-Build Request
           </DialogTitle>
           <DialogDescription className="dark:text-gray-400">
-            Select any active manufactured P1 or P2 part. This first increment
-            previews release readiness and does not create production or
+            Select any active manufactured P1 or P2 part. The controlled draft
+            and signed release-readiness decision do not create production or
             inventory records.
           </DialogDescription>
         </DialogHeader>
@@ -710,9 +754,9 @@ function AddQueueItemDialog({
                 </div>
                 {selectedPart.blockers.length === 0 ? (
                   <div className="text-green-700">
-                    Authority prerequisites are present. Release remains
-                    disabled until stock-work mutation and inventory-posting
-                    gates are implemented.
+                    Authority prerequisites are present. Work-order release
+                    remains disabled until the stock-work materialization gate
+                    is implemented.
                   </div>
                 ) : (
                   <ul className="list-disc space-y-1 pl-5 text-amber-800">
@@ -720,6 +764,56 @@ function AddQueueItemDialog({
                       <li key={blocker}>{blocker}</li>
                     ))}
                   </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          {savedDraft && (
+            <Card className="border-blue-300">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">
+                  Controlled release decision
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {isCheckingReleaseReadiness ? (
+                  <div>Re-evaluating current authority and stock…</div>
+                ) : releaseReadiness?.evaluation ? (
+                  <>
+                    <div>
+                      Requested {releaseReadiness.evaluation.requestedQuantity}{' '}
+                      · Available{' '}
+                      {releaseReadiness.evaluation.availableInventoryQuantity} ·
+                      Net build {releaseReadiness.evaluation.netBuildQuantity}
+                    </div>
+                    <div className="text-muted-foreground">
+                      Open WIP is excluded until controlled work-order linkage
+                      is authoritative.
+                    </div>
+                    {releaseReadiness.evaluation.blockers?.length > 0 && (
+                      <ul className="list-disc pl-5 text-amber-800">
+                        {releaseReadiness.evaluation.blockers.map(
+                          (blocker: string) => (
+                            <li key={blocker}>{blocker}</li>
+                          )
+                        )}
+                      </ul>
+                    )}
+                    <Button
+                      type="button"
+                      disabled={
+                        !releaseReadinessWritesEnabled ||
+                        !releaseReadiness.evaluation.readyForRelease ||
+                        authorizeReleaseReadiness.isPending
+                      }
+                      onClick={() => authorizeReleaseReadiness.mutate()}
+                      data-testid="button-authorize-stock-build-release-readiness"
+                    >
+                      Authorize Ready for Release
+                    </Button>
+                  </>
+                ) : (
+                  <div>Release readiness could not be evaluated.</div>
                 )}
               </CardContent>
             </Card>
@@ -737,6 +831,7 @@ function AddQueueItemDialog({
               type="button"
               disabled={
                 !stockBuildWritesEnabled ||
+                Boolean(savedDraft) ||
                 !selectedPart?.readyForStockBuildPreview ||
                 createDraft.isPending
               }

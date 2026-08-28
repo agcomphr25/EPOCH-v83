@@ -23,6 +23,9 @@ export function workOrderReadiness(row: Row) {
   const status = upper(row.status);
   if (completeStatuses.has(status)) return { state: 'COMPLETE', reason: null };
   if (status === 'IN_PROGRESS') return { state: 'IN PROGRESS', reason: null };
+  if (status === 'CANCELLED' || status === 'CANCELED') {
+    return { state: 'BLOCKED', reason: 'Current released demand has a cancelled work order' };
+  }
   if (status === 'BLOCKED' || status === 'HOLD') {
     return { state: 'BLOCKED', reason: text(row.hold_reason) || 'Work order is on hold' };
   }
@@ -102,6 +105,10 @@ export async function getDailyTagUp(filters: DailyTagUpFilters = {}) {
            WHERE m.successor_authority_id=a.id AND m.status='OPEN'
              AND LEAST(m.accepted_quantity,m.issued_quantity)<m.required_quantity) material_blocker_count
        FROM p2_manufacturing_work_order_authorities a
+       JOIN p2_frozen_production_demand_baselines current_baseline
+         ON current_baseline.id=a.frozen_demand_baseline_id
+        AND current_baseline.project_id=a.project_id
+        AND current_baseline.status='RELEASED'
        JOIN production_work_orders pwo ON pwo.id=a.production_work_order_id
        LEFT JOIN travelers t ON t.id=a.traveler_id
        WHERE a.project_id=ANY($1::uuid[])`,
@@ -129,7 +136,7 @@ export async function getDailyTagUp(filters: DailyTagUpFilters = {}) {
            'openQuantity',GREATEST(vpi.quantity-COALESCE(vpi.received_quantity,0),0)) ORDER BY vp.expected_delivery_date NULLS LAST) supply
        FROM vendor_po_items vpi JOIN vendor_pos vp ON vp.id=vpi.vendor_po_id JOIN vendors v ON v.id=vp.vendor_id
        WHERE vpi.project_id=ANY($1::uuid[]) AND vpi.ag_part_number IS NOT NULL
-         AND vp.status NOT IN ('Cancelled','Voided','Fully Received') AND vp.is_current_revision=true
+         AND vp.status IN ('Sent','Partially Received') AND vp.is_current_revision=true
        GROUP BY vpi.project_id,vpi.ag_part_number`,
       [projectIds]
     ),

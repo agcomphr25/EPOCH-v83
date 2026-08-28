@@ -362,6 +362,7 @@ export const safeMigrationFiles = [
   '0309_p2_quality_shipment_release_foundation.sql',
   '0310_rebuild_p2_ledger_metadata_indexes.sql',
   '0311_stock_build_request_authority.sql',
+  '0312_stock_build_release_readiness.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -474,6 +475,7 @@ export const criticalMigrationFiles = new Set([
   '0309_p2_quality_shipment_release_foundation.sql',
   '0310_rebuild_p2_ledger_metadata_indexes.sql',
   '0311_stock_build_request_authority.sql',
+  '0312_stock_build_release_readiness.sql',
 ]);
 
 export async function runSafeBootMigrations() {

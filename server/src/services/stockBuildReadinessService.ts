@@ -39,13 +39,26 @@ async function loadActiveManufacturedStockBuildParts(tx: Queryable) {
                         AND COALESCE(br.lifecycle_status,'RELEASED')='RELEASED'
                         AND (br.effective_from IS NULL OR br.effective_from<=now())
                         AND (br.effective_to IS NULL OR br.effective_to>now())),0)::int AS released_bom_count,
+            (SELECT max(br.id) FROM boms b JOIN bom_revisions br ON br.bom_id=b.id
+              WHERE (b.parent_inventory_item_id=i.id OR b.parent_part_ag_number=i.ag_part_number)
+                AND b.is_active=true AND br.is_released=true
+                AND COALESCE(br.lifecycle_status,'RELEASED')='RELEASED'
+                AND (br.effective_from IS NULL OR br.effective_from<=now())
+                AND (br.effective_to IS NULL OR br.effective_to>now())) AS released_bom_revision_id,
             COALESCE((SELECT count(*) FROM part_routings pr WHERE pr.is_active=true AND pr.project_id IS NULL
                         AND (pr.inventory_item_fk=i.id OR pr.inventory_item_id=i.id::text
                              OR lower(pr.part_number)=lower(i.ag_part_number))),0)::int AS active_routing_count,
+            (SELECT max(pr.id) FROM part_routings pr WHERE pr.is_active=true AND pr.project_id IS NULL
+              AND (pr.inventory_item_fk=i.id OR pr.inventory_item_id=i.id::text
+                   OR lower(pr.part_number)=lower(i.ag_part_number))) AS active_routing_id,
             COALESCE((SELECT count(*) FROM inventory_item_traceability_policies tp
                       WHERE tp.inventory_item_id=i.id AND tp.status='RELEASED'
                         AND (tp.effective_from IS NULL OR tp.effective_from<=now())
                         AND (tp.effective_to IS NULL OR tp.effective_to>now())),0)::int AS released_traceability_policy_count
+            ,(SELECT max(tp.id) FROM inventory_item_traceability_policies tp
+               WHERE tp.inventory_item_id=i.id AND tp.status='RELEASED'
+                 AND (tp.effective_from IS NULL OR tp.effective_from<=now())
+                 AND (tp.effective_to IS NULL OR tp.effective_to>now())) AS released_traceability_policy_id
        FROM inventory_items i LEFT JOIN inventory_departments d ON d.id=i.default_department_id
       WHERE i.is_active=true AND i.item_type='MANUFACTURED' ORDER BY i.ag_part_number,i.name`
   );
@@ -85,10 +98,13 @@ async function loadActiveManufacturedStockBuildParts(tx: Queryable) {
       defaultDepartmentName: row.default_department_name,
       availableQuantity: Number(row.available_quantity),
       releasedBomCount: Number(row.released_bom_count),
+      releasedBomRevisionId: row.released_bom_revision_id,
       activeRoutingCount: Number(row.active_routing_count),
+      activeRoutingId: row.active_routing_id,
       releasedTraceabilityPolicyCount: Number(
         row.released_traceability_policy_count
       ),
+      releasedTraceabilityPolicyId: row.released_traceability_policy_id,
       readyForStockBuildPreview: blockers.length === 0,
       blockers,
     };
@@ -173,8 +189,11 @@ export async function createStockBuildDraft(
       defaultDepartmentId: part.defaultDepartmentId,
       defaultDepartmentName: part.defaultDepartmentName,
       releasedBomCount: part.releasedBomCount,
+      releasedBomRevisionId: part.releasedBomRevisionId,
       activeRoutingCount: part.activeRoutingCount,
+      activeRoutingId: part.activeRoutingId,
       releasedTraceabilityPolicyCount: part.releasedTraceabilityPolicyCount,
+      releasedTraceabilityPolicyId: part.releasedTraceabilityPolicyId,
       availableQuantity: part.availableQuantity,
       blockers: part.blockers,
       evaluatedAt: new Date().toISOString(),
@@ -247,4 +266,205 @@ export async function getStockBuildRequest(id: string) {
       404
     );
   return result.rows[0];
+}
+
+async function evaluateReleaseReadiness(tx: Queryable, requestId: string) {
+  const requestResult = await tx.query(
+    `SELECT * FROM stock_build_requests WHERE id=$1`,
+    [requestId]
+  );
+  if (!requestResult.rows.length)
+    throw new StockBuildRequestError(
+      'STOCK_BUILD_REQUEST_NOT_FOUND',
+      'The stock-build request was not found.',
+      404
+    );
+  const request = requestResult.rows[0];
+  const part = (await loadActiveManufacturedStockBuildParts(tx)).find(
+    (candidate) => candidate.id === Number(request.inventory_item_id)
+  );
+  const blockers: string[] = [];
+  if (!['DRAFT', 'BLOCKED'].includes(String(request.status)))
+    blockers.push(
+      `Request status ${request.status} cannot be evaluated for release.`
+    );
+  if (!part) {
+    blockers.push('The manufactured part is no longer active.');
+  } else {
+    blockers.push(...part.blockers);
+    const draftAuthority = request.readiness_snapshot as Record<
+      string,
+      unknown
+    > | null;
+    if (part.productionSystem !== request.production_system)
+      blockers.push(
+        'The P1/P2 production-system authority changed after the draft was created.'
+      );
+    if (
+      Number(part.defaultDepartmentId) !==
+      Number(request.department_id_snapshot)
+    )
+      blockers.push(
+        'The assigned manufacturing department changed after the draft was created.'
+      );
+    const exactAuthorities: Array<[string, unknown, unknown]> = [
+      [
+        'released BOM revision',
+        draftAuthority?.releasedBomRevisionId,
+        part.releasedBomRevisionId,
+      ],
+      ['active routing', draftAuthority?.activeRoutingId, part.activeRoutingId],
+      [
+        'released traceability policy',
+        draftAuthority?.releasedTraceabilityPolicyId,
+        part.releasedTraceabilityPolicyId,
+      ],
+    ];
+    for (const [label, draftedId, currentId] of exactAuthorities) {
+      if (draftedId == null)
+        blockers.push(
+          `The draft does not contain an exact ${label} snapshot; recreate it before release.`
+        );
+      else if (String(draftedId) !== String(currentId))
+        blockers.push(
+          `The authoritative ${label} changed after the draft was created.`
+        );
+    }
+  }
+  const availableInventoryQuantity = part?.availableQuantity ?? 0;
+  const authoritativeOpenSupplyQuantity = 0;
+  const netBuildQuantity = Math.max(
+    Number(request.requested_quantity) - availableInventoryQuantity,
+    0
+  );
+  const evaluation = {
+    requestId,
+    requestConcurrencyVersion: Number(request.concurrency_version),
+    requestedQuantity: Number(request.requested_quantity),
+    productionSystem: part?.productionSystem ?? null,
+    departmentId: part?.defaultDepartmentId ?? null,
+    availableInventoryQuantity,
+    authoritativeOpenSupplyQuantity,
+    openSupplyPolicy:
+      'Excluded until a controlled stock-build request has authoritative work-order linkage.',
+    netBuildQuantity,
+    blockers,
+    readyForRelease: blockers.length === 0 && netBuildQuantity > 0,
+    noBuildRequired: blockers.length === 0 && netBuildQuantity === 0,
+    evaluatedAt: new Date().toISOString(),
+  };
+  return { request, evaluation, evaluationChecksum: checksum(evaluation) };
+}
+
+export async function previewStockBuildReleaseReadiness(requestId: string) {
+  return evaluateReleaseReadiness(pool as unknown as Queryable, requestId);
+}
+
+export async function authorizeStockBuildReleaseReadiness(
+  input: {
+    requestId: string;
+    expectedConcurrencyVersion: number;
+    idempotencyKey: string;
+    signatureMeaning: string;
+  },
+  actor: StockBuildActor
+) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+      `stock-build-release:${input.requestId}`,
+    ]);
+    const replay = await client.query(
+      `SELECT * FROM stock_build_release_decisions
+        WHERE stock_build_request_id=$1 AND idempotency_key=$2`,
+      [input.requestId, input.idempotencyKey]
+    );
+    if (replay.rows.length) {
+      await client.query('COMMIT');
+      return { replayed: true, decision: replay.rows[0] };
+    }
+    const { request, evaluation, evaluationChecksum } =
+      await evaluateReleaseReadiness(client, input.requestId);
+    if (
+      Number(request.concurrency_version) !== input.expectedConcurrencyVersion
+    )
+      throw new StockBuildRequestError(
+        'STOCK_BUILD_STALE_VERSION',
+        'The stock-build draft changed. Refresh release readiness before authorizing.'
+      );
+    if (!evaluation.readyForRelease)
+      throw new StockBuildRequestError(
+        evaluation.noBuildRequired
+          ? 'STOCK_BUILD_NO_BUILD_REQUIRED'
+          : 'STOCK_BUILD_RELEASE_BLOCKED',
+        evaluation.noBuildRequired
+          ? 'Available inventory already satisfies the requested quantity.'
+          : 'Current controlled authority is not ready for release.'
+      );
+    const decision = await client.query(
+      `INSERT INTO stock_build_release_decisions
+        (stock_build_request_id,request_concurrency_version,requested_quantity,
+         available_inventory_quantity,authoritative_open_supply_quantity,net_build_quantity,
+         evaluation_snapshot,evaluation_checksum,signature_meaning,actor_user_id,
+         actor_employee_id,actor_display_name,actor_role,idempotency_key)
+       VALUES ($1,$2,$3,$4,0,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [
+        input.requestId,
+        input.expectedConcurrencyVersion,
+        evaluation.requestedQuantity,
+        evaluation.availableInventoryQuantity,
+        evaluation.netBuildQuantity,
+        JSON.stringify(evaluation),
+        evaluationChecksum,
+        input.signatureMeaning,
+        actor.userId,
+        actor.employeeId,
+        actor.displayName,
+        actor.role,
+        input.idempotencyKey,
+      ]
+    );
+    const updated = await client.query(
+      `UPDATE stock_build_requests
+          SET status='READY_FOR_RELEASE',concurrency_version=concurrency_version+1,updated_at=now()
+        WHERE id=$1 AND concurrency_version=$2 AND status IN ('DRAFT','BLOCKED') RETURNING *`,
+      [input.requestId, input.expectedConcurrencyVersion]
+    );
+    if (!updated.rows.length)
+      throw new StockBuildRequestError(
+        'STOCK_BUILD_STALE_VERSION',
+        'The stock-build draft changed before authorization completed.'
+      );
+    await client.query(
+      `INSERT INTO stock_build_request_events
+        (stock_build_request_id,event_type,actor_user_id,actor_employee_id,actor_display_name,
+         actor_role,signature_meaning,evidence)
+       VALUES ($1,'RELEASE_READINESS_AUTHORIZED',$2,$3,$4,$5,$6,$7::jsonb)`,
+      [
+        input.requestId,
+        actor.userId,
+        actor.employeeId,
+        actor.displayName,
+        actor.role,
+        input.signatureMeaning,
+        JSON.stringify({
+          decisionId: decision.rows[0].id,
+          evaluationChecksum,
+          netBuildQuantity: evaluation.netBuildQuantity,
+        }),
+      ]
+    );
+    await client.query('COMMIT');
+    return {
+      replayed: false,
+      decision: decision.rows[0],
+      request: updated.rows[0],
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }

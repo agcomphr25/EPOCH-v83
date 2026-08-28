@@ -7,11 +7,14 @@ import { resolveUserSnapshot } from '../../utils/userSnapshot';
 import {
   areStockBuildRequestReadsEnabled,
   areStockBuildRequestWritesEnabled,
+  areStockBuildReleaseReadinessWritesEnabled,
 } from '../lib/featureFlags';
 import {
   createStockBuildDraft,
+  authorizeStockBuildReleaseReadiness,
   getStockBuildRequest,
   listActiveManufacturedStockBuildParts,
+  previewStockBuildReleaseReadiness,
   StockBuildRequestError,
 } from '../services/stockBuildReadinessService';
 
@@ -24,6 +27,13 @@ const draftBody = z.object({
   targetStockLocation: z.string().trim().max(255).optional(),
   notes: z.string().trim().max(2000).optional(),
   idempotencyKey: z.string().trim().min(1).max(200),
+});
+const releaseBody = z.object({
+  expectedConcurrencyVersion: z.number().int().positive(),
+  idempotencyKey: z.string().trim().min(1).max(200),
+  signatureMeaning: z.literal(
+    'I authorize this controlled stock-build request as ready for work-order release.'
+  ),
 });
 
 const fail = (res: Response, error: unknown) => {
@@ -105,6 +115,49 @@ router.get(
           404
         );
       res.json({ request: await getStockBuildRequest(req.params.id) });
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.get(
+  '/requests/:id/release-readiness',
+  authenticateToken,
+  requirePermission('manufacturing.stock_build.release'),
+  async (req, res) => {
+    try {
+      if (!areStockBuildRequestReadsEnabled())
+        throw new StockBuildRequestError(
+          'FEATURE_DISABLED',
+          'Stock-build request reads are disabled.',
+          404
+        );
+      res.json(await previewStockBuildReleaseReadiness(req.params.id));
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/requests/:id/release-readiness/authorize',
+  authenticateToken,
+  requirePermission('manufacturing.stock_build.release'),
+  async (req, res) => {
+    try {
+      if (!areStockBuildReleaseReadinessWritesEnabled())
+        throw new StockBuildRequestError(
+          'FEATURE_DISABLED',
+          'Stock-build release-readiness authorization is disabled.',
+          404
+        );
+      const body = releaseBody.parse(req.body);
+      const result = await authorizeStockBuildReleaseReadiness(
+        { requestId: req.params.id, ...body },
+        await actor(req)
+      );
+      res.status(result.replayed ? 200 : 201).json(result);
     } catch (error) {
       fail(res, error);
     }

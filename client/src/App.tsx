@@ -102,6 +102,7 @@ const ProductionStationDashboard = React.lazy(
   () => import('./pages/ProductionStationDashboard')
 );
 const TVDisplayPage = React.lazy(() => import('./pages/TVDisplayPage'));
+const DailyTagUpPage = React.lazy(() => import('./pages/DailyTagUpPage'));
 const TVTimerBoard = React.lazy(() => import('./pages/TVTimerBoard'));
 const ProductionTimerHistory = React.lazy(
   () => import('./pages/ProductionTimerHistory')
@@ -1371,6 +1372,7 @@ function App() {
                           component={ProductionStationDashboard}
                         />
                         <Route path="/tv-display" component={TVDisplayPage} />
+                        <Route path="/daily-tag-up" component={DailyTagUpPage} />
                         <Route
                           path="/tv-timer-board"
                           component={TVTimerBoard}

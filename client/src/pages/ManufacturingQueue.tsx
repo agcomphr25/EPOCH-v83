@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import {
@@ -88,6 +88,17 @@ type StockBuildPart = {
   blockers: string[];
 };
 
+type SharedManufacturingDepartment = {
+  id: number;
+  name: string;
+  isActive?: boolean;
+  productionEnabled?: boolean;
+  sortOrder?: number;
+};
+
+const ALL_MANUFACTURING_QUEUES = '__ALL__';
+const LEGACY_MANUFACTURING_QUEUES = ['Cutting Table', 'CNC', 'Cores'];
+
 type QueueItemWithInventory = ManufacturingQueue & {
   inventoryItem: {
     id: number;
@@ -102,10 +113,35 @@ type QueueItemWithInventory = ManufacturingQueue & {
 
 export default function ManufacturingQueue() {
   const { toast } = useToast();
-  const [selectedDepartment, setSelectedDepartment] =
-    useState<string>('Cutting Table');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>(
+    ALL_MANUFACTURING_QUEUES
+  );
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const { data: sharedDepartments = [] } = useQuery<
+    SharedManufacturingDepartment[]
+  >({
+    queryKey: ['/api/shared-departments', 'manufacturing-queue-filter'],
+    queryFn: () => apiRequest('/api/shared-departments?routingOnly=true'),
+  });
+  const manufacturingQueues = useMemo(() => {
+    const departments = sharedDepartments
+      .filter(
+        (department) =>
+          department.isActive !== false &&
+          department.productionEnabled !== false &&
+          department.name.trim().length > 0
+      )
+      .sort(
+        (left, right) =>
+          (left.sortOrder ?? 0) - (right.sortOrder ?? 0) ||
+          left.name.localeCompare(right.name)
+      )
+      .map((department) => department.name.trim());
+    return Array.from(
+      new Set([...LEGACY_MANUFACTURING_QUEUES, ...departments])
+    );
+  }, [sharedDepartments]);
 
   // Fetch queue items
   const { data: queueItems = [], isLoading } = useQuery<
@@ -114,7 +150,8 @@ export default function ManufacturingQueue() {
     queryKey: ['/api/manufacturing-queue', selectedDepartment, selectedStatus],
     queryFn: () => {
       const params = new URLSearchParams();
-      if (selectedDepartment) params.append('department', selectedDepartment);
+      if (selectedDepartment !== ALL_MANUFACTURING_QUEUES)
+        params.append('department', selectedDepartment);
       if (selectedStatus && selectedStatus !== 'ALL')
         params.append('status', selectedStatus);
       return apiRequest(`/api/manufacturing-queue?${params.toString()}`);
@@ -276,9 +313,14 @@ export default function ManufacturingQueue() {
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                  <SelectItem value="Cutting Table">Cutting Table</SelectItem>
-                  <SelectItem value="CNC">CNC</SelectItem>
-                  <SelectItem value="Cores">Cores</SelectItem>
+                  <SelectItem value={ALL_MANUFACTURING_QUEUES}>
+                    All Queues
+                  </SelectItem>
+                  {manufacturingQueues.map((department) => (
+                    <SelectItem key={department} value={department}>
+                      {department}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>

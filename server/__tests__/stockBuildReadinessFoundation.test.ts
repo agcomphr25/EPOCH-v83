@@ -42,6 +42,15 @@ describe('stock-build readiness foundation', () => {
     expect(page).not.toContain('Release Stock Work Order');
   });
 
+  it('shows all active production queues instead of three hard-coded filters', () => {
+    const page = read('client/src/pages/ManufacturingQueue.tsx');
+    expect(page).toContain("const ALL_MANUFACTURING_QUEUES = '__ALL__'");
+    expect(page).toContain('/api/shared-departments?routingOnly=true');
+    expect(page).toContain('department.productionEnabled !== false');
+    expect(page).toContain('All Queues');
+    expect(page).toContain('manufacturingQueues.map');
+  });
+
   it('registers an additive immutable request and event authority', () => {
     const migration = read('migrations/0311_stock_build_request_authority.sql');
     const registry = read('server/scripts/migrations/runSafeBootMigrations.ts');

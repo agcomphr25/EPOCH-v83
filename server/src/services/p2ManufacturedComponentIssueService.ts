@@ -364,6 +364,7 @@ export async function reverseP2ManufacturedComponentIssue(
       sourceRecordId: row.id,
       reversedTransactionId: row.issue_ledger_entry_id,
       metadata: {
+        p2ComponentIssueReversalKey: input.idempotencyKey,
         p2ManufacturedComponentIssueReversalKey: input.idempotencyKey,
         p2ManufacturedComponentIssueReversalHash: requestHash,
         custodyId: row.custody_id,

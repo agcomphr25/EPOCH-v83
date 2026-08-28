@@ -141,6 +141,7 @@ import costAccountingRoutes from './costAccounting';
 import payrollControlRoutes from './payrollControl';
 import employeeBadgesRoutes from './employeeBadges';
 import manufacturingQueueRoutes from './manufacturingQueue';
+import stockBuildReadinessRoutes from './stockBuildReadiness';
 import cuttingTableManufacturingQueueRoutes from './cuttingTableManufacturingQueue';
 import cuttingDocumentsRoutes from './cuttingDocuments';
 import allocationRequirementsRoutes from './allocationRequirements';
@@ -1616,6 +1617,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Manufacturing Queue routes
   app.use('/api/manufacturing-queue', manufacturingQueueRoutes);
+  app.use('/api/stock-build-readiness', stockBuildReadinessRoutes);
 
   // Allocation Requirements routes
   app.use('/api/allocation-requirements', allocationRequirementsRoutes);

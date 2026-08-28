@@ -34,7 +34,8 @@ import {
   Filter,
   X,
   Lock,
-  GitBranch
+  GitBranch,
+  ShieldCheck
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -53,6 +54,7 @@ import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import ProgramManufacturingOrchestration from '@/components/p2/ProgramManufacturingOrchestration';
 import P2FrozenProductionDemand from '@/components/p2/P2FrozenProductionDemand';
 import P2GenealogyViewer from '@/components/p2/P2GenealogyViewer';
+import P2ActivationReadiness from '@/components/p2/P2ActivationReadiness';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -115,6 +117,8 @@ interface PartRouting {
 
 export default function P2ControlCenter() {
   const genealogyEnabled = import.meta.env.VITE_P2_GENEALOGY_VIEWER_ENABLED === 'true';
+  const activationReadinessEnabled =
+    import.meta.env.VITE_P2_CONTROLLED_ACTIVATION_READINESS_ENABLED === 'true';
   const [location, navigate] = useLocation();
   const { toast } = useToast();
   const urlParams = new URLSearchParams(window.location.search);
@@ -173,10 +177,10 @@ export default function P2ControlCenter() {
 
   const { data: pipelineProjects = [] } = useQuery<{
     projectId: string;
-    projectCode: string;
-    projectName: string;
-    currentStage: string;
-    maxAllowedStageKey?: string;
+      projectCode: string;
+      projectName: string;
+      currentStage: string;
+      maxAllowedStageKey?: string;
     closingStatus?: 'MISSING' | 'INCOMPLETE' | 'COMPLETE';
   }[]>({
     queryKey: ['/api/projects/pipeline'],
@@ -236,7 +240,8 @@ export default function P2ControlCenter() {
       await apiRequest(`/api/p2/purchase-orders/${lineItemCorrection.poId}/line-item-correction/complete`, {
         method: 'POST',
         body: { reason: lineItemCorrectionReason },
-      });
+        }
+      );
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
       toast({ title: 'Correction completed', description: 'The PO was relocked and the correction was audited.' });
       setLineItemCorrection(null);
@@ -253,8 +258,9 @@ export default function P2ControlCenter() {
   const serializedLedgerStats = useMemo(
     () => allPOStatuses.reduce(
       (totals, po) => ({
-        scheduledItems: totals.scheduledItems + Number(po.scheduledItems || 0),
-        inProduction: totals.inProduction + Number(po.inProductionItems || 0),
+          scheduledItems:
+            totals.scheduledItems + Number(po.scheduledItems || 0),
+          inProduction: totals.inProduction + Number(po.inProductionItems || 0),
       }),
       { scheduledItems: 0, inProduction: 0 },
     ),
@@ -288,11 +294,12 @@ export default function P2ControlCenter() {
 
   const selectedPONumbers = selectedPOIds.length > 0
     ? allPOStatuses.filter((po) => selectedPOIds.includes(po.id)).map((po) => po.poNumber)
-    : poFromUrl
+      : poFromUrl
       ? [poFromUrl]
-    : [];
+        : [];
   const selectedProjectId = selectedPOIds.length === 1
-    ? allPOStatuses.find((po) => po.id === selectedPOIds[0])?.projectId || undefined
+      ? allPOStatuses.find((po) => po.id === selectedPOIds[0])?.projectId ||
+        undefined
     : undefined;
   const programProjectId = selectedProjectId || wadProjectId || undefined;
 
@@ -438,7 +445,9 @@ export default function P2ControlCenter() {
         <div className="flex items-center gap-3">
           {(() => {
             if (selectedPOIds.length !== 1) return null;
-            const selectedPO = allPOStatuses.find(po => po.id === selectedPOIds[0]);
+            const selectedPO = allPOStatuses.find(
+              (po) => po.id === selectedPOIds[0]
+            );
             if (!selectedPO?.projectId) return null;
             return (
               <div className="flex items-center gap-2">
@@ -686,10 +695,10 @@ export default function P2ControlCenter() {
                 const Icon = getActionIcon(action.type);
                 const severityStyle = getSeverityStyle(action.severity || 'info');
                 const daysText = action.daysUntilDue !== null && action.daysUntilDue !== undefined
-                  ? action.daysUntilDue < 0 
-                    ? `${Math.abs(action.daysUntilDue)}d overdue`
-                    : action.daysUntilDue === 0 
-                      ? 'Due today'
+                    ? action.daysUntilDue < 0
+                      ? `${Math.abs(action.daysUntilDue)}d overdue`
+                      : action.daysUntilDue === 0
+                        ? 'Due today'
                       : `${action.daysUntilDue}d left`
                   : '';
                 return (
@@ -708,7 +717,9 @@ export default function P2ControlCenter() {
                   >
                     <Icon className="h-3 w-3 mr-1" />
                     {action.label}
-                    {daysText && <span className="ml-1 opacity-80">({daysText})</span>}
+                    {daysText && (
+                      <span className="ml-1 opacity-80">({daysText})</span>
+                    )}
                   </Badge>
                 );
               })}
@@ -799,22 +810,24 @@ export default function P2ControlCenter() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-muted-foreground">Showing:</span>
               {poFilterOptions.filter((po) => selectedPOIds.includes(po.id)).map((po) => (
-                <Badge
+                  <Badge
                   key={po.id}
                   variant="secondary"
-                  className="gap-1 pl-2 pr-1 py-0.5 text-xs font-normal"
+                    className="gap-1 pl-2 pr-1 py-0.5 text-xs font-normal"
                 >
-                  <span className="font-medium">{po.poNumber}</span>
-                  <span className="text-muted-foreground">— {po.customerName}</span>
-                  <button
-                    onClick={() => togglePOFilter(po.id)}
-                    className="ml-0.5 rounded-full hover:bg-muted p-0.5"
-                    aria-label={`Remove ${po.poNumber} filter`}
+                    <span className="font-medium">{po.poNumber}</span>
+                    <span className="text-muted-foreground">
+                      — {po.customerName}
+                    </span>
+                    <button
+                      onClick={() => togglePOFilter(po.id)}
+                      className="ml-0.5 rounded-full hover:bg-muted p-0.5"
+                      aria-label={`Remove ${po.poNumber} filter`}
                   >
-                    <X className="h-3 w-3" />
+                      <X className="h-3 w-3" />
                   </button>
                 </Badge>
-              ))}
+                ))}
             </div>
           )}
         </div>
@@ -851,6 +864,16 @@ export default function P2ControlCenter() {
             <TabsTrigger value="genealogy" className="flex items-center gap-2" data-testid="tab-genealogy">
               <GitBranch className="h-4 w-4" />
               Genealogy
+            </TabsTrigger>
+          )}
+          {activationReadinessEnabled && (
+            <TabsTrigger
+              value="pilot-readiness"
+              className="flex items-center gap-2"
+              data-testid="tab-pilot-readiness"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Pilot Readiness
             </TabsTrigger>
           )}
           <TabsTrigger value="shipping" className="flex items-center gap-2" data-testid="tab-shipping">
@@ -943,7 +966,8 @@ export default function P2ControlCenter() {
               <POsNeedingBOMs onSelectPO={(poId) => {
                 setSelectedPOForBOM(poId);
                 setShowBOMWizard(true);
-              }} />
+                }}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1011,6 +1035,12 @@ export default function P2ControlCenter() {
         {genealogyEnabled && (
           <TabsContent value="genealogy">
             <P2GenealogyViewer />
+          </TabsContent>
+        )}
+
+        {activationReadinessEnabled && (
+          <TabsContent value="pilot-readiness">
+            <P2ActivationReadiness />
           </TabsContent>
         )}
 
@@ -1091,7 +1121,8 @@ export default function P2ControlCenter() {
               onClick={() => pendingLineItemCorrection && startLineItemCorrection.mutate({
                 poId: pendingLineItemCorrection.poId,
                 reason: lineItemCorrectionReason.trim(),
-              })}
+                })
+              }
               data-testid="button-start-line-item-correction"
             >
               {startLineItemCorrection.isPending ? 'Opening...' : 'Open audited correction'}
@@ -1108,7 +1139,9 @@ function POsNeedingBOMs({ onSelectPO }: { onSelectPO: (poId: number) => void }) 
   });
 
   if (isLoading) {
-    return <div className="text-center py-4 text-muted-foreground">Loading...</div>;
+    return (
+      <div className="text-center py-4 text-muted-foreground">Loading...</div>
+    );
   }
 
   if (posNeedingBOMs.length === 0) {
@@ -1164,7 +1197,7 @@ function P2TravelersTab({ selectedPONumbers = [] }: { selectedPONumbers?: string
     queryKey: ['/api/part-routings'],
   });
 
-  const activeRoutings = routings.filter(r => r.isActive);
+  const activeRoutings = routings.filter((r) => r.isActive);
 
   const generateTravelerMutation = useMutation({
     mutationFn: async (data: { routingId: string; workOrderId?: string; quantity?: number; createdBy: string }) => {
@@ -1205,12 +1238,14 @@ function P2TravelersTab({ selectedPONumbers = [] }: { selectedPONumbers?: string
           traveler.travelerNumber,
         ].filter((value): value is string => !!value);
         return selectedPONumbers.some((poNumber) =>
-          sourceFields.some((value) => value.toLowerCase().includes(poNumber.toLowerCase()))
+            sourceFields.some((value) =>
+              value.toLowerCase().includes(poNumber.toLowerCase())
+            )
         );
       })
     : travelers;
 
-  const filteredTravelers = travelersForSelectedPOs.filter(t => {
+  const filteredTravelers = travelersForSelectedPOs.filter((t) => {
     if (statusFilter === 'all') return true;
     return t.status === statusFilter;
   });
@@ -1252,8 +1287,10 @@ function P2TravelersTab({ selectedPONumbers = [] }: { selectedPONumbers?: string
   const travelerStats = {
     draft: travelersForSelectedPOs.filter(t => t.status === 'DRAFT').length,
     inProgress: travelersForSelectedPOs.filter(t => t.status === 'IN_PROGRESS').length,
-    completed: travelersForSelectedPOs.filter(t => t.status === 'COMPLETED').length,
-    blocked: travelersForSelectedPOs.filter(t => t.status === 'BLOCKED').length,
+    completed: travelersForSelectedPOs.filter((t) => t.status === 'COMPLETED')
+      .length,
+    blocked: travelersForSelectedPOs.filter((t) => t.status === 'BLOCKED')
+      .length,
   };
 
   return (

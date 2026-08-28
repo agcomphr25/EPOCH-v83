@@ -1,0 +1,51 @@
+name: Daily Tag Up PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/daily-tag-up-postmerge-hardening]
+  pull_request:
+    paths:
+      - 'server/src/services/dailyTagUpService.ts'
+      - 'server/src/routes/dailyTagUp.ts'
+      - 'server/__tests__/dailyTagUp*.test.ts'
+      - 'client/src/pages/DailyTagUpPage.tsx'
+      - '.github/workflows/daily-tag-up-postgres.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: daily_tag_up_cert
+          POSTGRES_PASSWORD: disposable_daily_tag_up_password
+          POSTGRES_DB: daily_tag_up_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U daily_tag_up_cert -d daily_tag_up_certification"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://daily_tag_up_cert:disposable_daily_tag_up_password@127.0.0.1:5432/daily_tag_up_certification
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Prove disposable database boundary
+        run: |
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).hostname)")" = 127.0.0.1
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).pathname)")" = /daily_tag_up_certification
+      - name: Certify Daily Tag Up SQL and focused contracts
+        run: |
+          npx vitest run --config vitest.config.server.ts server/__tests__/dailyTagUpPostgres.test.ts server/__tests__/dailyTagUpAuthorityContract.test.ts server/__tests__/dailyTagUpService.test.ts --reporter=verbose
+          npx vitest run --config vitest.config.client.ts client/src/__tests__/dailyTagUp.client.test.ts --reporter=verbose
+      - name: Diff hygiene
+        run: git diff --check HEAD^ HEAD

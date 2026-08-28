@@ -12,6 +12,7 @@ export interface UserPermissions {
 }
 
 export const CAPABILITY_GATED_ROUTES: Record<string, string | string[]> = {
+  '/daily-tag-up': 'p2.work_orders.view',
   '/p2-work-orders/queues': 'p2.work_orders.view',
   '/pto-command-center': [
     'timekeeping.pto.view_all',
@@ -194,6 +195,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/orders-list',
   '/orders-management',
   '/p2-control-center',
+  '/daily-tag-up',
   '/pm-control-center',
   '/payment-management',
   '/pdf-templates',
@@ -707,6 +709,7 @@ export function hasRouteAccess(
  * Maps route patterns to the roles that can access them
  */
 export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
+  '/daily-tag-up': ['ADMIN', 'OWNER', 'PROJECT_MANAGER', 'PROGRAM_MANAGER', 'MANAGER', 'SUPERVISOR'],
   '/admin/orders': ['ADMIN', 'OWNER'],
   '/admin/policies': ['ADMIN', 'OWNER'],
   '/system-audits': ['ADMIN', 'OWNER'],

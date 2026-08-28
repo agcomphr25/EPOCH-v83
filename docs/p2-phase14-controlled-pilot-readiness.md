@@ -1,7 +1,8 @@
 # P2 controlled activation and pilot readiness
 
-Status: **NOT READY FOR CONTROLLED PILOT**  
-Production activation: prohibited  
+Status: **NOT READY FOR CONTROLLED PILOT**
+
+Production activation: prohibited
 Certified starting tree: `e094936fe5692f32c7d4dfceaf7d19a9766b123e`
 
 This Phase 14 control package connects the existing Phase 1-13 authorities. It creates no new production authority, database table, migration, backfill, or automatic activation path. All committed feature settings remain disabled by default.

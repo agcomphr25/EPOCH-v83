@@ -114,6 +114,11 @@ interface VarianceHistoryRow extends CycleCountLine {
   postedAt: string | null;
 }
 
+interface ScopeOptions {
+  projects: Array<{ id: string; projectCode: string; projectName: string; partCount: number }>;
+  manufacturedParts: Array<{ id: number; agPartNumber: string; name: string }>;
+}
+
 const API_BASE = '/api/inventory/cycle-counts';
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -169,7 +174,9 @@ function VarianceBadge({ variance }: { variance: number }) {
 
 function CreateSessionDialog({ onCreated }: { onCreated: (id: number) => void }) {
   const [open, setOpen] = useState(false);
-  const [location, setLocation] = useState('ALL');
+  const [location, setLocation] = useState('WAREHOUSE-MAIN');
+  const [scopeMode, setScopeMode] = useState<'PROJECT' | 'PART'>('PROJECT');
+  const [projectId, setProjectId] = useState('');
   const [partFilter, setPartFilter] = useState('');
   const [countType, setCountType] = useState<'CYCLE' | 'FULL' | 'SPOT' | 'ABC'>('CYCLE');
   const [scheduledFor, setScheduledFor] = useState('');
@@ -183,11 +190,18 @@ function CreateSessionDialog({ onCreated }: { onCreated: (id: number) => void })
     enabled: open,
   });
 
+  const { data: scopeOptions, isLoading: scopeLoading } = useQuery<ScopeOptions>({
+    queryKey: [API_BASE, 'scope-options'],
+    queryFn: async () => apiRequest(`${API_BASE}/scope-options`),
+    enabled: open,
+  });
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const body = {
         location,
-        partFilter: partFilter.trim() || null,
+        projectId: scopeMode === 'PROJECT' ? projectId || null : null,
+        partFilter: scopeMode === 'PART' ? partFilter.trim() || null : null,
         countType,
         scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : null,
         blindCount,
@@ -200,7 +214,7 @@ function CreateSessionDialog({ onCreated }: { onCreated: (id: number) => void })
       toast.success(`Session ${sess.sessionNumber ?? `#${sess.id}`} created`);
       queryClient.invalidateQueries({ queryKey: [API_BASE] });
       setOpen(false);
-      setPartFilter(''); setNotes(''); setScheduledFor('');
+      setProjectId(''); setPartFilter(''); setNotes(''); setScheduledFor('');
       onCreated(sess.id);
     },
     onError: (e: any) => toast.error(e?.responseData?.error ?? e?.message ?? 'Create failed'),
@@ -213,11 +227,12 @@ function CreateSessionDialog({ onCreated }: { onCreated: (id: number) => void })
           <Plus className="h-4 w-4 mr-2" /> New Cycle Count
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>New Cycle Count Session</DialogTitle>
           <DialogDescription>
-            Pre-populate the count list from active material lots at the chosen location.
+            Choose a project or manufactured part, count the physical quantity at one location,
+            then route variances for approval and balance-sheet posting.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
@@ -239,19 +254,54 @@ function CreateSessionDialog({ onCreated }: { onCreated: (id: number) => void })
               <Input
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                placeholder="ALL or specific location"
+                placeholder="Specific inventory location"
                 data-testid="input-location"
               />
             </div>
           </div>
-          <div>
-            <Label>Part Filter (optional)</Label>
-            <Input
-              value={partFilter}
-              onChange={(e) => setPartFilter(e.target.value)}
-              placeholder="Specific AG Part#"
-              data-testid="input-part-filter"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Count Scope</Label>
+              <Select value={scopeMode} onValueChange={(value: 'PROJECT' | 'PART') => {
+                setScopeMode(value); setProjectId(''); setPartFilter('');
+              }}>
+                <SelectTrigger data-testid="select-count-scope"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PROJECT">Project manufactured parts</SelectItem>
+                  <SelectItem value="PART">One manufactured part</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>{scopeMode === 'PROJECT' ? 'Project' : 'Manufactured Part'}</Label>
+              {scopeMode === 'PROJECT' ? (
+                <Select value={projectId} onValueChange={setProjectId} disabled={scopeLoading}>
+                  <SelectTrigger data-testid="select-count-project">
+                    <SelectValue placeholder={scopeLoading ? 'Loading…' : 'Select project'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(scopeOptions?.projects ?? []).map(project => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.projectCode} — {project.projectName} ({project.partCount})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select value={partFilter} onValueChange={setPartFilter} disabled={scopeLoading}>
+                  <SelectTrigger data-testid="select-count-manufactured-part">
+                    <SelectValue placeholder={scopeLoading ? 'Loading…' : 'Select manufactured part'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(scopeOptions?.manufacturedParts ?? []).map(part => (
+                      <SelectItem key={part.id} value={part.agPartNumber}>
+                        {part.agPartNumber} — {part.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -298,7 +348,11 @@ function CreateSessionDialog({ onCreated }: { onCreated: (id: number) => void })
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} data-testid="button-confirm-create">
+          <Button
+            onClick={() => createMutation.mutate()}
+            disabled={createMutation.isPending || !location.trim() || (scopeMode === 'PROJECT' ? !projectId : !partFilter)}
+            data-testid="button-confirm-create"
+          >
             {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Create Session
           </Button>

@@ -30,6 +30,7 @@ import {
   listVariancePolicies,
   createVariancePolicy,
   listVarianceHistory,
+  listScopeOptions,
   type Actor,
 } from '../services/cycleCountService';
 
@@ -60,6 +61,10 @@ function sendErr(res: Response, err: unknown) {
 
 router.get('/variance-policies', requirePermission('inventory.cycleCount.view'), async (_req, res) => {
   try { res.json(await listVariancePolicies()); } catch (e) { sendErr(res, e); }
+});
+
+router.get('/scope-options', requirePermission('inventory.cycleCount.view'), async (_req, res) => {
+  try { res.json(await listScopeOptions()); } catch (e) { sendErr(res, e); }
 });
 
 router.post('/variance-policies', requirePermission('inventory.cycleCount.create'), async (req, res) => {
@@ -99,6 +104,7 @@ router.post('/', requirePermission('inventory.cycleCount.create'), async (req, r
     const schema = z.object({
       location: z.string().min(1),
       partFilter: z.string().optional().nullable(),
+      projectId: z.string().uuid().optional().nullable(),
       countType: z.enum(['CYCLE', 'FULL', 'SPOT', 'ABC']).optional(),
       scheduledFor: z.string().datetime().optional().nullable(),
       blindCount: z.boolean().optional(),

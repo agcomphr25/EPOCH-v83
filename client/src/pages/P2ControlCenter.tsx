@@ -33,7 +33,8 @@ import {
   ChevronRight,
   Filter,
   X,
-  Lock
+  Lock,
+  GitBranch
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -51,6 +52,7 @@ import { P2POItemsManager } from '@/components/P2POItemsManager';
 import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import ProgramManufacturingOrchestration from '@/components/p2/ProgramManufacturingOrchestration';
 import P2FrozenProductionDemand from '@/components/p2/P2FrozenProductionDemand';
+import P2GenealogyViewer from '@/components/p2/P2GenealogyViewer';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -112,6 +114,7 @@ interface PartRouting {
 }
 
 export default function P2ControlCenter() {
+  const genealogyEnabled = import.meta.env.VITE_P2_GENEALOGY_VIEWER_ENABLED === 'true';
   const [location, navigate] = useLocation();
   const { toast } = useToast();
   const urlParams = new URLSearchParams(window.location.search);
@@ -844,6 +847,12 @@ export default function P2ControlCenter() {
             <Lock className="h-4 w-4" />
             Frozen Demand
           </TabsTrigger>
+          {genealogyEnabled && (
+            <TabsTrigger value="genealogy" className="flex items-center gap-2" data-testid="tab-genealogy">
+              <GitBranch className="h-4 w-4" />
+              Genealogy
+            </TabsTrigger>
+          )}
           <TabsTrigger value="shipping" className="flex items-center gap-2" data-testid="tab-shipping">
             <Truck className="h-4 w-4" />
             Shipping
@@ -998,6 +1007,12 @@ export default function P2ControlCenter() {
         <TabsContent value="frozen-demand">
           <P2FrozenProductionDemand projectId={programProjectId} />
         </TabsContent>
+
+        {genealogyEnabled && (
+          <TabsContent value="genealogy">
+            <P2GenealogyViewer />
+          </TabsContent>
+        )}
 
         <TabsContent value="shipping" className="space-y-4">
           <div className="flex flex-wrap justify-end gap-2">

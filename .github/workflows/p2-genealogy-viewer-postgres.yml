@@ -1,0 +1,70 @@
+name: P2 Genealogy Viewer PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'server/src/services/p2GenealogyViewerService.ts'
+      - 'server/src/routes/p2ManufacturingWorkOrders.ts'
+      - 'server/src/lib/featureFlags.ts'
+      - 'client/src/components/p2/P2GenealogyViewer.tsx'
+      - 'client/src/pages/P2ControlCenter.tsx'
+      - 'server/__tests__/p2GenealogyViewerReporting.test.ts'
+      - '.github/workflows/p2-genealogy-viewer-postgres.yml'
+  push:
+    branches: [codex/p2-genealogy-viewer-search-reporting]
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase13_cert
+          POSTGRES_PASSWORD: disposable_phase13_password
+          POSTGRES_DB: epoch_phase13_certification
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase13_cert -d epoch_phase13_certification"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://phase13_cert:disposable_phase13_password@127.0.0.1:5432/epoch_phase13_certification
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Prove isolation and disabled gates
+        run: |
+          test "$(node -e "console.log(new URL(process.env.DATABASE_URL).hostname)")" = 127.0.0.1
+          test -z "${P2_GENEALOGY_VIEWER_ENABLED:-}"
+          test -z "${VITE_P2_GENEALOGY_VIEWER_ENABLED:-}"
+      - name: Focused Phase 10-13 contracts
+        run: |
+          npx vitest run --config vitest.config.server.ts server/__tests__/p2ManufacturedOutputGenealogyFoundation.test.ts server/__tests__/p2ManufacturedOutputCustodyFoundation.test.ts server/__tests__/p2ManufacturedComponentIssueGenealogy.test.ts server/__tests__/p2QualityShipmentReleaseFoundation.test.ts server/__tests__/p2GenealogyViewerReporting.test.ts
+      - name: Syntax and hygiene
+        run: |
+          npx esbuild server/src/services/p2GenealogyViewerService.ts server/src/routes/p2ManufacturingWorkOrders.ts client/src/components/p2/P2GenealogyViewer.tsx client/src/pages/P2ControlCenter.tsx --platform=node --format=esm --outdir=/tmp/p2-phase13-ts
+          npx eslint server/src/services/p2GenealogyViewerService.ts server/__tests__/p2GenealogyViewerReporting.test.ts client/src/components/p2/P2GenealogyViewer.tsx --max-warnings 0
+          npx prettier --check server/src/services/p2GenealogyViewerService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/src/lib/featureFlags.ts client/src/components/p2/P2GenealogyViewer.tsx server/__tests__/p2GenealogyViewerReporting.test.ts
+          git diff --check
+      - name: Prove read-only PostgreSQL genealogy relationships
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE p2_manufacturing_work_order_authorities(id uuid PRIMARY KEY);
+          CREATE TABLE p2_manufactured_output_authorities(id uuid PRIMARY KEY,work_order_authority_id uuid REFERENCES p2_manufacturing_work_order_authorities(id),output_identity text,authority_checksum text);
+          CREATE TABLE p2_manufactured_component_genealogy_edges(id uuid PRIMARY KEY,child_output_authority_id uuid REFERENCES p2_manufactured_output_authorities(id),parent_work_order_authority_id uuid REFERENCES p2_manufacturing_work_order_authorities(id),edge_checksum text);
+          CREATE TABLE p2_material_genealogy_edges(id uuid PRIMARY KEY,output_authority_id uuid REFERENCES p2_manufactured_output_authorities(id),edge_checksum text);
+          INSERT INTO p2_manufacturing_work_order_authorities VALUES ('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002');
+          INSERT INTO p2_manufactured_output_authorities VALUES ('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000001','SERIAL-A','output-checksum');
+          INSERT INTO p2_manufactured_component_genealogy_edges VALUES ('00000000-0000-0000-0000-000000000021','00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000002','component-checksum');
+          INSERT INTO p2_material_genealogy_edges VALUES ('00000000-0000-0000-0000-000000000031','00000000-0000-0000-0000-000000000011','material-checksum');
+          CREATE TABLE preservation_marker(id integer PRIMARY KEY,payload text);
+          INSERT INTO preservation_marker VALUES (1,'unchanged');
+          SQL
+          before="$(psql "$DATABASE_URL" -Atc "SELECT count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM preservation_marker")"
+          test "$(psql "$DATABASE_URL" -Atc "SELECT count(*) FROM p2_manufactured_output_authorities o JOIN p2_manufactured_component_genealogy_edges c ON c.child_output_authority_id=o.id JOIN p2_material_genealogy_edges m ON m.output_authority_id=o.id WHERE o.output_identity='SERIAL-A'")" = 1
+          after="$(psql "$DATABASE_URL" -Atc "SELECT count(*)||':'||md5(string_agg(id||payload,',' ORDER BY id)) FROM preservation_marker")"
+          test "$before" = "$after"

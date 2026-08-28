@@ -2705,6 +2705,25 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       ));
       const shippedByPoItem = new Map<number, number>();
       if (p2PoIds.length > 0) {
+        // Shipment documents are immutable evidence and may remain attached to an
+        // older PO revision even after serialized units move to the current revision.
+        // Search the complete PO family so a revision cannot recreate demand that
+        // the original PO already fulfilled.
+        const poFamilyResult = await pool.query(`
+          SELECT DISTINCT family.id
+          FROM p2_purchase_orders requested
+          JOIN p2_purchase_orders family
+            ON COALESCE(family.parent_po_id, family.id)
+             = COALESCE(requested.parent_po_id, requested.id)
+          WHERE requested.id = ANY($1::int[])
+        `, [p2PoIds]);
+        const poFamilyRows = Array.isArray(poFamilyResult)
+          ? poFamilyResult
+          : (poFamilyResult as any).rows || [];
+        const shipmentEvidencePoIds = Array.from(new Set(
+          poFamilyRows.map((row: any) => Number(row.id)).filter(Number.isFinite)
+        ));
+
         const shipmentMembershipResult = await pool.query(`
           SELECT
             si.po_item_id AS "poItemId",
@@ -2714,7 +2733,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             ON LOWER(si.id::text) = LOWER(membership."serializedItemId")
           WHERE si.po_item_id IS NOT NULL
           GROUP BY si.po_item_id
-        `, [p2PoIds]);
+        `, [shipmentEvidencePoIds]);
         const shipmentMembershipRows = Array.isArray(shipmentMembershipResult)
           ? shipmentMembershipResult
           : (shipmentMembershipResult as any).rows || [];

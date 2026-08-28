@@ -40,6 +40,7 @@ import { getQuoteContractReviewGate } from '../services/quoteContractService';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 import {
   buildProjectBomAssemblyTree,
+  collectManufacturedBomParts,
   collectPurchasedBomParts,
   type ProjectBomAssemblyRow,
 } from '../services/projectBomAssembly';
@@ -3938,7 +3939,7 @@ router.get('/:id/p2-hub', async (req, res) => {
                     NULL::text[] AS parent_key,
                     root.part_number AS root_part_number,
                     root.part_number AS part_number,
-                    inventory.name AS part_name,
+                    inventory.name AS part_name, inventory.id AS inventory_item_id,
                     COALESCE(inventory.item_type::text, inventory.type) AS item_type,
                     1::numeric AS qty_per, NULL::int AS operation_seq, 0 AS depth,
                     ARRAY[root.part_number]::text[] AS part_path,
@@ -3950,7 +3951,7 @@ router.get('/:id/p2-hub', async (req, res) => {
              UNION ALL
              SELECT tree.node_key || ('line:' || line.id::text), tree.node_key,
                     tree.root_part_number, line.child_part_ag_number,
-                    inventory.name,
+                    inventory.name, inventory.id,
                     COALESCE(inventory.item_type::text, inventory.type),
                     line.qty_per, line.operation_seq, tree.depth + 1,
                     tree.part_path || line.child_part_ag_number,
@@ -3963,7 +3964,7 @@ router.get('/:id/p2-hub', async (req, res) => {
              LEFT JOIN selected_boms child_bom ON child_bom.parent_part_ag_number = line.child_part_ag_number
              WHERE NOT line.child_part_ag_number = ANY(tree.part_path)
            )
-           SELECT node_key, parent_key, root_part_number, part_number, part_name, item_type,
+           SELECT node_key, parent_key, root_part_number, part_number, part_name, inventory_item_id, item_type,
                   qty_per, operation_seq, depth, bom_id, bom_code, bom_description,
                   bom_is_active, latest_revision_id, latest_rev_code,
                   latest_rev_created_at, line_count
@@ -3994,6 +3995,42 @@ router.get('/:id/p2-hub', async (req, res) => {
       assemblyTree,
       orderedQuantityByRootPart
     );
+    const manufacturedBomParts = collectManufacturedBomParts(
+      assemblyTree,
+      orderedQuantityByRootPart
+    );
+    const bomInventoryPartNumbers = Array.from(new Set([
+      ...purchasedBomParts.map((part) => part.part_number),
+      ...manufacturedBomParts.map((part) => part.part_number),
+    ]));
+    const inventoryBalanceRows = bomInventoryPartNumbers.length > 0
+      ? await optionalHubQuery<LegacyProjectValue>(
+          'project BOM inventory balances',
+          `SELECT ag_part_number, location_id, quantity_on_hand, quantity_allocated,
+                  quantity_available, last_counted_at
+           FROM inventory_balances
+           WHERE ag_part_number = ANY($1::text[])
+           ORDER BY ag_part_number, location_id`,
+          [bomInventoryPartNumbers]
+        )
+      : [];
+    const inventoryBalancesByPart = new Map<string, LegacyProjectValue[]>();
+    inventoryBalanceRows.forEach((balance) => {
+      const key = String(balance.ag_part_number ?? '').trim().toLowerCase();
+      if (!key) return;
+      const rows = inventoryBalancesByPart.get(key) ?? [];
+      rows.push(balance);
+      inventoryBalancesByPart.set(key, rows);
+    });
+    const addInventoryBalances = <T extends { part_number: string }>(part: T) => {
+      const inventoryBalances = inventoryBalancesByPart.get(part.part_number.trim().toLowerCase()) ?? [];
+      return {
+        ...part,
+        quantity_on_hand: inventoryBalances.reduce((sum, row) => sum + Number(row.quantity_on_hand ?? 0), 0),
+        quantity_available: inventoryBalances.reduce((sum, row) => sum + Number(row.quantity_available ?? 0), 0),
+        inventory_balances: inventoryBalances,
+      };
+    };
     const recursiveBomRecords = Array.from(
       new Map(
         assemblyRows
@@ -4185,6 +4222,27 @@ router.get('/:id/p2-hub', async (req, res) => {
       rows.push(workOrder);
       workOrdersByPart.set(partKey, rows);
     });
+    const manufacturedItems = manufacturedBomParts.map((part) => {
+      const relatedWorkOrders = workOrdersByPart.get(normalizeProductionKey(part.part_number)) ?? [];
+      const departments = Array.from(new Set(relatedWorkOrders
+        .map((workOrder) => workOrder.assignedDepartment ?? workOrder.assigned_department ?? workOrder.departmentName ?? workOrder.department_name ?? workOrder.department)
+        .filter(Boolean)));
+      const statuses = relatedWorkOrders.map((workOrder) => String(workOrder.status ?? '').trim()).filter(Boolean);
+      const progress = statuses.some((status) => ['COMPLETED', 'COMPLETE', 'CLOSED'].includes(status.toUpperCase()))
+        ? 'Completed'
+        : statuses.some((status) => ['IN_PROGRESS', 'ACTIVE', 'STARTED'].includes(status.toUpperCase()))
+          ? 'In Production'
+          : statuses.some((status) => ['RELEASED', 'SCHEDULED'].includes(status.toUpperCase()))
+            ? 'Scheduled'
+            : relatedWorkOrders.length > 0 ? 'Pending' : 'Work Order Required';
+      return addInventoryBalances({
+        ...part,
+        department: departments.join(' / ') || 'Unassigned',
+        progress,
+        work_orders: relatedWorkOrders,
+      });
+    });
+    const purchasedItems = purchasedBomParts.map(addInventoryBalances);
     const poLinePlacements = activePoItems.map((item: LegacyProjectValue) => {
       const lineId = Number(item.id);
       const lineSerializedItems = serializedByLineId.get(lineId) ?? [];
@@ -4807,6 +4865,7 @@ router.get('/:id/p2-hub', async (req, res) => {
             ...productionTotals,
           },
           poLinePlacements,
+          manufacturedItems,
           manufacturingWorkOrderAction,
           productionOrders,
           serializedItems,
@@ -4824,7 +4883,7 @@ router.get('/:id/p2-hub', async (req, res) => {
             materialBudget,
             receivedMaterialCost,
           },
-          parts: purchasedBomParts,
+          parts: purchasedItems,
           partsRequests,
           receivedMaterials,
         },

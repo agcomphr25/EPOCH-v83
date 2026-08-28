@@ -4,6 +4,7 @@ export type ProjectBomAssemblyRow = {
   root_part_number: string;
   part_number: string;
   part_name?: string | null;
+  inventory_item_id?: number | null;
   item_type?: string | null;
   qty_per?: string | number | null;
   operation_seq?: number | null;
@@ -25,6 +26,7 @@ export type ProjectBomAssemblyNode = {
   quantityPerParent: number;
   operationSequence: number | null;
   depth: number;
+  isInventoryItem: boolean;
   isManufactured: boolean;
   hasBom: boolean;
   bomId: string | null;
@@ -35,6 +37,14 @@ export type ProjectBomAssemblyNode = {
 };
 
 export type ProjectPurchasedBomPart = {
+  id: string;
+  part_number: string;
+  part_name: string | null;
+  quantity: number;
+  bom_occurrence_count: number;
+};
+
+export type ProjectManufacturedBomPart = {
   id: string;
   part_number: string;
   part_name: string | null;
@@ -67,7 +77,8 @@ export function buildProjectBomAssemblyTree(rows: ProjectBomAssemblyRow[]): Proj
         quantityPerParent: Number(row.qty_per ?? 1),
         operationSequence: row.operation_seq ?? null,
         depth: Number(row.depth),
-        isManufactured: normalizedType === 'MANUFACTURED' || Boolean(row.bom_id),
+        isInventoryItem: Boolean(row.inventory_item_id),
+        isManufactured: Boolean(row.inventory_item_id) && normalizedType === 'MANUFACTURED',
         hasBom: Boolean(row.bom_id),
         bomId: row.bom_id ?? null,
         bomCode: row.bom_code ?? null,
@@ -97,7 +108,7 @@ export function collectPurchasedBomParts(
 
   const visit = (node: ProjectBomAssemblyNode, extendedParentQuantity: number) => {
     const requiredQuantity = extendedParentQuantity * node.quantityPerParent;
-    if (!node.isManufactured) {
+    if (node.isInventoryItem && !node.isManufactured) {
       const normalizedPartNumber = node.partNumber.trim().toLowerCase();
       const existing = purchasedByPart.get(normalizedPartNumber);
       if (existing) {
@@ -124,6 +135,43 @@ export function collectPurchasedBomParts(
   });
 
   return Array.from(purchasedByPart.values()).sort((left, right) =>
+    left.part_number.localeCompare(right.part_number)
+  );
+}
+
+export function collectManufacturedBomParts(
+  roots: ProjectBomAssemblyNode[],
+  orderedQuantityByRootPart: ReadonlyMap<string, number>
+): ProjectManufacturedBomPart[] {
+  const manufacturedByPart = new Map<string, ProjectManufacturedBomPart>();
+
+  const visit = (node: ProjectBomAssemblyNode, extendedParentQuantity: number) => {
+    const requiredQuantity = extendedParentQuantity * node.quantityPerParent;
+    if (node.isManufactured) {
+      const normalizedPartNumber = node.partNumber.trim().toLowerCase();
+      const existing = manufacturedByPart.get(normalizedPartNumber);
+      if (existing) {
+        existing.quantity += requiredQuantity;
+        existing.bom_occurrence_count += 1;
+      } else {
+        manufacturedByPart.set(normalizedPartNumber, {
+          id: `bom-manufactured:${normalizedPartNumber}`,
+          part_number: node.partNumber,
+          part_name: node.partName,
+          quantity: requiredQuantity,
+          bom_occurrence_count: 1,
+        });
+      }
+    }
+    node.children.forEach((child) => visit(child, requiredQuantity));
+  };
+
+  roots.forEach((root) => {
+    const orderedQuantity = orderedQuantityByRootPart.get(root.partNumber.trim().toLowerCase()) ?? 0;
+    visit(root, orderedQuantity);
+  });
+
+  return Array.from(manufacturedByPart.values()).sort((left, right) =>
     left.part_number.localeCompare(right.part_number)
   );
 }

@@ -110,6 +110,7 @@ function ProductionHierarchyNode({ node, isRoot = false }: { node: any; isRoot?:
   const demand = node.productionDemand ?? {};
   const departments = Array.isArray(demand.departments) ? demand.departments : [];
   const isPurchased = node.sourceType === 'PURCHASED_MATERIAL';
+  if (isPurchased) return null;
   const typeLabel = node.sourceType === 'ASSEMBLY_WORK_ORDER'
     ? 'Assembly work order'
     : isPurchased
@@ -149,9 +150,11 @@ function ProductionHierarchyNode({ node, isRoot = false }: { node: any; isRoot?:
           </p>
         )}
       </div>
-      {Array.isArray(node.children) && node.children.length > 0 && (
+      {Array.isArray(node.children) && node.children.some((child: any) => child.sourceType !== 'PURCHASED_MATERIAL') && (
         <div className="mt-2 space-y-2">
-          {node.children.map((child: any) => <ProductionHierarchyNode key={child.key} node={child} />)}
+          {node.children
+            .filter((child: any) => child.sourceType !== 'PURCHASED_MATERIAL')
+            .map((child: any) => <ProductionHierarchyNode key={child.key} node={child} />)}
         </div>
       )}
     </div>
@@ -983,6 +986,12 @@ export default function ProjectDetailPage() {
   const productionSummary = hubProduction.summary ?? {};
   const projectSerializedItems = Array.isArray(hubProduction.serializedItems) ? hubProduction.serializedItems : traceabilitySerials;
   const productionLinePlacements = Array.isArray(hubProduction.poLinePlacements) ? hubProduction.poLinePlacements : [];
+  const manufacturedProductionItems = Array.isArray(hubProduction.manufacturedItems) ? hubProduction.manufacturedItems : [];
+  const manufacturedItemsByDepartment = manufacturedProductionItems.reduce((groups: Record<string, any[]>, item: any) => {
+    const department = item.department || 'Unassigned';
+    (groups[department] ??= []).push(item);
+    return groups;
+  }, {});
   const productionAssemblyTree = hubProduction.assemblyTree ?? {};
   const assemblyPoItems = Array.isArray(productionAssemblyTree.poItems) ? productionAssemblyTree.poItems : [];
   const productionPlacementCounts = productionLinePlacements.reduce((counts: Record<string, number>, line: any) => {
@@ -3914,6 +3923,56 @@ export default function ProjectDetailPage() {
                   ))}
                 </div>
               )}
+              <div className="space-y-3" data-testid="manufactured-production-items">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-semibold">Manufactured BOM Items by Department</h3>
+                    <p className="text-sm text-muted-foreground">Only manufactured inventory items are shown here, grouped by the department responsible for their work orders.</p>
+                  </div>
+                  <Badge variant="secondary">{formatQuantityLabel(manufacturedProductionItems.length)} manufactured items</Badge>
+                </div>
+                {manufacturedProductionItems.length === 0 ? (
+                  <p className="rounded-md border p-3 text-sm text-muted-foreground">No manufactured BOM inventory items are available for this project.</p>
+                ) : (
+                  <Accordion type="multiple" className="space-y-2">
+                    {Object.entries(manufacturedItemsByDepartment).map(([department, items]) => (
+                      <AccordionItem key={department} value={department} className="rounded-md border px-3">
+                        <AccordionTrigger className="hover:no-underline">
+                          <span className="flex flex-wrap items-center gap-2 text-left">
+                            <span>{department}</span>
+                            <Badge variant="outline">{(items as any[]).length} items</Badge>
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent className="space-y-2 pb-3">
+                          {(items as any[]).map((item: any) => (
+                            <div key={item.id} className="rounded-md border bg-background p-3">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-mono font-semibold">{item.part_number}</p>
+                                  <p className="text-sm text-muted-foreground">{item.part_name || 'No description'}</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <Badge variant="outline">Required {formatQuantityLabel(item.quantity)}</Badge>
+                                  <Badge variant={item.progress === 'Completed' ? 'default' : 'secondary'}>{item.progress}</Badge>
+                                  <Badge variant="outline">On hand {formatQuantityLabel(item.quantity_on_hand)}</Badge>
+                                </div>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {(item.work_orders ?? []).map((workOrder: any) => (
+                                  <Badge key={workOrder.id ?? workOrder.workOrderNumber} variant="outline">
+                                    {workOrder.workOrderNumber ?? workOrder.work_order_number} · {workOrder.status ?? 'Unknown'}
+                                  </Badge>
+                                ))}
+                                {(item.work_orders ?? []).length === 0 && <span className="text-xs text-amber-700">Work order has not been provisioned.</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                )}
+              </div>
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -4247,15 +4306,50 @@ export default function ProjectDetailPage() {
                     <p className="text-sm text-muted-foreground">All purchased components required by the active assembly BOM, extended by the ordered assembly quantity.</p>
                   </div>
                   <div className="space-y-2">
-                  {hubMaterial.parts.map((part: any) => (
-                    <div key={part.id} className="flex items-center justify-between rounded-md border p-3">
-                      <div>
-                        <p className="font-medium">{part.part_number}</p>
-                        <p className="text-sm text-muted-foreground">{part.part_name}</p>
-                      </div>
-                      <Badge variant="outline">Qty {part.quantity}</Badge>
-                    </div>
-                  ))}
+                  <Accordion type="multiple" className="space-y-2">
+                    {hubMaterial.parts.map((part: any) => (
+                      <AccordionItem key={part.id} value={String(part.id)} className="rounded-md border px-3">
+                        <AccordionTrigger className="hover:no-underline">
+                          <span className="flex w-full flex-wrap items-center justify-between gap-3 pr-3 text-left">
+                            <span>
+                              <span className="block font-mono font-medium">{part.part_number}</span>
+                              <span className="block text-sm font-normal text-muted-foreground">{part.part_name}</span>
+                            </span>
+                            <span className="flex flex-wrap gap-2">
+                              <Badge variant="outline">Required {formatQuantityLabel(part.quantity)}</Badge>
+                              <Badge variant={Number(part.quantity_available ?? 0) > 0 ? 'default' : 'secondary'}>
+                                Available {formatQuantityLabel(part.quantity_available)}
+                              </Badge>
+                            </span>
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent className="space-y-3 pb-3">
+                          {(part.inventory_balances ?? []).length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No inventory balance exists for this purchased item.</p>
+                          ) : (
+                            <div className="grid gap-2 md:grid-cols-2">
+                              {part.inventory_balances.map((balance: any) => (
+                                <div key={balance.id ?? balance.location_id} className="rounded-md border bg-muted/20 p-3 text-sm">
+                                  <p className="font-medium">{balance.location_id}</p>
+                                  <p className="text-muted-foreground">
+                                    On hand {formatQuantityLabel(balance.quantity_on_hand)} · Allocated {formatQuantityLabel(balance.quantity_allocated)} · Available {formatQuantityLabel(balance.quantity_available)}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <Button
+                            size="sm"
+                            onClick={() => setLocation(`/inventory/parts-request?projectId=${encodeURIComponent(project.id)}&create=1&partNumber=${encodeURIComponent(part.part_number)}`)}
+                            data-testid={`create-parts-request-${part.part_number}`}
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Create Part Request
+                          </Button>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
                   </div>
                 </div>
               )}

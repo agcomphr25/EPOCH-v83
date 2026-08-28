@@ -155,6 +155,10 @@ export default function PartsRequestsCard({ scope = 'mine' }: PartsRequestsCardP
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('create') === '1';
   }, []);
+  const initialPartNumber = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('partNumber') || '';
+  }, []);
 
   const { data: sessionUser } = useQuery<SessionUser | null>({
     queryKey: ['/api/auth/session'],
@@ -383,6 +387,14 @@ export default function PartsRequestsCard({ scope = 'mine' }: PartsRequestsCardP
       setIsCreateOpen(true);
     }
   }, [initialProjectId, openCreateFromQuery]);
+
+  useEffect(() => {
+    if (!openCreateFromQuery || !initialPartNumber || inventoryItems.length === 0) return;
+    const item = inventoryItems.find(
+      (candidate) => candidate.agPartNumber.trim().toLowerCase() === initialPartNumber.trim().toLowerCase()
+    );
+    if (item) handleInventoryItemSelect(item);
+  }, [initialPartNumber, inventoryItems, openCreateFromQuery]);
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));

@@ -1,0 +1,131 @@
+name: P2 Controlled Activation Pilot Readiness PostgreSQL Certification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/p2-controlled-activation-pilot-readiness
+  pull_request:
+    paths:
+      - 'server/src/services/p2ControlledActivationService.ts'
+      - 'server/src/lib/featureFlags.ts'
+      - 'server/src/routes/p2ManufacturingWorkOrders.ts'
+      - 'server/__tests__/p2ControlledActivationPilotReadiness.test.ts'
+      - 'client/src/components/p2/P2ActivationReadiness.tsx'
+      - 'client/src/pages/P2ControlCenter.tsx'
+      - 'docs/p2-phase14-controlled-pilot-readiness.md'
+      - '.github/workflows/p2-controlled-activation-pilot-readiness-postgres.yml'
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: phase14
+          POSTGRES_PASSWORD: phase14_disposable_password
+          POSTGRES_DB: epoch_p2_phase14
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U phase14 -d epoch_p2_phase14"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://phase14:phase14_disposable_password@127.0.0.1:5432/epoch_p2_phase14
+      NODE_ENV: test
+      P2_CONTROLLED_PILOT_ENVIRONMENT: SYNTHETIC_DISPOSABLE
+      P2_V2_PILOT_ENVIRONMENT: isolated_test
+      P2_V2_PRODUCTION_LAUNCH_ENABLED: 'true'
+      P2_V2_SYNTHETIC_DATA_MARKER: SYNTHETIC_TEST_DATA_NOT_FOR_PRODUCTION
+      P2_V2_OUTBOUND_EVIDENCE_FILE: /tmp/p2-phase14-outbound-attempts.log
+      EMAIL_ENABLED: 'false'
+      SMS_ENABLED: 'false'
+      WEBHOOKS_ENABLED: 'false'
+      SHIPPING_CARRIER_ENABLED: 'false'
+      SHIPPING_LABELS_ENABLED: 'false'
+      PURCHASING_OUTBOUND_ENABLED: 'false'
+      EXTERNAL_UPLOADS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install committed dependencies
+        run: npm ci --ignore-scripts
+      - name: Prove disposable isolation and disabled production configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const url = new URL(process.env.DATABASE_URL);
+          if (url.hostname !== '127.0.0.1' || url.pathname !== '/epoch_p2_phase14') throw new Error('Non-disposable database rejected');
+          for (const key of ['EMAIL_ENABLED','SMS_ENABLED','WEBHOOKS_ENABLED','SHIPPING_CARRIER_ENABLED','SHIPPING_LABELS_ENABLED','PURCHASING_OUTBOUND_ENABLED','EXTERNAL_UPLOADS_ENABLED']) {
+            if (process.env[key] !== 'false') throw new Error(`${key} must remain disabled`);
+          }
+          console.log('production_data_access=false');
+          console.log('outbound_integrations=false');
+          NODE
+          : > "$P2_V2_OUTBOUND_EVIDENCE_FILE"
+      - name: Create schema and replay safe boot
+        env:
+          SAFE_BOOT_MIGRATIONS_ONLY: 'true'
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE SEQUENCE rts_item_number_seq"
+          npx drizzle-kit push --force --config drizzle.app.config.ts
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/0069_timekeeping_schema.sql
+          npm run maintenance:safe-migrations
+          npm run maintenance:safe-migrations
+      - name: Run Phase 14 dependency and UI contracts
+        run: >-
+          npx vitest run --config vitest.config.server.ts
+          server/__tests__/p2ControlledActivationPilotReadiness.test.ts
+          server/__tests__/p2ProjectControlledConfigurationFoundation.test.ts
+          server/__tests__/p2WadTravelerAuthorityFoundation.test.ts
+          server/__tests__/p2FrozenProductionDemandFoundation.test.ts
+          server/__tests__/p2ManufacturingWorkOrderQueueFoundation.test.ts
+          server/__tests__/p2TravelerProvisioningCoverageLedger.test.ts
+          server/__tests__/p2ReceivingBarcodeIdentities.test.ts
+          server/__tests__/p2ControlledMaterialScanConsumption.test.ts
+          server/__tests__/p2ManufacturedOutputGenealogyFoundation.test.ts
+          server/__tests__/p2ManufacturedOutputCustodyFoundation.test.ts
+          server/__tests__/p2ManufacturedComponentIssueGenealogy.test.ts
+          server/__tests__/p2QualityShipmentReleaseFoundation.test.ts
+          server/__tests__/p2GenealogyViewerReporting.test.ts
+          --reporter=verbose
+      - name: Run synthetic end-to-end pilot and authority failures
+        env:
+          NODE_OPTIONS: --require=./scripts/p2-v2-synthetic-outbound-guard.cjs
+        run: >-
+          npx vitest run --config vitest.config.server.ts --no-file-parallelism
+          server/__tests__/p2V2PostgresCertification.test.ts
+          server/__tests__/p2V2PilotPostgresCertification.test.ts
+          server/__tests__/projectProductionExecution.test.ts
+          server/__tests__/projectQualityRelease.test.ts
+          server/__tests__/projectShippingCloseout.test.ts
+          --reporter=verbose
+      - name: Run client interaction regressions
+        run: >-
+          npx vitest run --config vitest.config.client.ts
+          client/src/__tests__/P2V2ProjectWorkflow.component.test.tsx
+          client/src/__tests__/P2V2PilotControlCenter.component.test.tsx
+          client/src/__tests__/p2ManufacturingWorkOrderQueues.client.test.tsx
+          client/src/__tests__/p2ControlledMaterialConsumption.client.test.tsx
+          client/src/__tests__/p2ManufacturedOutputGenealogy.client.test.tsx
+          --reporter=verbose
+      - name: TypeScript, lint, formatting, build, and diff hygiene
+        run: |
+          npx tsc --noEmit --pretty false
+          npx eslint server/src/services/p2ControlledActivationService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/__tests__/p2ControlledActivationPilotReadiness.test.ts client/src/components/p2/P2ActivationReadiness.tsx --max-warnings 0
+          npx prettier --check server/src/services/p2ControlledActivationService.ts server/__tests__/p2ControlledActivationPilotReadiness.test.ts client/src/components/p2/P2ActivationReadiness.tsx docs/p2-phase14-controlled-pilot-readiness.md .github/workflows/p2-controlled-activation-pilot-readiness-postgres.yml
+          npm run build
+          git diff --check
+      - name: Prove zero outbound attempts
+        shell: bash
+        run: |
+          test ! -s "$P2_V2_OUTBOUND_EVIDENCE_FILE"
+          echo 'outbound_attempts=0'

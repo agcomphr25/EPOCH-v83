@@ -34,7 +34,8 @@ import {
   Filter,
   X,
   Lock,
-  GitBranch
+  GitBranch,
+  ShieldCheck
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -53,6 +54,7 @@ import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import ProgramManufacturingOrchestration from '@/components/p2/ProgramManufacturingOrchestration';
 import P2FrozenProductionDemand from '@/components/p2/P2FrozenProductionDemand';
 import P2GenealogyViewer from '@/components/p2/P2GenealogyViewer';
+import P2ActivationReadiness from '@/components/p2/P2ActivationReadiness';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -115,6 +117,8 @@ interface PartRouting {
 
 export default function P2ControlCenter() {
   const genealogyEnabled = import.meta.env.VITE_P2_GENEALOGY_VIEWER_ENABLED === 'true';
+  const activationReadinessEnabled =
+    import.meta.env.VITE_P2_CONTROLLED_ACTIVATION_READINESS_ENABLED === 'true';
   const [location, navigate] = useLocation();
   const { toast } = useToast();
   const urlParams = new URLSearchParams(window.location.search);
@@ -853,6 +857,12 @@ export default function P2ControlCenter() {
               Genealogy
             </TabsTrigger>
           )}
+          {activationReadinessEnabled && (
+            <TabsTrigger value="pilot-readiness" className="flex items-center gap-2" data-testid="tab-pilot-readiness">
+              <ShieldCheck className="h-4 w-4" />
+              Pilot Readiness
+            </TabsTrigger>
+          )}
           <TabsTrigger value="shipping" className="flex items-center gap-2" data-testid="tab-shipping">
             <Truck className="h-4 w-4" />
             Shipping
@@ -1011,6 +1021,12 @@ export default function P2ControlCenter() {
         {genealogyEnabled && (
           <TabsContent value="genealogy">
             <P2GenealogyViewer />
+          </TabsContent>
+        )}
+
+        {activationReadinessEnabled && (
+          <TabsContent value="pilot-readiness">
+            <P2ActivationReadiness />
           </TabsContent>
         )}
 

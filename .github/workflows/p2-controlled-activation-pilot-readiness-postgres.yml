@@ -51,12 +51,21 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Check out exact main TypeScript baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || 'main' }}
+          path: phase14-main-baseline
+      - name: Isolate exact main baseline
+        run: mv phase14-main-baseline /tmp/phase14-main-baseline
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
       - name: Install committed dependencies
         run: npm ci --ignore-scripts
+      - name: Share dependencies with exact main baseline
+        run: ln -s "$GITHUB_WORKSPACE/node_modules" /tmp/phase14-main-baseline/node_modules
       - name: Prove disposable isolation and disabled production configuration
         shell: bash
         run: |
@@ -117,9 +126,30 @@ jobs:
           client/src/__tests__/p2ControlledMaterialConsumption.client.test.tsx
           client/src/__tests__/p2ManufacturedOutputGenealogy.client.test.tsx
           --reporter=verbose
-      - name: TypeScript, lint, formatting, build, and diff hygiene
+      - name: TypeScript diagnostic comparison
+        shell: bash
         run: |
-          NODE_OPTIONS=--max-old-space-size=6144 npx tsc --noEmit --pretty false
+          set +e
+          NODE_OPTIONS=--max-old-space-size=6144 npx tsc --noEmit --pretty false --tsBuildInfoFile /tmp/phase14-head.tsbuildinfo > /tmp/phase14-head.log 2>&1
+          head_exit=$?
+          if [ "$head_exit" -eq 0 ]; then exit 0; fi
+          if [ "$head_exit" -ne 1 ] && [ "$head_exit" -ne 2 ]; then cat /tmp/phase14-head.log; exit "$head_exit"; fi
+          pushd /tmp/phase14-main-baseline
+          NODE_OPTIONS=--max-old-space-size=6144 "$GITHUB_WORKSPACE/node_modules/.bin/tsc" --noEmit --pretty false --tsBuildInfoFile /tmp/phase14-base.tsbuildinfo > /tmp/phase14-base.log 2>&1
+          base_exit=$?
+          popd
+          if [ "$base_exit" -ne 1 ] && [ "$base_exit" -ne 2 ]; then cat /tmp/phase14-base.log; exit "$base_exit"; fi
+          sed -E -e "s#$GITHUB_WORKSPACE/##g" -e 's#/tmp/phase14-main-baseline/##g' -e 's/\([0-9]+,[0-9]+\):/:/' /tmp/phase14-head.log | sort > /tmp/phase14-head.normalized
+          sed -E -e "s#$GITHUB_WORKSPACE/##g" -e 's#/tmp/phase14-main-baseline/##g' -e 's/\([0-9]+,[0-9]+\):/:/' /tmp/phase14-base.log | sort > /tmp/phase14-base.normalized
+          comm -13 /tmp/phase14-base.normalized /tmp/phase14-head.normalized > /tmp/phase14-new-diagnostics
+          if [ -s /tmp/phase14-new-diagnostics ]; then
+            echo 'Phase 14 introduces TypeScript diagnostics beyond exact main.'
+            cat /tmp/phase14-new-diagnostics
+            exit 1
+          fi
+          echo 'Phase 14 introduces no TypeScript diagnostic beyond exact main.'
+      - name: Lint, formatting, build, and diff hygiene
+        run: |
           npx eslint server/src/services/p2ControlledActivationService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/__tests__/p2ControlledActivationPilotReadiness.test.ts client/src/components/p2/P2ActivationReadiness.tsx --max-warnings 0
           npx prettier --check server/src/services/p2ControlledActivationService.ts server/__tests__/p2ControlledActivationPilotReadiness.test.ts client/src/components/p2/P2ActivationReadiness.tsx docs/p2-phase14-controlled-pilot-readiness.md .github/workflows/p2-controlled-activation-pilot-readiness-postgres.yml
           npm run build

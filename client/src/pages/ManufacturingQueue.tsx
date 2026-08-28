@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   Command,
@@ -445,11 +446,17 @@ function AddQueueItemDialog({
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { toast } = useToast();
   const [partPickerOpen, setPartPickerOpen] = useState(false);
   const [selectedPartId, setSelectedPartId] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [priority, setPriority] = useState(50);
   const [dueDate, setDueDate] = useState('');
+  const [targetStockLocation, setTargetStockLocation] = useState('');
+  const [notes, setNotes] = useState('');
+  const [draftIdempotencyKey] = useState(() => crypto.randomUUID());
+  const stockBuildWritesEnabled =
+    import.meta.env.VITE_STOCK_BUILD_REQUEST_WRITES_ENABLED === 'true';
   const { data, isLoading, isError } = useQuery<{ parts: StockBuildPart[] }>({
     queryKey: ['/api/stock-build-readiness/parts'],
     queryFn: () => apiRequest('/api/stock-build-readiness/parts'),
@@ -457,6 +464,35 @@ function AddQueueItemDialog({
   });
   const parts = data?.parts ?? [];
   const selectedPart = parts.find((part) => part.id === selectedPartId);
+  const createDraft = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/stock-build-readiness/drafts', {
+        method: 'POST',
+        body: JSON.stringify({
+          inventoryItemId: selectedPartId,
+          requestedQuantity: quantity,
+          priority,
+          dueDate: dueDate || undefined,
+          targetStockLocation: targetStockLocation || undefined,
+          notes: notes || undefined,
+          idempotencyKey: draftIdempotencyKey,
+        }),
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Stock-build draft saved',
+        description:
+          'The controlled request was saved. It has not released work or changed inventory.',
+      });
+      onOpenChange(false);
+    },
+    onError: (error: Error) =>
+      toast({
+        title: 'Unable to save stock-build draft',
+        description: error.message,
+        variant: 'destructive',
+      }),
+  });
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -588,6 +624,27 @@ function AddQueueItemDialog({
               />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="targetStockLocation">Target stock location</Label>
+              <Input
+                id="targetStockLocation"
+                value={targetStockLocation}
+                onChange={(event) => setTargetStockLocation(event.target.value)}
+                placeholder="Optional inventory location"
+              />
+            </div>
+            <div>
+              <Label htmlFor="stockBuildNotes">Notes</Label>
+              <Textarea
+                id="stockBuildNotes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Optional request notes"
+                rows={2}
+              />
+            </div>
+          </div>
           {selectedPart && (
             <Card
               className={
@@ -636,10 +693,17 @@ function AddQueueItemDialog({
             </Button>
             <Button
               type="button"
-              disabled
-              data-testid="button-preview-stock-work-order"
+              disabled={
+                !stockBuildWritesEnabled ||
+                !selectedPart?.readyForStockBuildPreview ||
+                createDraft.isPending
+              }
+              onClick={() => createDraft.mutate()}
+              data-testid="button-save-stock-work-draft"
             >
-              Release Stock Work Order (coming next)
+              {createDraft.isPending
+                ? 'Saving Draft…'
+                : 'Save Controlled Draft'}
             </Button>
           </DialogFooter>
         </div>

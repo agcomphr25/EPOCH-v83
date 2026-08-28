@@ -231,6 +231,15 @@ export function isP2GenealogyViewerEnabled(): boolean {
   return envBool('P2_GENEALOGY_VIEWER_ENABLED', false);
 }
 
+/** Universal P1/P2 stock-build request authority; release remains a separate future gate. */
+export function areStockBuildRequestReadsEnabled(): boolean {
+  return envBool('STOCK_BUILD_REQUEST_READS_ENABLED', false);
+}
+
+export function areStockBuildRequestWritesEnabled(): boolean {
+  return envBool('STOCK_BUILD_REQUEST_WRITES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

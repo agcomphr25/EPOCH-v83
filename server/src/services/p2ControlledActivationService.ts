@@ -304,7 +304,7 @@ export const P2_ACTIVATION_FLAGS: readonly P2ActivationFlag[] = [
 const exactTrue = (value: string | undefined) => value === 'true';
 
 export function evaluateP2ActivationFlags(
-  env: NodeJS.ProcessEnv = process.env
+  env: Record<string, string | undefined> = process.env
 ) {
   const states = P2_ACTIVATION_FLAGS.map((entry) => {
     const serverEnabled = exactTrue(env[entry.key]);

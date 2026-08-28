@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -42,7 +43,7 @@ describe('Phase 14 controlled activation readiness', () => {
   });
 
   it('accepts an internally consistent synthetic configuration', () => {
-    const env: NodeJS.ProcessEnv = {
+    const env: Record<string, string | undefined> = {
       P2_CONTROLLED_PILOT_ENVIRONMENT: 'SYNTHETIC_DISPOSABLE',
     };
     for (const entry of P2_ACTIVATION_FLAGS) {

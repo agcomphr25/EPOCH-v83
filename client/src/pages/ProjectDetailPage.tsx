@@ -4094,8 +4094,21 @@ export default function ProjectDetailPage() {
                                   Boolean(line.manufacturingHierarchy)) && (
                                 <Button
                                   size="sm"
-                                  disabled={createManufacturingWorkOrders.isPending}
+                                  disabled={
+                                    createManufacturingWorkOrders.isPending ||
+                                    !hubProduction.manufacturingWorkOrderAction?.launchId ||
+                                    !hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest ||
+                                    !hubProduction.manufacturingWorkOrderAction?.enabled
+                                  }
                                   onClick={() => createManufacturingWorkOrders.mutate()}
+                                  title={
+                                    !hubProduction.manufacturingWorkOrderAction?.launchId ||
+                                    !hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest
+                                      ? 'Complete Production Launch before creating manufacturing work orders.'
+                                      : !hubProduction.manufacturingWorkOrderAction?.enabled
+                                        ? 'Manufacturing work-order creation is not enabled for this deployment yet.'
+                                        : undefined
+                                  }
                                   data-testid="create-manufacturing-work-orders"
                                 >
                                   {createManufacturingWorkOrders.isPending ? 'Creating...' : 'Create Manufacturing Work Orders'}
@@ -4104,7 +4117,16 @@ export default function ProjectDetailPage() {
                             </div>
                           </div>
                           {line.manufacturingHierarchy ? (
-                            <ProductionHierarchyNode node={line.manufacturingHierarchy} isRoot />
+                            <>
+                              {!hubProduction.manufacturingWorkOrderAction?.completed &&
+                                (!hubProduction.manufacturingWorkOrderAction?.launchId ||
+                                  !hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest) && (
+                                <p className="mb-2 text-xs text-muted-foreground" data-testid="manufacturing-work-orders-launch-required">
+                                  Complete Production Launch before creating manufacturing work orders.
+                                </p>
+                              )}
+                              <ProductionHierarchyNode node={line.manufacturingHierarchy} isRoot />
+                            </>
                           ) : (
                             <p className="text-sm text-muted-foreground">No released BOM hierarchy is linked to this PO line.</p>
                           )}

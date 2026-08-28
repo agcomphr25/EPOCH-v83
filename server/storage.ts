@@ -6725,7 +6725,11 @@ export class DatabaseStorage implements IStorage {
     console.log('🔧 Storage data has id?:', 'id' in data);
     console.log('🔧 Storage data.id value:', (data as any).id);
     
-    const [item] = await db.insert(inventoryItems).values([data]).returning();
+    const insertData = data as typeof inventoryItems.$inferInsert;
+    const [item] = await db
+      .insert(inventoryItems)
+      .values(insertData)
+      .returning();
     return item;
   }
 
@@ -6782,11 +6786,12 @@ export class DatabaseStorage implements IStorage {
     // Upsert in batches of 100 to avoid query size limits
     for (let i = 0; i < uniqueItems.length; i += 100) {
       const batch = uniqueItems.slice(i, i + 100);
+      const insertBatch = batch as Array<typeof inventoryItems.$inferInsert>;
       
       // Use PostgreSQL's ON CONFLICT to upsert (insert or update)
       await db
         .insert(inventoryItems)
-        .values(batch)
+        .values(insertBatch)
         .onConflictDoUpdate({
           target: inventoryItems.agPartNumber,
           set: {

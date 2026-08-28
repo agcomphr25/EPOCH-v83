@@ -72,8 +72,8 @@ describe('Phase 14 controlled activation readiness', () => {
     expect(page).toContain(
       "VITE_P2_CONTROLLED_ACTIVATION_READINESS_ENABLED === 'true'"
     );
-    expect(component).toContain(
-      'This screen cannot enable production features.'
+    expect(component).toMatch(
+      /This screen cannot enable production\s+features\./
     );
     expect(route).not.toMatch(
       /p2-activation\/readiness[\s\S]{0,500}(INSERT|UPDATE|DELETE)/i

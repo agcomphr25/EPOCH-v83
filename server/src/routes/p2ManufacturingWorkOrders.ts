@@ -19,6 +19,7 @@ import {
   areP2QualityShipmentReleaseReadsEnabled,
   areP2QualityShipmentReleaseWritesEnabled,
   isP2GenealogyViewerEnabled,
+  isP2ControlledActivationReadinessEnabled,
   areP2TravelerProvisioningWritesEnabled,
 } from '../lib/featureFlags';
 import {
@@ -64,6 +65,7 @@ import {
   P2GenealogyViewerError,
   searchP2Genealogy,
 } from '../services/p2GenealogyViewerService';
+import { evaluateP2ActivationFlags } from '../services/p2ControlledActivationService';
 
 const router = Router();
 const materializeBody = z.object({
@@ -203,6 +205,20 @@ const fail = (res: Response, error: unknown) => {
   console.error('[p2-manufacturing-work-orders]', error);
   return res.status(500).json({ error: 'P2_WORK_ORDER_FAILED' });
 };
+
+router.get(
+  '/p2-activation/readiness',
+  authenticateToken,
+  requirePermission('p2.work_orders.view'),
+  (req, res) => {
+    try {
+      enabled(isP2ControlledActivationReadinessEnabled());
+      res.json(evaluateP2ActivationFlags());
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
 
 router.get(
   '/p2-genealogy/search',

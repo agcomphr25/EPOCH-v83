@@ -231,6 +231,11 @@ export function isP2GenealogyViewerEnabled(): boolean {
   return envBool('P2_GENEALOGY_VIEWER_ENABLED', false);
 }
 
+/** Phase 14 read-only activation readiness controller; never enables other flags. */
+export function isP2ControlledActivationReadinessEnabled(): boolean {
+  return envBool('P2_CONTROLLED_ACTIVATION_READINESS_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

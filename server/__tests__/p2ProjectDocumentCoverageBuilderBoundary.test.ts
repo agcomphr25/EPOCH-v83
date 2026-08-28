@@ -18,4 +18,13 @@ describe('P2 project document coverage builder boundary', () => {
     expect(projectsRoute).toContain('getProjectManufacturingDocumentRefs(id).catch(() => [])');
     expect(projectsRoute).toContain('builderDocumentParts.has(String(partNumber).trim().toLowerCase())');
   });
+
+  it('uses each PO line linked AG part number for routing coverage', () => {
+    expect(projectsRoute).toContain('const linkedAgPartNumbers = Array.from(');
+    expect(projectsRoute).toContain('linkedAgPartNumbers.length > 0 ? [id, linkedAgPartNumbers] : [id]');
+    expect(projectsRoute).toContain('const activePoLinkedAgPartNumbers = Array.from(');
+    expect(projectsRoute).toContain('poInventoryPartById.get(Number(item.inventory_item_id))');
+    expect(projectsRoute).toContain('activePoLinkedAgPartNumbers.filter(');
+    expect(projectsRoute).toContain('linked AG part(s) need routing coverage.');
+  });
 });

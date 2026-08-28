@@ -119,7 +119,7 @@ jobs:
           --reporter=verbose
       - name: TypeScript, lint, formatting, build, and diff hygiene
         run: |
-          npx tsc --noEmit --pretty false
+          NODE_OPTIONS=--max-old-space-size=6144 npx tsc --noEmit --pretty false
           npx eslint server/src/services/p2ControlledActivationService.ts server/src/routes/p2ManufacturingWorkOrders.ts server/__tests__/p2ControlledActivationPilotReadiness.test.ts client/src/components/p2/P2ActivationReadiness.tsx --max-warnings 0
           npx prettier --check server/src/services/p2ControlledActivationService.ts server/__tests__/p2ControlledActivationPilotReadiness.test.ts client/src/components/p2/P2ActivationReadiness.tsx docs/p2-phase14-controlled-pilot-readiness.md .github/workflows/p2-controlled-activation-pilot-readiness-postgres.yml
           npm run build

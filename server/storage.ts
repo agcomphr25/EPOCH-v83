@@ -771,7 +771,7 @@ import {
 } from './src/helpers/quoteFeedbackHelper';
 import { DEFAULT_SESSIONS_LIMIT } from './src/constants/sessions';
 import { userHasScopedCapability as _userHasScopedCapability } from './src/services/permissionService';
-import { formatDates } from './utils/formatDates';
+import { formatDates, toDateOnlyString } from './utils/formatDates';
 import { deriveP1ProductionStatus } from './src/utils/p1ProductionStatus';
 import { ensureP2PurchaseOrderReadSchema } from './src/lib/p2PurchaseOrderReadiness';
 import {
@@ -14582,8 +14582,8 @@ export class DatabaseStorage implements IStorage {
             order_id: o.orderId,
             model_id: o.modelId || null,
             current_department: o.currentDepartment,
-            order_date: o.orderDate ? o.orderDate.toISOString().split('T')[0] : null,
-            due_date: o.dueDate ? o.dueDate.toISOString().split('T')[0] : null,
+            order_date: toDateOnlyString(o.orderDate),
+            due_date: toDateOnlyString(o.dueDate),
           }));
         expectedDeptMap = await getBulkExpectedDepartments(forecastInput);
       } catch (err) {

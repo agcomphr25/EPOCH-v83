@@ -80,25 +80,26 @@ export const FORMAT_DATES_REGISTRY: Record<string, readonly string[]> = {
   CuttingFabricInventoryTransaction: ['createdAt', 'updatedAt'],
 };
 
+export function toDateOnlyString(value: unknown): string | null {
+  if (value == null || value === '') return null;
+
+  const date = value instanceof Date
+    ? value
+    : typeof value === 'string'
+      ? new Date(value)
+      : null;
+
+  if (!date || Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
 export function formatDates<T extends Record<string, unknown>>(
   row: T,
   dateColumns: readonly (keyof T)[],
 ): T {
   const result = { ...row };
   for (const col of dateColumns) {
-    const val = result[col];
-    if (val == null || val === '') {
-      (result as Record<string, unknown>)[col as string] = null;
-    } else if (val instanceof Date) {
-      (result as Record<string, unknown>)[col as string] = val
-        .toISOString()
-        .slice(0, 10);
-    } else if (typeof val === 'string') {
-      const d = new Date(val);
-      (result as Record<string, unknown>)[col as string] = isNaN(d.getTime())
-        ? null
-        : d.toISOString().slice(0, 10);
-    }
+    (result as Record<string, unknown>)[col as string] = toDateOnlyString(result[col]);
   }
   return result;
 }

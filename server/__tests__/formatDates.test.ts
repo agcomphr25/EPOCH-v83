@@ -1,5 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { formatDates } from '../utils/formatDates';
+import { formatDates, toDateOnlyString } from '../utils/formatDates';
+
+describe('toDateOnlyString', () => {
+  it.each([
+    [new Date('2024-03-15T12:00:00Z'), '2024-03-15'],
+    ['2024-03-15', '2024-03-15'],
+    ['2024-03-15T08:30:00.000Z', '2024-03-15'],
+    [null, null],
+    [undefined, null],
+    ['', null],
+    ['not-a-date', null],
+    [new Date('not-a-date'), null],
+    [42, null],
+  ])('normalizes %j to %j', (input, expected) => {
+    expect(toDateOnlyString(input)).toBe(expected);
+  });
+});
 
 describe('formatDates', () => {
   it('converts null to null for date columns', () => {

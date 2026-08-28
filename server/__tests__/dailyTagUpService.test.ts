@@ -19,6 +19,10 @@ describe('Daily Tag Up read model calculations', () => {
     expect(workOrderReadiness({ status: 'READY', material_blocker_count: 1 })).toMatchObject({ state: 'BLOCKED' });
     expect(workOrderReadiness({ status: 'READY', traveler_requirement: 'REQUIRED', traveler_id: null })).toMatchObject({ state: 'BLOCKED', reason: 'Required traveler has not been provisioned' });
     expect(workOrderReadiness({ status: 'READY', traveler_requirement: 'NOT_REQUIRED_APPROVED' })).toEqual({ state: 'READY', reason: null });
+    expect(workOrderReadiness({ status: 'CANCELLED' })).toEqual({
+      state: 'BLOCKED',
+      reason: 'Current released demand has a cancelled work order',
+    });
   });
 
   it('builds the assembly hierarchy from frozen node identities without synthesizing nodes', () => {

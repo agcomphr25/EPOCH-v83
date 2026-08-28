@@ -6801,8 +6801,8 @@ export class DatabaseStorage implements IStorage {
             sku: sql`EXCLUDED.sku`,
             type: sql`EXCLUDED.type`,
             purchaseUnit: sql`EXCLUDED.purchase_unit`,
-            utilizedPL1: sql`EXCLUDED.utilized_pl1`,
-            utilizedPL2: sql`EXCLUDED.utilized_pl2`,
+            utilizedInPL1: sql`EXCLUDED.utilized_in_pl1`,
+            utilizedInPL2: sql`EXCLUDED.utilized_in_pl2`,
             secondarySupplierPartNumber: sql`EXCLUDED.secondary_supplier_part_number`,
             updatedAt: sql`NOW()`,
           },
@@ -6905,41 +6905,11 @@ export class DatabaseStorage implements IStorage {
   // Inventory Item Groups (assigning items to groups)
   async getItemsByGroupId(groupId: number): Promise<InventoryItem[]> {
     const result = await db
-      .select({
-        id: inventoryItems.id,
-        agPartNumber: inventoryItems.agPartNumber,
-        sku: inventoryItems.sku,
-        name: inventoryItems.name,
-        type: inventoryItems.type,
-        source: inventoryItems.source,
-        vendorId: inventoryItems.vendorId,
-        supplierPartNumber: inventoryItems.supplierPartNumber,
-        secondarySupplierPartNumber: inventoryItems.secondarySupplierPartNumber,
-        costPer: inventoryItems.costPer,
-        vendorUnit: inventoryItems.vendorUnit,
-        purchaseUnit: inventoryItems.purchaseUnit,
-        purchaseQuantity: inventoryItems.purchaseQuantity,
-        consumptionRate: inventoryItems.consumptionRate,
-        usageUnit: inventoryItems.usageUnit,
-        cogsPerUnit: inventoryItems.cogsPerUnit,
-        orderDate: inventoryItems.orderDate,
-        department: inventoryItems.department,
-        secondarySource: inventoryItems.secondarySource,
-        notes: inventoryItems.notes,
-        isStockItem: inventoryItems.isStockItem,
-        utilizedInPL1: inventoryItems.utilizedInPL1,
-        utilizedInPL2: inventoryItems.utilizedInPL2,
-        utilizedInFacilities: inventoryItems.utilizedInFacilities,
-        utilizedInAdmin: inventoryItems.utilizedInAdmin,
-        utilizedInServices: inventoryItems.utilizedInServices,
-        isActive: inventoryItems.isActive,
-        createdAt: inventoryItems.createdAt,
-        updatedAt: inventoryItems.updatedAt,
-      })
+      .select({ item: inventoryItems })
       .from(inventoryItems)
       .innerJoin(inventoryItemGroups, eq(inventoryItems.id, inventoryItemGroups.itemId))
       .where(eq(inventoryItemGroups.groupId, groupId));
-    return result;
+    return result.map(({ item }) => item);
   }
 
   async getGroupsByItemId(itemId: number): Promise<ItemGroup[]> {
@@ -7043,41 +7013,11 @@ export class DatabaseStorage implements IStorage {
   // Vendor Scope - Items and Groups
   async getVendorScopeItems(vendorId: number): Promise<InventoryItem[]> {
     const result = await db
-      .select({
-        id: inventoryItems.id,
-        agPartNumber: inventoryItems.agPartNumber,
-        sku: inventoryItems.sku,
-        name: inventoryItems.name,
-        type: inventoryItems.type,
-        source: inventoryItems.source,
-        vendorId: inventoryItems.vendorId,
-        supplierPartNumber: inventoryItems.supplierPartNumber,
-        secondarySupplierPartNumber: inventoryItems.secondarySupplierPartNumber,
-        costPer: inventoryItems.costPer,
-        vendorUnit: inventoryItems.vendorUnit,
-        purchaseUnit: inventoryItems.purchaseUnit,
-        purchaseQuantity: inventoryItems.purchaseQuantity,
-        consumptionRate: inventoryItems.consumptionRate,
-        usageUnit: inventoryItems.usageUnit,
-        cogsPerUnit: inventoryItems.cogsPerUnit,
-        orderDate: inventoryItems.orderDate,
-        department: inventoryItems.department,
-        secondarySource: inventoryItems.secondarySource,
-        notes: inventoryItems.notes,
-        isStockItem: inventoryItems.isStockItem,
-        utilizedInPL1: inventoryItems.utilizedInPL1,
-        utilizedInPL2: inventoryItems.utilizedInPL2,
-        utilizedInFacilities: inventoryItems.utilizedInFacilities,
-        utilizedInAdmin: inventoryItems.utilizedInAdmin,
-        utilizedInServices: inventoryItems.utilizedInServices,
-        isActive: inventoryItems.isActive,
-        createdAt: inventoryItems.createdAt,
-        updatedAt: inventoryItems.updatedAt,
-      })
+      .select({ item: inventoryItems })
       .from(inventoryItems)
       .innerJoin(vendorScopeItems, eq(inventoryItems.id, vendorScopeItems.itemId))
       .where(eq(vendorScopeItems.vendorId, vendorId));
-    return result;
+    return result.map(({ item }) => item);
   }
 
   async getVendorScopeGroups(vendorId: number): Promise<ItemGroup[]> {

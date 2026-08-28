@@ -317,10 +317,10 @@ export default function Navigation() {
 
   const navItems = [
     {
-      path: '/tv-display',
-      label: 'TV Display',
-      icon: Tv,
-      description: 'Multi-panel shop floor display for monitors and meeting room screens',
+      path: '/daily-tag-up',
+      label: 'Daily Tag Up',
+      icon: LayoutDashboard,
+      description: 'Management visibility across active P2 demand, departments, work orders, materials, and issues',
     },
     {
       path: '/time-clock-admin',
@@ -1502,6 +1502,12 @@ export default function Navigation() {
   ];
 
   const verifiedModulesItems = [
+    {
+      path: '/tv-display',
+      label: 'TV Display',
+      icon: Tv,
+      description: 'Multi-panel shop floor display for monitors and meeting room screens',
+    },
     {
       path: '/',
       label: 'Order Management',

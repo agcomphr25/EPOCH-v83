@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { DispositionStep, ReceivingProgressBar, PutawayStep } from '../pages/InventoryReceivingControlCenter';
+import {
+  DispositionStep,
+  ReceivingProgressBar,
+  PutawayStep,
+  getInspectionProgress,
+} from '../pages/InventoryReceivingControlCenter';
 import { getRccCompleteInvalidationKeys } from '../lib/rccInvalidation';
 
 const { mockApiRequest, mockToastError } = vi.hoisted(() => ({
@@ -72,14 +77,22 @@ function renderPutawayStep(
     onComplete = vi.fn(),
     onUpdate = vi.fn(),
     qc,
-  }: { onComplete?: () => void; onUpdate?: (r: Receipt) => void; qc?: QueryClient } = {}
+  }: {
+    onComplete?: () => void;
+    onUpdate?: (r: Receipt) => void;
+    qc?: QueryClient;
+  } = {}
 ) {
   const client = qc ?? makeQueryClient();
   return {
     client,
     ...render(
       <QueryClientProvider client={client}>
-        <PutawayStep receipt={receipt} onComplete={onComplete} onUpdate={onUpdate} />
+        <PutawayStep
+          receipt={receipt}
+          onComplete={onComplete}
+          onUpdate={onUpdate}
+        />
       </QueryClientProvider>
     ),
   };
@@ -123,10 +136,7 @@ describe('ReceivingProgressBar', () => {
   });
 
   it('shows 0% when no lines have been received', () => {
-    const lines = [
-      makeLine('10', '0'),
-      makeLine('5', '0'),
-    ];
+    const lines = [makeLine('10', '0'), makeLine('5', '0')];
     render(<ReceivingProgressBar lines={lines} />);
     const bar = screen.getByTestId('rcc-receiving-progress');
     expect(bar.textContent).toContain('0 / 2 lines received');
@@ -135,10 +145,7 @@ describe('ReceivingProgressBar', () => {
   });
 
   it('shows 50% when half the lines are fully received', () => {
-    const lines = [
-      makeLine('10', '10'),
-      makeLine('5', '0'),
-    ];
+    const lines = [makeLine('10', '10'), makeLine('5', '0')];
     render(<ReceivingProgressBar lines={lines} />);
     const bar = screen.getByTestId('rcc-receiving-progress');
     expect(bar.textContent).toContain('1 / 2 lines received');
@@ -147,26 +154,26 @@ describe('ReceivingProgressBar', () => {
   });
 
   it('shows partial breakdown when a line has receivedQty between 0 and orderedQty', () => {
-    const lines = [
-      makeLine('10', '5'),
-      makeLine('8', '8'),
-    ];
+    const lines = [makeLine('10', '5'), makeLine('8', '8')];
     render(<ReceivingProgressBar lines={lines} />);
     const bar = screen.getByTestId('rcc-receiving-progress');
     expect(screen.getByTestId('rcc-full-count').textContent).toBe('1 full');
-    expect(screen.getByTestId('rcc-partial-count').textContent).toBe('1 partial');
+    expect(screen.getByTestId('rcc-partial-count').textContent).toBe(
+      '1 partial'
+    );
     expect(screen.getByTestId('rcc-open-count').textContent).toBe('0 open');
-    const fullFill = bar.querySelector('[data-testid="rcc-progress-full"]') as HTMLElement;
+    const fullFill = bar.querySelector(
+      '[data-testid="rcc-progress-full"]'
+    ) as HTMLElement;
     expect(fullFill.style.width).toBe('50%');
-    const partialFill = bar.querySelector('[data-testid="rcc-progress-partial"]') as HTMLElement;
+    const partialFill = bar.querySelector(
+      '[data-testid="rcc-progress-partial"]'
+    ) as HTMLElement;
     expect(partialFill.style.width).toBe('50%');
   });
 
   it('treats lines with orderedQty of 0 as not received even if receivedQty is 0', () => {
-    const lines = [
-      makeLine('0', '0'),
-      makeLine('5', '5'),
-    ];
+    const lines = [makeLine('0', '0'), makeLine('5', '5')];
     render(<ReceivingProgressBar lines={lines} />);
     const bar = screen.getByTestId('rcc-receiving-progress');
     expect(bar.textContent).toContain('1 / 2 lines received');
@@ -183,12 +190,18 @@ describe('ReceivingProgressBar', () => {
     ];
     render(<ReceivingProgressBar lines={lines} />);
     expect(screen.getByTestId('rcc-full-count').textContent).toBe('2 full');
-    expect(screen.getByTestId('rcc-partial-count').textContent).toBe('1 partial');
+    expect(screen.getByTestId('rcc-partial-count').textContent).toBe(
+      '1 partial'
+    );
     expect(screen.getByTestId('rcc-open-count').textContent).toBe('1 open');
     const bar = screen.getByTestId('rcc-receiving-progress');
-    const fullFill = bar.querySelector('[data-testid="rcc-progress-full"]') as HTMLElement;
+    const fullFill = bar.querySelector(
+      '[data-testid="rcc-progress-full"]'
+    ) as HTMLElement;
     expect(fullFill.style.width).toBe('50%');
-    const partialFill = bar.querySelector('[data-testid="rcc-progress-partial"]') as HTMLElement;
+    const partialFill = bar.querySelector(
+      '[data-testid="rcc-progress-partial"]'
+    ) as HTMLElement;
     expect(partialFill.style.width).toBe('25%');
   });
 
@@ -200,25 +213,27 @@ describe('ReceivingProgressBar', () => {
     ];
     render(<ReceivingProgressBar lines={lines} />);
     expect(screen.getByTestId('rcc-full-count').textContent).toBe('1 full');
-    expect(screen.getByTestId('rcc-partial-count').textContent).toBe('2 partial');
+    expect(screen.getByTestId('rcc-partial-count').textContent).toBe(
+      '2 partial'
+    );
     expect(screen.getByTestId('rcc-open-count').textContent).toBe('0 open');
   });
 
   it('rounds percentage to nearest integer', () => {
-    const lines = [
-      makeLine('5', '5'),
-      makeLine('5', '5'),
-      makeLine('5', '0'),
-    ];
+    const lines = [makeLine('5', '5'), makeLine('5', '5'), makeLine('5', '0')];
     render(<ReceivingProgressBar lines={lines} />);
-    const fill = screen.getByTestId('rcc-receiving-progress').querySelector('.bg-emerald-500') as HTMLElement;
+    const fill = screen
+      .getByTestId('rcc-receiving-progress')
+      .querySelector('.bg-emerald-500') as HTMLElement;
     expect(fill.style.width).toBe('67%');
   });
 
   it('caps bar at 100% even if somehow receivedLines exceeds totalLines', () => {
     const lines = [makeLine('5', '5')];
     render(<ReceivingProgressBar lines={lines} />);
-    const fill = screen.getByTestId('rcc-receiving-progress').querySelector('.bg-emerald-500') as HTMLElement;
+    const fill = screen
+      .getByTestId('rcc-receiving-progress')
+      .querySelector('.bg-emerald-500') as HTMLElement;
     expect(fill.style.width).toBe('100%');
   });
 
@@ -227,14 +242,18 @@ describe('ReceivingProgressBar', () => {
     render(<ReceivingProgressBar lines={lines} />);
     expect(screen.queryByTestId('rcc-full-count')).toBeNull();
     expect(screen.queryByTestId('rcc-partial-count')).toBeNull();
-    expect(screen.getByTestId('rcc-receiving-progress').textContent).toContain('2 / 2 lines received');
+    expect(screen.getByTestId('rcc-receiving-progress').textContent).toContain(
+      '2 / 2 lines received'
+    );
   });
 
   it('does not show partial breakdown when no lines have been received', () => {
     const lines = [makeLine('5', '0'), makeLine('10', '0')];
     render(<ReceivingProgressBar lines={lines} />);
     expect(screen.queryByTestId('rcc-partial-count')).toBeNull();
-    expect(screen.getByTestId('rcc-receiving-progress').textContent).toContain('0 / 2 lines received');
+    expect(screen.getByTestId('rcc-receiving-progress').textContent).toContain(
+      '0 / 2 lines received'
+    );
   });
 
   it('amber segment is always visible when a partial line exists even if full lines dominate', () => {
@@ -245,10 +264,14 @@ describe('ReceivingProgressBar', () => {
     ];
     render(<ReceivingProgressBar lines={lines} />);
     const bar = screen.getByTestId('rcc-receiving-progress');
-    const partialFill = bar.querySelector('[data-testid="rcc-progress-partial"]') as HTMLElement;
+    const partialFill = bar.querySelector(
+      '[data-testid="rcc-progress-partial"]'
+    ) as HTMLElement;
     const pct = parseInt(partialFill.style.width, 10);
     expect(pct).toBeGreaterThanOrEqual(1);
-    expect(screen.getByTestId('rcc-partial-count').textContent).toBe('1 partial');
+    expect(screen.getByTestId('rcc-partial-count').textContent).toBe(
+      '1 partial'
+    );
   });
 });
 
@@ -265,7 +288,7 @@ describe('getRccCompleteInvalidationKeys — cache invalidation after receipt co
     const vendorPoId = 42;
     const keys = getRccCompleteInvalidationKeys(vendorPoId);
     const match = keys.find(
-      (k) => k[0] === '/api/vendor-pos' && k[1] === vendorPoId,
+      (k) => k[0] === '/api/vendor-pos' && k[1] === vendorPoId
     );
     expect(match).toBeDefined();
   });
@@ -273,7 +296,7 @@ describe('getRccCompleteInvalidationKeys — cache invalidation after receipt co
   it('does NOT include a per-PO key when vendorPoId is undefined', () => {
     const keys = getRccCompleteInvalidationKeys(undefined);
     const perPoKeys = keys.filter(
-      (k) => k[0] === '/api/vendor-pos' && k.length > 1,
+      (k) => k[0] === '/api/vendor-pos' && k.length > 1
     );
     expect(perPoKeys).toHaveLength(0);
   });
@@ -281,7 +304,7 @@ describe('getRccCompleteInvalidationKeys — cache invalidation after receipt co
   it('does NOT include a per-PO key when vendorPoId is null', () => {
     const keys = getRccCompleteInvalidationKeys(null);
     const perPoKeys = keys.filter(
-      (k) => k[0] === '/api/vendor-pos' && k.length > 1,
+      (k) => k[0] === '/api/vendor-pos' && k.length > 1
     );
     expect(perPoKeys).toHaveLength(0);
   });
@@ -298,14 +321,18 @@ describe('getRccCompleteInvalidationKeys — cache invalidation after receipt co
 
   it('per-PO key contains the vendorPoId as a number in the second position', () => {
     const keys = getRccCompleteInvalidationKeys(99);
-    const perPoKey = keys.find((k) => k.length === 2 && k[0] === '/api/vendor-pos');
+    const perPoKey = keys.find(
+      (k) => k.length === 2 && k[0] === '/api/vendor-pos'
+    );
     expect(perPoKey).toBeDefined();
     expect(perPoKey![1]).toBe(99);
   });
 
   it('includes the per-PO key when vendorPoId is 0 (falsy but defined)', () => {
     const keys = getRccCompleteInvalidationKeys(0);
-    const perPoKey = keys.find((k) => k.length === 2 && k[0] === '/api/vendor-pos');
+    const perPoKey = keys.find(
+      (k) => k.length === 2 && k[0] === '/api/vendor-pos'
+    );
     expect(perPoKey).toBeDefined();
     expect(perPoKey![1]).toBe(0);
   });
@@ -414,25 +441,72 @@ describe('PutawayStep — completeReceiptMutation invalidates the correct query 
   });
 
   it('locks completion and lists accepted units that still need putaway', () => {
-    renderPutawayStep(makeReceipt({
-      units: [
-        { ...makeUnit(1), location: undefined, freezerNumber: undefined },
-        makeUnit(2),
-      ],
-    }));
+    renderPutawayStep(
+      makeReceipt({
+        units: [
+          { ...makeUnit(1), location: undefined, freezerNumber: undefined },
+          makeUnit(2),
+        ],
+      })
+    );
 
-    expect(screen.getByTestId('putaway-completion-blockers').textContent).toContain('UNIT-1');
+    expect(
+      screen.getByTestId('putaway-completion-blockers').textContent
+    ).toContain('UNIT-1');
     expect(screen.getByText('Complete Receipt')).toHaveAttribute('disabled');
-    expect(mockApiRequest).not.toHaveBeenCalledWith('/api/receipts/1', expect.objectContaining({
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'complete' }),
-    }));
+    expect(mockApiRequest).not.toHaveBeenCalledWith(
+      '/api/receipts/1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'complete' }),
+      })
+    );
   });
 });
 
 describe('DispositionStep — Accept All', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('keeps Putaway hidden while any unit is pending inspection', async () => {
+    renderDispositionStep(
+      makeReceipt({
+        units: [
+          makeUnit(1),
+          { ...makeUnit(2), disposition: 'pending_inspection' },
+        ],
+      })
+    );
+
+    expect(
+      screen.getByTestId('inspection-progress-summary').textContent
+    ).toContain('1 of 2 units inspected · 1 remaining');
+    expect(screen.queryByText(/Continue to Putaway/)).toBeNull();
+  });
+
+  it('reveals Putaway only after every unit has a disposition', () => {
+    const onNext = vi.fn();
+    renderDispositionStep(makeReceipt({ units: [makeUnit(1), makeUnit(2)] }), {
+      onNext,
+    });
+
+    expect(
+      screen.getByTestId('inspection-progress-summary').textContent
+    ).toContain('Inspection complete: 2 of 2 units dispositioned');
+    fireEvent.click(
+      screen.getByText(/Inspection Complete — Continue to Putaway/)
+    );
+    expect(onNext).toHaveBeenCalledOnce();
+  });
+
+  it('does not allow an empty receipt to continue to Putaway', () => {
+    expect(getInspectionProgress([])).toEqual({
+      total: 0,
+      pending: 0,
+      completed: 0,
+      canContinueToPutaway: false,
+    });
   });
 
   it('accepts every pending unit after confirmation and refreshes the receipt', async () => {
@@ -444,17 +518,25 @@ describe('DispositionStep — Accept All', () => {
     });
     const refreshedReceipt = {
       ...pendingReceipt,
-      units: pendingReceipt.units?.map(unit => ({ ...unit, disposition: 'accepted' })),
+      units: pendingReceipt.units?.map((unit) => ({
+        ...unit,
+        disposition: 'accepted',
+      })),
     };
     const onUpdate = vi.fn();
 
-    mockApiRequest.mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
-      if (url.endsWith('/ensure-units')) return { createdCount: 0, skipped: [] };
-      if (url.endsWith('/required-docs')) return { hasMissing: false, missingByPartNumber: {} };
-      if (url.endsWith('/disposition') && options?.method === 'POST') return {};
-      if (url === '/api/receipts/1') return refreshedReceipt;
-      return {};
-    });
+    mockApiRequest.mockImplementation(
+      async (url: string, options?: { method?: string; body?: string }) => {
+        if (url.endsWith('/ensure-units'))
+          return { createdCount: 0, skipped: [] };
+        if (url.endsWith('/required-docs'))
+          return { hasMissing: false, missingByPartNumber: {} };
+        if (url.endsWith('/disposition') && options?.method === 'POST')
+          return {};
+        if (url === '/api/receipts/1') return refreshedReceipt;
+        return {};
+      }
+    );
 
     renderDispositionStep(pendingReceipt, { onUpdate });
 
@@ -463,11 +545,14 @@ describe('DispositionStep — Accept All', () => {
 
     await waitFor(() => {
       const dispositionCalls = mockApiRequest.mock.calls.filter(
-        ([url, options]) => String(url).endsWith('/disposition') && options?.method === 'POST'
+        ([url, options]) =>
+          String(url).endsWith('/disposition') && options?.method === 'POST'
       );
       expect(dispositionCalls).toHaveLength(2);
       for (const [, options] of dispositionCalls) {
-        expect(JSON.parse(options.body)).toMatchObject({ disposition: 'accepted' });
+        expect(JSON.parse(options.body)).toMatchObject({
+          disposition: 'accepted',
+        });
       }
       expect(onUpdate).toHaveBeenCalledWith(refreshedReceipt);
     });

@@ -43,12 +43,16 @@ describe('simple manufacturing work-order action', () => {
     expect(hub).toContain("event_type = 'P2_COMPONENT_TRAVELERS_PROVISIONED'");
   });
 
-  it('shows one plain-language button only while work orders are missing', () => {
+  it('shows one plain-language button only while work orders are missing and disables it until launch is eligible', () => {
     expect(ui).toContain('Create Manufacturing Work Orders');
     expect(ui).toContain('hasMissingManufacturingWorkOrder');
     expect(ui).toContain(
       'Complete Production Launch before creating manufacturing work orders.'
     );
+    expect(ui).toContain('!hubProduction.manufacturingWorkOrderAction?.launchId');
+    expect(ui).toContain('!hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest');
+    expect(ui).toContain('!hubProduction.manufacturingWorkOrderAction?.enabled');
+    expect(ui).toContain('manufacturing-work-orders-launch-required');
     expect(ui).not.toContain('Authorize Execution</Button>');
     expect(ui).not.toContain('Provision P2 Orders</Button>');
   });

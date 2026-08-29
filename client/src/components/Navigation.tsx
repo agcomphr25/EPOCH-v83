@@ -74,6 +74,7 @@ import {
   ShieldCheck,
   LayoutGrid,
   PackageCheck,
+  PackageSearch,
   ShieldAlert,
   Tv,
   FileSearch,
@@ -1502,6 +1503,12 @@ export default function Navigation() {
   ];
 
   const verifiedModulesItems = [
+    ...(['ADMIN', 'OWNER'].includes(String(currentUser?.role ?? '').toUpperCase()) ? [{
+      path: '/product-teardown',
+      label: 'Product Teardown',
+      icon: PackageSearch,
+      description: 'Capture disassembled product parts and compare them with inventory and the latest BOM',
+    }] : []),
     {
       path: '/tv-display',
       label: 'TV Display',

@@ -16,6 +16,7 @@ import SessionExpiryListener from './components/SessionExpiryListener';
 import ErrorBoundary from './components/ErrorBoundary';
 // ── Lazy page imports (route-level code splitting) ──────────────────────────
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const ProductTeardown = React.lazy(() => import('./pages/ProductTeardown'));
 const OrderManagement = React.lazy(() => import('./pages/OrderManagement'));
 const OrdersManagementPage = React.lazy(
   () => import('./pages/OrdersManagementPage')
@@ -1473,6 +1474,7 @@ function App() {
                         />
 
                         {/* Production and BOM Routes */}
+                        <Route path="/product-teardown" component={ProductTeardown} />
                         <Route
                           path="/production-tracking/customer-wip"
                           component={CustomerWIPPage}

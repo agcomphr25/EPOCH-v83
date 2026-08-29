@@ -3666,6 +3666,15 @@ router.get('/:id/p2-hub', async (req, res) => {
         item,
       ])
     );
+    const linkedAgPartNumbers = Array.from(
+      new Set(
+        poItems
+          .map((item: LegacyProjectValue) =>
+            poInventoryPartById.get(Number(item.inventory_item_id))
+          )
+          .filter(Boolean)
+      )
+    );
     const partNumbers = Array.from(
       new Set([
         ...poItems
@@ -3835,7 +3844,7 @@ router.get('/:id/p2-hub', async (req, res) => {
       ),
       optionalHubQuery<LegacyProjectValue>(
         'part routings',
-        partNumbers.length > 0
+        linkedAgPartNumbers.length > 0
           ? `SELECT id, project_id, part_number, part_name, routing_name,
                     routing_revision, routing_type, is_active, department_config,
                     qc_standards, created_by,
@@ -3850,7 +3859,7 @@ router.get('/:id/p2-hub', async (req, res) => {
              FROM part_routings
              WHERE project_id = $1
              ORDER BY is_active DESC, updated_at DESC`,
-        partNumbers.length > 0 ? [id, partNumbers] : [id]
+        linkedAgPartNumbers.length > 0 ? [id, linkedAgPartNumbers] : [id]
       ),
       partNumbers.length > 0
         ? optionalHubQuery<LegacyProjectValue>(
@@ -4414,14 +4423,16 @@ router.get('/:id/p2-hub', async (req, res) => {
       const step = stepByType.get(stepType) as LegacyProjectValue;
       return !!step && ['completed', 'not_applicable'].includes(step.status);
     };
-    const activePoPartNumbers = Array.from(
+    const activePoLinkedAgPartNumbers = Array.from(
       new Set(
         activePoItems
-          .map((item: LegacyProjectValue) => item.part_number)
+          .map((item: LegacyProjectValue) =>
+            poInventoryPartById.get(Number(item.inventory_item_id))
+          )
           .filter(Boolean)
       )
     );
-    const partsMissingRoutings = activePoPartNumbers.filter(
+    const partsMissingRoutings = activePoLinkedAgPartNumbers.filter(
       (partNumber: string) =>
         !routeByPartNumber.has(String(partNumber).trim().toLowerCase())
     );
@@ -4434,7 +4445,7 @@ router.get('/:id/p2-hub', async (req, res) => {
         )
         .filter(Boolean)
     );
-    const partsMissingInstructions = activePoPartNumbers.filter(
+    const partsMissingInstructions = activePoLinkedAgPartNumbers.filter(
       (partNumber: string) => {
         if (builderDocumentParts.has(String(partNumber).trim().toLowerCase()))
           return false;
@@ -4547,20 +4558,20 @@ router.get('/:id/p2-hub', async (req, res) => {
         key: 'work_instructions',
         label: 'Work Instructions / Spec Sheet',
         status:
-          activePoPartNumbers.length > 0 &&
+          activePoLinkedAgPartNumbers.length > 0 &&
           partsMissingInstructions.length === 0
             ? 'covered_by_project_data'
             : 'needs_setup',
         source: 'Form & Document Builder',
         detail:
-          activePoPartNumbers.length === 0
-            ? 'No PO parts are linked yet.'
+          activePoLinkedAgPartNumbers.length === 0
+            ? 'No PO lines have a linked AG part yet.'
             : partsMissingInstructions.length === 0
-              ? 'Every PO part has work instruction or spec sheet coverage.'
-              : `${partsMissingInstructions.length} PO part(s) need a work instruction or spec sheet.`,
+              ? 'Every linked AG part has work instruction or spec sheet coverage.'
+              : `${partsMissingInstructions.length} linked AG part(s) need a work instruction or spec sheet.`,
         route: `/forms/document-builder?projectId=${encodeURIComponent(id)}`,
         relatedCount: Math.max(
-          activePoPartNumbers.length - partsMissingInstructions.length,
+          activePoLinkedAgPartNumbers.length - partsMissingInstructions.length,
           0
         ),
         missingParts: partsMissingInstructions,
@@ -4582,16 +4593,22 @@ router.get('/:id/p2-hub', async (req, res) => {
         key: 'routing',
         label: 'Routing',
         status:
-          projectRoutings.length > 0 && partsMissingRoutings.length === 0
+          activePoLinkedAgPartNumbers.length > 0 &&
+          partsMissingRoutings.length === 0
             ? 'covered_by_project_data'
             : 'needs_setup',
         source: 'Part routings',
         detail:
-          partsMissingRoutings.length === 0 && projectRoutings.length > 0
-            ? `${projectRoutings.length} routing record(s) cover the PO parts.`
-            : `${partsMissingRoutings.length || activePoPartNumbers.length} PO part(s) need routing coverage.`,
+          activePoLinkedAgPartNumbers.length === 0
+            ? 'No PO lines have a linked AG part for routing coverage.'
+            : partsMissingRoutings.length === 0
+              ? 'Every linked AG part has routing coverage.'
+              : `${partsMissingRoutings.length} linked AG part(s) need routing coverage.`,
         route: `/projects/${id}?tab=bom-routing`,
-        relatedCount: projectRoutings.length,
+        relatedCount: Math.max(
+          activePoLinkedAgPartNumbers.length - partsMissingRoutings.length,
+          0
+        ),
         missingParts: partsMissingRoutings,
       },
       {

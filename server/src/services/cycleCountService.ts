@@ -16,7 +16,7 @@
 
 import crypto from 'crypto';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import {
   cycleCountSessions,
   cycleCountLines,
@@ -120,6 +120,7 @@ export async function createVariancePolicy(
 export type CreateSessionInput = {
   location: string;
   partFilter?: string | null;
+  projectId?: string | null;
   countType?: 'CYCLE' | 'FULL' | 'SPOT' | 'ABC';
   scheduledFor?: Date | null;
   blindCount?: boolean;
@@ -127,8 +128,48 @@ export type CreateSessionInput = {
   notes?: string | null;
 };
 
+export type CycleCountScopeOptions = {
+  projects: Array<{ id: string; projectCode: string; projectName: string; partCount: number }>;
+  manufacturedParts: Array<{ id: number; agPartNumber: string; name: string }>;
+};
+
+export async function listScopeOptions(): Promise<CycleCountScopeOptions> {
+  const manufacturedParts = await db
+    .select({ id: inventoryItems.id, agPartNumber: inventoryItems.agPartNumber, name: inventoryItems.name })
+    .from(inventoryItems)
+    .where(and(sql`${inventoryItems.isActive} IS NOT FALSE`, eq(inventoryItems.itemType, 'MANUFACTURED')))
+    .orderBy(asc(inventoryItems.agPartNumber));
+
+  const projectRows = await pool.query<{
+    id: string; project_code: string; project_name: string; part_count: number;
+  }>(`SELECT p.id, p.project_code, p.project_name, COUNT(DISTINCT c.inventory_item_id)::int AS part_count
+      FROM projects p
+      JOIN p2_project_controlled_configurations c
+        ON c.project_id = p.id AND c.status = 'RELEASED'
+      JOIN inventory_items i
+        ON i.id = c.inventory_item_id
+       AND i.is_active IS NOT FALSE
+       AND i.item_type = 'MANUFACTURED'
+      WHERE p.status = 'active'
+      GROUP BY p.id, p.project_code, p.project_name
+      ORDER BY p.project_code`);
+
+  return {
+    projects: projectRows.rows.map(row => ({
+      id: row.id,
+      projectCode: row.project_code,
+      projectName: row.project_name,
+      partCount: row.part_count,
+    })),
+    manufacturedParts,
+  };
+}
+
 export async function createSession(input: CreateSessionInput, actor: Actor): Promise<SessionWithLines> {
   if (!input.location?.trim()) throw httpErr(400, 'location is required');
+  if (input.location === 'ALL') {
+    throw httpErr(400, 'Select a specific inventory location so approved counts can update the correct balance');
+  }
   const countType = input.countType ?? 'CYCLE';
 
   const policy = input.variancePolicyId
@@ -145,7 +186,59 @@ export async function createSession(input: CreateSessionInput, actor: Actor): Pr
 
   const byPart = new Map<string, SeedLine>();
 
-  if (countType === 'FULL') {
+  if (input.projectId) {
+    if (input.partFilter?.trim()) throw httpErr(400, 'Choose either a project or one manufactured part, not both');
+    const configured = await pool.query<{
+      id: number; ag_part_number: string; name: string; quantity_on_hand: string | number;
+    }>(`SELECT i.id, i.ag_part_number, i.name,
+              COALESCE(SUM(b.quantity_on_hand), 0) AS quantity_on_hand
+        FROM p2_project_controlled_configurations c
+        JOIN inventory_items i
+          ON i.id = c.inventory_item_id
+         AND i.is_active IS NOT FALSE
+         AND i.item_type = 'MANUFACTURED'
+        LEFT JOIN inventory_balances b
+          ON b.ag_part_number = i.ag_part_number AND b.location_id = $2
+        WHERE c.project_id = $1 AND c.status = 'RELEASED'
+        GROUP BY i.id, i.ag_part_number, i.name
+        ORDER BY i.ag_part_number`, [input.projectId, input.location]);
+    if (!configured.rows.length) {
+      throw httpErr(409, 'This project has no released manufactured-part configuration to count');
+    }
+    for (const item of configured.rows) {
+      byPart.set(item.ag_part_number, {
+        lotId: null,
+        agPartNumber: item.ag_part_number,
+        materialName: item.name,
+        expectedQty: toNum(item.quantity_on_hand),
+        inventoryItemId: item.id,
+      });
+    }
+  } else if (input.partFilter?.trim()) {
+    const [item] = await db
+      .select({ id: inventoryItems.id, agPartNumber: inventoryItems.agPartNumber, name: inventoryItems.name })
+      .from(inventoryItems)
+      .where(and(
+        sql`${inventoryItems.isActive} IS NOT FALSE`,
+        eq(inventoryItems.itemType, 'MANUFACTURED'),
+        eq(inventoryItems.agPartNumber, input.partFilter.trim()),
+      ));
+    if (!item) throw httpErr(404, 'Active manufactured inventory part not found');
+    const [balance] = await db
+      .select({ quantityOnHand: inventoryBalances.quantityOnHand })
+      .from(inventoryBalances)
+      .where(and(
+        eq(inventoryBalances.agPartNumber, item.agPartNumber),
+        eq(inventoryBalances.locationId, input.location),
+      ));
+    byPart.set(item.agPartNumber, {
+      lotId: null,
+      agPartNumber: item.agPartNumber,
+      materialName: item.name,
+      expectedQty: balance?.quantityOnHand ?? 0,
+      inventoryItemId: item.id,
+    });
+  } else if (countType === 'FULL') {
     const trimmedPartFilter = input.partFilter?.trim();
     const itemWhere = trimmedPartFilter
       ? and(sql`${inventoryItems.isActive} IS NOT FALSE`, eq(inventoryItems.agPartNumber, trimmedPartFilter))
@@ -238,7 +331,7 @@ export async function createSession(input: CreateSessionInput, actor: Actor): Pr
       status: input.scheduledFor ? 'SCHEDULED' : 'IN_PROGRESS',
       countType,
       location: input.location,
-      partFilter: input.partFilter ?? null,
+      partFilter: input.projectId ? `PROJECT:${input.projectId}` : input.partFilter ?? null,
       scheduledFor: input.scheduledFor ?? null,
       blindCount: input.blindCount ?? true,
       variancePolicyId: policy?.id ?? null,
@@ -377,6 +470,9 @@ export async function submitForReview(sessionId: number, actor: Actor): Promise<
     if (sess.status !== 'IN_PROGRESS') throw httpErr(409, 'Only IN_PROGRESS sessions can be submitted');
 
     const lines = await tx.select().from(cycleCountLines).where(eq(cycleCountLines.sessionId, sessionId));
+    const projectId = sess.partFilter?.startsWith('PROJECT:')
+      ? sess.partFilter.slice('PROJECT:'.length)
+      : null;
     const counted = lines.filter(l => l.countedQty != null);
     if (counted.length === 0) throw httpErr(400, 'No counts have been recorded');
 
@@ -454,10 +550,13 @@ export async function postSession(sessionId: number, actor: Actor): Promise<Sess
 
     const lines = await tx.select().from(cycleCountLines).where(eq(cycleCountLines.sessionId, sessionId));
 
+    if (sess.location === 'ALL' && lines.some(line => toNum(line.varianceQty) !== 0)) {
+      throw httpErr(409, 'Cannot post an adjustment for ALL locations; the session must identify one inventory location');
+    }
+
     for (const line of lines) {
       if (line.countedQty == null) continue;
       const variance = toNum(line.varianceQty);
-      if (variance === 0) continue;
       if (line.approvalStatus === 'REJECTED') continue;
 
       // Resolve canonical inventoryItemId (denormalized on line, fallback to lookup by ag_part_number)
@@ -468,25 +567,43 @@ export async function postSession(sessionId: number, actor: Actor): Promise<Sess
         itemId = item.id;
       }
 
-      // Determine quantityBefore — prefer the lot remaining qty; else fall back to inventory_balances rollup.
-      let qtyBefore = 0;
+      const [balance] = await tx
+        .select()
+        .from(inventoryBalances)
+        .where(and(
+          eq(inventoryBalances.agPartNumber, line.agPartNumber),
+          eq(inventoryBalances.locationId, sess.location),
+        ))
+        .for('update');
+      const currentBalanceQty = balance?.quantityOnHand ?? 0;
+      const expectedQty = toNum(line.expectedQty);
+      if (currentBalanceQty !== expectedQty) {
+        throw httpErr(409, `Balance changed after counting ${line.agPartNumber}; expected ${expectedQty}, current ${currentBalanceQty}. Start a new count.`);
+      }
+
+      if (variance === 0) {
+        if (balance) {
+          await tx.update(inventoryBalances).set({ lastCountedAt: new Date(), updatedAt: new Date() }).where(eq(inventoryBalances.id, balance.id));
+        }
+        continue;
+      }
+
+      // The location balance is the posting authority.
+      let qtyBefore = currentBalanceQty;
       let lotForLedger: string | null = line.lotId ?? null;
       if (lotForLedger) {
         const [lot] = await tx.select({ id: materialLots.id, remainingQty: materialLots.remainingQty }).from(materialLots).where(eq(materialLots.id, lotForLedger)).for('update');
-        if (lot) {
-          qtyBefore = toNum(lot.remainingQty);
-        } else {
+        if (!lot) {
           lotForLedger = null;
         }
-      }
-      if (!lotForLedger) {
-        const [bal] = await tx.select({ q: sql<number>`SUM(${inventoryBalances.quantityOnHand})` }).from(inventoryBalances).where(eq(inventoryBalances.agPartNumber, line.agPartNumber));
-        qtyBefore = toNum(bal?.q as any);
       }
 
       const qtyAfter = qtyBefore + variance;
       if (qtyAfter < 0) {
         throw httpErr(409, `Cannot post: posting variance ${variance} for ${line.agPartNumber} would yield negative quantity (${qtyAfter})`);
+      }
+      if (!Number.isInteger(qtyAfter)) {
+        throw httpErr(409, `Manufactured-part balance ${line.agPartNumber} must be a whole-unit quantity`);
       }
 
       const ledgerRow = await recordInventoryLedgerEntry({
@@ -502,6 +619,7 @@ export async function postSession(sessionId: number, actor: Actor): Promise<Sess
         performedByDisplayName: actor.username,
         approvedByUserId: sess.approvedByUserId ?? null,
         approvedByDisplayName: sess.approvedByDisplayName ?? null,
+        projectId,
         reasonCode: 'CYCLE_COUNT',
         notes: `Cycle count session ${sess.sessionNumber ?? '#' + sess.id} line ${line.id}${line.notes ? ': ' + line.notes : ''}`,
         sourceModule: 'cycle_count',
@@ -512,12 +630,32 @@ export async function postSession(sessionId: number, actor: Actor): Promise<Sess
           countedBy: line.countedByDisplayName,
           expectedQty: toNum(line.expectedQty),
           countedQty: toNum(line.countedQty),
+          projectId,
         },
       }, tx as any);
 
       // Update material lot remaining_qty if we have a lot
       if (lotForLedger) {
         await tx.update(materialLots).set({ remainingQty: qtyAfter.toFixed(4), updatedAt: new Date() }).where(eq(materialLots.id, lotForLedger));
+      }
+
+      const allocated = balance?.quantityAllocated ?? 0;
+      if (balance) {
+        await tx.update(inventoryBalances).set({
+          quantityOnHand: qtyAfter,
+          quantityAvailable: Math.max(0, qtyAfter - allocated),
+          lastCountedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(eq(inventoryBalances.id, balance.id));
+      } else {
+        await tx.insert(inventoryBalances).values({
+          agPartNumber: line.agPartNumber,
+          locationId: sess.location,
+          quantityOnHand: qtyAfter,
+          quantityAllocated: 0,
+          quantityAvailable: qtyAfter,
+          lastCountedAt: new Date(),
+        });
       }
 
       // Persist ledger linkage on the line

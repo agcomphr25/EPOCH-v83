@@ -37,6 +37,7 @@ import {
   ChevronUp,
   Pencil,
   Save,
+  Lock,
 } from 'lucide-react';
 
 import { apiRequest } from '@/lib/queryClient';
@@ -336,9 +337,21 @@ const STEP_LABELS = [
   '1. Shipment Info',
   '2. Line Items',
   '3. Unit Splitting',
-  '4. Disposition',
+  '4. Inspection & Disposition',
   '5. Putaway',
 ];
+
+export function getInspectionProgress(units: ReceivedUnit[]) {
+  const pending = units.filter(
+    (unit) => unit.disposition === 'pending_inspection'
+  ).length;
+  return {
+    total: units.length,
+    pending,
+    completed: units.length - pending,
+    canContinueToPutaway: units.length > 0 && pending === 0,
+  };
+}
 
 // ── Helper Components ──────────────────────────────────────────────────────────
 
@@ -355,15 +368,25 @@ function DispositionBadge({ disposition }: { disposition: string }) {
 function StepIndicator({
   currentStep,
   totalSteps,
+  lockedSteps = [],
 }: {
   currentStep: number;
   totalSteps: number;
+  lockedSteps?: number[];
 }) {
   return (
     <div className="flex items-center gap-1 mb-6">
       {Array.from({ length: totalSteps }, (_, i) => (
         <div key={i} className="flex items-center gap-1">
           <div
+            aria-label={
+              lockedSteps.includes(i) ? `Step ${i + 1} locked` : undefined
+            }
+            title={
+              lockedSteps.includes(i)
+                ? 'Complete inspection before Putaway'
+                : undefined
+            }
             className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
               i < currentStep
                 ? 'bg-green-600 text-white'
@@ -372,7 +395,13 @@ function StepIndicator({
                   : 'bg-gray-200 text-gray-500'
             }`}
           >
-            {i < currentStep ? <Check className="w-3 h-3" /> : i + 1}
+            {i < currentStep ? (
+              <Check className="w-3 h-3" />
+            ) : lockedSteps.includes(i) ? (
+              <Lock className="w-3 h-3" />
+            ) : (
+              i + 1
+            )}
           </div>
           {i < totalSteps - 1 && (
             <div
@@ -1090,6 +1119,16 @@ function CenterPanel({
     blockers: string[];
   } | null>(null);
   const queryClient = useQueryClient();
+  const inspectionProgress = getInspectionProgress(receipt?.units ?? []);
+
+  useEffect(() => {
+    if (step === 4 && !inspectionProgress.canContinueToPutaway) {
+      setStep(3);
+      toast.error(
+        'Putaway paused. Complete inspection and disposition for every unit first.'
+      );
+    }
+  }, [step, inspectionProgress.canContinueToPutaway]);
   const reopenActiveReceiptMutation = useMutation({
     mutationFn: async () => {
       if (!receipt) throw new Error('No receipt selected');
@@ -1212,7 +1251,11 @@ function CenterPanel({
             )}
           </div>
         </div>
-        <StepIndicator currentStep={step} totalSteps={5} />
+        <StepIndicator
+          currentStep={step}
+          totalSteps={5}
+          lockedSteps={inspectionProgress.canContinueToPutaway ? [] : [4]}
+        />
         <div className="text-xs text-gray-500 font-medium">
           {STEP_LABELS[step]}
         </div>
@@ -1310,7 +1353,7 @@ function CenterPanel({
           >
             Back
           </Button>
-          {step < 4 && (
+          {step < 3 && (
             <Button
               size="sm"
               onClick={() => setStep((s) => Math.min(4, s + 1))}
@@ -3454,6 +3497,7 @@ export function DispositionStep({
   onUpdate: (r: Receipt) => void;
 }) {
   const units = receipt.units ?? [];
+  const inspectionProgress = getInspectionProgress(units);
   const NONE_SENTINEL = '__none__';
   const [settingDisposition, setSettingDisposition] = useState<{
     unitId: number;
@@ -3887,7 +3931,7 @@ export function DispositionStep({
               ) : (
                 <CheckCircle2 className="w-3 h-3 mr-1" />
               )}
-              Accept All {pendingUnits.length} Pending Unit
+              Inspect and Accept All {pendingUnits.length} Unit
               {pendingUnits.length === 1 ? '' : 's'}
             </Button>
           )}
@@ -4165,10 +4209,11 @@ export function DispositionStep({
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-sm">
-              Accept all pending units?
+              Inspect and accept all pending units?
             </DialogTitle>
             <DialogDescription className="text-xs">
-              This will accept {pendingUnits.length} pending unit
+              This confirms inspection and accepts {pendingUnits.length} pending
+              unit
               {pendingUnits.length === 1 ? '' : 's'} using the approval default:{' '}
               {approvalDefaultsLabel}.
             </DialogDescription>
@@ -4191,15 +4236,41 @@ export function DispositionStep({
               {acceptAllMutation.isPending ? (
                 <Loader2 className="w-3 h-3 animate-spin mr-1" />
               ) : null}
-              Accept All
+              Inspect & Accept All
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {units.length > 0 && (
+      <div
+        className={`rounded-lg border px-3 py-2 text-xs ${
+          inspectionProgress.canContinueToPutaway
+            ? 'border-green-300 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-900/20 dark:text-green-300'
+            : 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
+        }`}
+        data-testid="inspection-progress-summary"
+        role="status"
+        aria-live="polite"
+      >
+        {inspectionProgress.canContinueToPutaway ? (
+          <span className="flex items-center gap-2 font-medium">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Inspection complete: {inspectionProgress.completed} of{' '}
+            {inspectionProgress.total} units dispositioned
+          </span>
+        ) : (
+          <span className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {inspectionProgress.completed} of {inspectionProgress.total} units
+            inspected · {inspectionProgress.pending} remaining
+          </span>
+        )}
+      </div>
+
+      {inspectionProgress.canContinueToPutaway && (
         <Button size="sm" className="w-full mt-2" onClick={onNext}>
-          Continue to Putaway <ChevronRight className="w-3 h-3 ml-1" />
+          Inspection Complete — Continue to Putaway{' '}
+          <ChevronRight className="w-3 h-3 ml-1" />
         </Button>
       )}
     </div>
@@ -5273,14 +5344,19 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="avery-5160">Avery 5160 sheet — 30 labels</SelectItem>
-            <SelectItem value="avery-5163">Avery 5163 sheet — 10 labels</SelectItem>
+            <SelectItem value="avery-5160">
+              Avery 5160 sheet — 30 labels
+            </SelectItem>
+            <SelectItem value="avery-5163">
+              Avery 5163 sheet — 10 labels
+            </SelectItem>
             <SelectItem value="receiving-4x6">Receiving — 4 × 6 in</SelectItem>
           </SelectContent>
         </Select>
         <div className="mt-1 text-[11px] text-gray-500">
           Every size includes the AG part number and description.
-          {labelSize !== 'receiving-4x6' && ' Print Avery sheets at Actual size / 100%.'}
+          {labelSize !== 'receiving-4x6' &&
+            ' Print Avery sheets at Actual size / 100%.'}
         </div>
         {controlledReceivingBarcodes && (
           <div className="mt-2 grid gap-2">

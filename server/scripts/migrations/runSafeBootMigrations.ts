@@ -363,6 +363,7 @@ export const safeMigrationFiles = [
   '0310_rebuild_p2_ledger_metadata_indexes.sql',
   '0311_stock_build_request_authority.sql',
   '0312_stock_build_release_readiness.sql',
+  '0313_product_teardown_capture.sql',
   'investigation_308_order_duplication.sql',
 ];
 

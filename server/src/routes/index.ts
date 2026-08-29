@@ -78,6 +78,7 @@ import p2ProjectControlledConfigurationsRoutes from './p2ProjectControlledConfig
 import p2FrozenProductionDemandRoutes from './p2FrozenProductionDemand';
 import p2ManufacturingWorkOrderRoutes from './p2ManufacturingWorkOrders';
 import dailyTagUpRoutes from './dailyTagUp';
+import productTeardownsRoutes from './productTeardowns';
 import communicationsRoutes from './communications';
 import marketingRoutes from './marketing';
 import internalMessagesRoutes from './internalMessages';
@@ -1467,6 +1468,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/configuration-control', p2FrozenProductionDemandRoutes);
   app.use('/api', p2ManufacturingWorkOrderRoutes);
   app.use('/api/daily-tag-up', dailyTagUpRoutes);
+  app.use('/api/product-teardowns', requireAdminOrOwner, productTeardownsRoutes);
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);

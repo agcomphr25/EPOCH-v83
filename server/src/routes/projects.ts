@@ -3349,7 +3349,8 @@ const projectSourcePartInventorySchema = z.object({
     .default('COMPONENT'),
 });
 
-// POST /api/projects/:id/p2-hub/source-parts/inventory-item - convert a project PO source part into a manufactured AG inventory item.
+// POST /api/projects/:id/p2-hub/source-parts/inventory-item - link a project PO source part to an AG inventory item,
+// creating a manufactured item only when no inventory item already exists.
 router.post('/:id/p2-hub/source-parts/inventory-item', async (req, res) => {
   try {
     const { id } = req.params;
@@ -3391,7 +3392,8 @@ router.post('/:id/p2-hub/source-parts/inventory-item', async (req, res) => {
     const requestedInternalPartNumber = input.internalPartNumber?.trim() || '';
     const requestedInternalItems = requestedInternalPartNumber
       ? await pool.query<LegacyProjectValue>(
-          `SELECT id, ag_part_number, name, item_type, manufactured_category
+          `SELECT id, ag_part_number, name, item_type, manufactured_category,
+                  utilized_in_non_inventory
            FROM inventory_items
            WHERE LOWER(TRIM(ag_part_number)) = LOWER(TRIM($1))
            LIMIT 1`,
@@ -3407,7 +3409,8 @@ router.post('/:id/p2-hub/source-parts/inventory-item', async (req, res) => {
     const existingByLink =
       !requestedInternalPartNumber && sourceLine.inventory_item_id
         ? await pool.query<LegacyProjectValue>(
-            `SELECT id, ag_part_number, name, item_type, manufactured_category
+            `SELECT id, ag_part_number, name, item_type, manufactured_category,
+                    utilized_in_non_inventory
            FROM inventory_items
            WHERE id = $1
            LIMIT 1`,
@@ -3418,7 +3421,8 @@ router.post('/:id/p2-hub/source-parts/inventory-item', async (req, res) => {
       requestedInternalPartNumber || existingByLink.length > 0
         ? []
         : await pool.query<LegacyProjectValue>(
-            `SELECT id, ag_part_number, name, item_type, manufactured_category
+            `SELECT id, ag_part_number, name, item_type, manufactured_category,
+                    utilized_in_non_inventory
            FROM inventory_items
            WHERE LOWER(TRIM(ag_part_number)) = LOWER(TRIM($1))
            LIMIT 1`,
@@ -3432,16 +3436,24 @@ router.post('/:id/p2-hub/source-parts/inventory-item', async (req, res) => {
     const linkedPoItemIds = poRows.map((row: LegacyProjectValue) => row.id);
 
     if (existingItem) {
+      const isNonInventory = existingItem.utilized_in_non_inventory === true;
       const updated = await pool.query<LegacyProjectValue>(
         `UPDATE inventory_items
-         SET item_type = 'MANUFACTURED',
-             type = 'Manufactured',
-             manufactured_category = COALESCE(manufactured_category, $2),
-             manufacturing_level = COALESCE(manufacturing_level, 'COMPONENT'),
+         SET item_type = CASE WHEN $3::boolean THEN 'PURCHASED' ELSE 'MANUFACTURED' END,
+             type = CASE WHEN $3::boolean THEN 'Purchased' ELSE 'Manufactured' END,
+             manufactured_category = CASE
+               WHEN $3::boolean THEN NULL
+               ELSE COALESCE(manufactured_category, $2)
+             END,
+             manufacturing_level = CASE
+               WHEN $3::boolean THEN NULL
+               ELSE COALESCE(manufacturing_level, 'COMPONENT')
+             END,
              updated_at = NOW()
          WHERE id = $1
-         RETURNING id, ag_part_number, name, item_type, manufactured_category`,
-        [existingItem.id, input.manufacturedCategory]
+         RETURNING id, ag_part_number, name, item_type, manufactured_category,
+                   utilized_in_non_inventory`,
+        [existingItem.id, input.manufacturedCategory, isNonInventory]
       );
       await pool.query(
         `UPDATE p2_purchase_order_items
@@ -3648,7 +3660,8 @@ router.get('/:id/p2-hub', async (req, res) => {
       poInventoryItemIds.length > 0
         ? await optionalHubQuery<LegacyProjectValue>(
             'PO inventory items',
-            `SELECT id, ag_part_number, name, item_type, type, manufactured_category
+            `SELECT id, ag_part_number, name, item_type, type, manufactured_category,
+                    utilized_in_non_inventory
            FROM inventory_items
            WHERE id = ANY($1::int[])`,
             [poInventoryItemIds]
@@ -4127,6 +4140,7 @@ router.get('/:id/p2-hub', async (req, res) => {
         inventoryName: inventoryItem?.name ?? null,
         itemType: inventoryItem?.item_type ?? inventoryItem?.type ?? null,
         manufacturedCategory: inventoryItem?.manufactured_category ?? null,
+        isNonInventory: inventoryItem?.utilized_in_non_inventory === true,
         isManufactured: itemType === 'MANUFACTURED',
       };
     });

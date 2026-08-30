@@ -97,7 +97,12 @@ type SharedManufacturingDepartment = {
 };
 
 const ALL_MANUFACTURING_QUEUES = '__ALL__';
-const LEGACY_MANUFACTURING_QUEUES = ['Cutting Table', 'CNC', 'Cores'];
+const LEGACY_MANUFACTURING_QUEUES = [
+  'Cutting Table',
+  'CNC',
+  'Cores',
+  'Assembly',
+];
 
 type QueueItemWithInventory = ManufacturingQueue & {
   inventoryItem: {
@@ -122,7 +127,7 @@ export default function ManufacturingQueue() {
     SharedManufacturingDepartment[]
   >({
     queryKey: ['/api/shared-departments', 'manufacturing-queue-filter'],
-    queryFn: () => apiRequest('/api/shared-departments?routingOnly=true'),
+    queryFn: () => apiRequest('/api/shared-departments'),
   });
   const manufacturingQueues = useMemo(() => {
     const departments = sharedDepartments

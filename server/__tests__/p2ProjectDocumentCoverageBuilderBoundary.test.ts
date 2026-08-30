@@ -27,4 +27,11 @@ describe('P2 project document coverage builder boundary', () => {
     expect(projectsRoute).toContain('activePoLinkedAgPartNumbers.filter(');
     expect(projectsRoute).toContain('linked AG part(s) need routing coverage.');
   });
+
+  it('returns the inventory part description for missing-part hover text', () => {
+    expect(projectsRoute).toContain('const activePoLinkedAgPartDescriptions = Object.fromEntries(');
+    expect(projectsRoute).toContain("String(inventoryItem?.name ?? '').trim()");
+    expect(projectsRoute).toContain("String(item.part_name ?? '').trim()");
+    expect(projectsRoute).toContain('missingPartDescriptions: activePoLinkedAgPartDescriptions');
+  });
 });

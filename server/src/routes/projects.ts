@@ -4446,6 +4446,17 @@ router.get('/:id/p2-hub', async (req, res) => {
           .filter(Boolean)
       )
     );
+    const activePoLinkedAgPartDescriptions = Object.fromEntries(
+      activePoItems.flatMap((item: LegacyProjectValue) => {
+        const inventoryItem =
+          poInventoryItemById.get(Number(item.inventory_item_id)) ?? null;
+        const partNumber = String(inventoryItem?.ag_part_number ?? '').trim();
+        const description =
+          String(inventoryItem?.name ?? '').trim() ||
+          String(item.part_name ?? '').trim();
+        return partNumber && description ? [[partNumber, description]] : [];
+      })
+    );
     const partsMissingRoutings = activePoLinkedAgPartNumbers.filter(
       (partNumber: string) =>
         !routeByPartNumber.has(String(partNumber).trim().toLowerCase())
@@ -4589,6 +4600,7 @@ router.get('/:id/p2-hub', async (req, res) => {
           0
         ),
         missingParts: partsMissingInstructions,
+        missingPartDescriptions: activePoLinkedAgPartDescriptions,
       },
       {
         key: 'bom',
@@ -4624,6 +4636,7 @@ router.get('/:id/p2-hub', async (req, res) => {
           0
         ),
         missingParts: partsMissingRoutings,
+        missingPartDescriptions: activePoLinkedAgPartDescriptions,
       },
       {
         key: 'quote',

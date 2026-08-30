@@ -3152,6 +3152,7 @@ export default function ProjectDetailPage() {
                 <div className="space-y-3">
                   {documentCoverageItems.map((item: any) => {
                     const missingParts = Array.isArray(item.missingParts) ? item.missingParts : [];
+                    const missingPartDescriptions = item.missingPartDescriptions ?? {};
                     return (
                       <div key={item.key} className="rounded-md border p-4">
                         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3184,11 +3185,19 @@ export default function ProjectDetailPage() {
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                           <span className="rounded bg-muted px-2 py-1">Source: {item.source || 'Project record'}</span>
-                          {missingParts.slice(0, 8).map((part: string) => (
-                            <span key={part} className="rounded bg-amber-50 px-2 py-1 text-amber-800">
-                              Missing: {part}
-                            </span>
-                          ))}
+                          {missingParts.slice(0, 8).map((part: string) => {
+                            const description = missingPartDescriptions[part];
+                            return (
+                              <span
+                                key={part}
+                                className="rounded bg-amber-50 px-2 py-1 text-amber-800"
+                                title={description || undefined}
+                                aria-label={description ? `Missing: ${part}. ${description}` : undefined}
+                              >
+                                Missing: {part}
+                              </span>
+                            );
+                          })}
                           {missingParts.length > 8 && (
                             <span className="rounded bg-amber-50 px-2 py-1 text-amber-800">
                               +{missingParts.length - 8} more

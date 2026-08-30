@@ -1104,9 +1104,14 @@ export default function ProjectDetailPage() {
       }),
     onSuccess: (data: any) => {
       const agPartNumber = data?.inventoryItem?.agPartNumber ?? data?.inventoryItem?.ag_part_number;
+      const isNonInventory =
+        data?.inventoryItem?.utilizedInNonInventory === true ||
+        data?.inventoryItem?.utilized_in_non_inventory === true;
       toast({
         title: data?.created ? 'AG inventory item created' : 'AG inventory item updated',
-        description: agPartNumber
+        description: isNonInventory && agPartNumber
+          ? `${agPartNumber} is linked as a non-inventory item.`
+          : agPartNumber
           ? `${agPartNumber} is now linked as a manufactured source part.`
           : 'The source part is now linked as a manufactured inventory item.',
       });
@@ -3331,6 +3336,7 @@ export default function ProjectDetailPage() {
                     {bomRoutingSourceParts.map((sourcePart: any) => {
                       const rowKey = sourcePart.poItemId ?? sourcePart.partNumber;
                       const isLinkedManufactured = Boolean(sourcePart.agPartNumber && sourcePart.isManufactured);
+                      const isLinkedNonInventory = Boolean(sourcePart.agPartNumber && sourcePart.isNonInventory);
                       const internalPartInput = sourcePartInternalNumbers[String(rowKey)] ?? sourcePart.agPartNumber ?? '';
                       return (
                         <div key={rowKey} className="rounded-md border p-3">
@@ -3341,7 +3347,9 @@ export default function ProjectDetailPage() {
                                 {sourcePart.quantity !== undefined && (
                                   <Badge variant="outline">Qty {formatQuantityLabel(sourcePart.quantity)}</Badge>
                                 )}
-                                {isLinkedManufactured ? (
+                                {isLinkedNonInventory ? (
+                                  <Badge className="bg-orange-100 text-orange-800">Non-inventory AG item</Badge>
+                                ) : isLinkedManufactured ? (
                                   <Badge className="bg-green-100 text-green-800">Manufactured AG item</Badge>
                                 ) : sourcePart.agPartNumber ? (
                                   <Badge variant="secondary">AG item linked</Badge>
@@ -3356,9 +3364,11 @@ export default function ProjectDetailPage() {
                                 <span className="rounded bg-muted px-2 py-1">
                                   AG inventory: <span className="font-mono">{sourcePart.agPartNumber || 'Not linked'}</span>
                                 </span>
-                                <span className="rounded bg-muted px-2 py-1">
-                                  Category: {sourcePart.manufacturedCategory || 'Component default'}
-                                </span>
+                                {!isLinkedNonInventory && (
+                                  <span className="rounded bg-muted px-2 py-1">
+                                    Category: {sourcePart.manufacturedCategory || (sourcePart.isManufactured ? 'Component default' : 'Not manufactured')}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <div className="space-y-1">
@@ -3390,10 +3400,10 @@ export default function ProjectDetailPage() {
                                 Link AG Part
                               </Button>
                               <Button
-                                variant={isLinkedManufactured ? 'outline' : 'default'}
+                                variant={isLinkedManufactured || isLinkedNonInventory ? 'outline' : 'default'}
                                 size="sm"
                                 onClick={() => convertSourcePartMutation.mutate(sourcePart)}
-                                disabled={convertSourcePartMutation.isPending || !sourcePart.partNumber}
+                                disabled={convertSourcePartMutation.isPending || !sourcePart.partNumber || isLinkedNonInventory}
                                 data-testid={`button-convert-source-part-${sourcePart.poItemId ?? sourcePart.partNumber}`}
                               >
                                 {convertSourcePartMutation.isPending ? (
@@ -3401,7 +3411,7 @@ export default function ProjectDetailPage() {
                                 ) : (
                                   <Edit className="h-4 w-4 mr-1.5" />
                                 )}
-                                {isLinkedManufactured ? 'Refresh Link' : 'Create AG Item'}
+                                {isLinkedNonInventory ? 'Non-Inventory' : isLinkedManufactured ? 'Refresh Link' : 'Create AG Item'}
                               </Button>
                             </div>
                           </div>

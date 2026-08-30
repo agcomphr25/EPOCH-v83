@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import {
@@ -6583,6 +6583,14 @@ function DraftBomWizardWorkspace({
 }
 
 function AssemblyTreeWorkspace({ tree }: { tree: AssemblyTreeNode[] }) {
+  const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>([]);
+  const expandableNodeIds = useMemo(
+    () => tree.flatMap(collectExpandableAssemblyNodeIds),
+    [tree],
+  );
+  const rootExpandableNodeIds = tree
+    .filter((node) => node.children.length > 0 || node.isManufactured)
+    .map((node) => node.id);
   const totals = tree.reduce(
     (acc, node) => {
       const nodes = flattenAssemblyTree(node);
@@ -6604,11 +6612,33 @@ function AssemblyTreeWorkspace({ tree }: { tree: AssemblyTreeNode[] }) {
             {tree.length} created BOM{tree.length === 1 ? '' : 's'} broken down by on-hand and ordered parts.
           </p>
         </div>
-        <div className="grid grid-cols-4 gap-2 text-sm">
-          <AssemblyOrderStatusCount label="Ready" value={totals.ready} tone="ready" />
-          <AssemblyOrderStatusCount label="On hand" value={totals.onHand} tone="on-hand" />
-          <AssemblyOrderStatusCount label="Ordered" value={totals.ordered} tone="active" />
-          <AssemblyOrderStatusCount label="Need plan" value={totals.needsPlan} tone="quote" />
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setExpandedNodeIds(expandableNodeIds)}
+              disabled={expandableNodeIds.length === 0}
+            >
+              Open all
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setExpandedNodeIds([])}
+              disabled={expandedNodeIds.length === 0}
+            >
+              Close all
+            </Button>
+          </div>
+          <div className="grid grid-cols-4 gap-2 text-sm">
+            <AssemblyOrderStatusCount label="Ready" value={totals.ready} tone="ready" />
+            <AssemblyOrderStatusCount label="On hand" value={totals.onHand} tone="on-hand" />
+            <AssemblyOrderStatusCount label="Ordered" value={totals.ordered} tone="active" />
+            <AssemblyOrderStatusCount label="Need plan" value={totals.needsPlan} tone="quote" />
+          </div>
         </div>
       </div>
 
@@ -6617,9 +6647,25 @@ function AssemblyTreeWorkspace({ tree }: { tree: AssemblyTreeNode[] }) {
           Create a BOM in the BOM wizard to see what can be manufactured.
         </div>
       ) : (
-        <Accordion type="multiple" className="divide-y divide-slate-200">
+        <Accordion
+          type="multiple"
+          value={rootExpandableNodeIds.filter((id) => expandedNodeIds.includes(id))}
+          onValueChange={(nextIds) => {
+            setExpandedNodeIds((currentIds) => [
+              ...currentIds.filter((id) => !rootExpandableNodeIds.includes(id)),
+              ...nextIds,
+            ]);
+          }}
+          className="divide-y divide-slate-200"
+        >
           {tree.map((node) => (
-            <AssemblyTreeAccordionNode key={node.id} node={node} depth={0} />
+            <AssemblyTreeAccordionNode
+              key={node.id}
+              node={node}
+              depth={0}
+              expandedNodeIds={expandedNodeIds}
+              setExpandedNodeIds={setExpandedNodeIds}
+            />
           ))}
         </Accordion>
       )}
@@ -6627,7 +6673,17 @@ function AssemblyTreeWorkspace({ tree }: { tree: AssemblyTreeNode[] }) {
   );
 }
 
-function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; depth: number }) {
+function AssemblyTreeAccordionNode({
+  node,
+  depth,
+  expandedNodeIds,
+  setExpandedNodeIds,
+}: {
+  node: AssemblyTreeNode;
+  depth: number;
+  expandedNodeIds: string[];
+  setExpandedNodeIds: Dispatch<SetStateAction<string[]>>;
+}) {
   const canExpand = node.children.length > 0 || node.isManufactured;
   const rowContent = (
     <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto_auto] md:items-center">
@@ -6664,9 +6720,31 @@ function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; de
       </AccordionTrigger>
       <AccordionContent className="px-4 pb-4">
         {node.children.length > 0 ? (
-          <Accordion type="multiple" className="rounded-md border border-slate-200">
+          <Accordion
+            type="multiple"
+            value={node.children
+              .filter((child) => child.children.length > 0 || child.isManufactured)
+              .map((child) => child.id)
+              .filter((id) => expandedNodeIds.includes(id))}
+            onValueChange={(nextIds) => {
+              const childIds = node.children
+                .filter((child) => child.children.length > 0 || child.isManufactured)
+                .map((child) => child.id);
+              setExpandedNodeIds((currentIds) => [
+                ...currentIds.filter((id) => !childIds.includes(id)),
+                ...nextIds,
+              ]);
+            }}
+            className="rounded-md border border-slate-200"
+          >
             {node.children.map((child) => (
-              <AssemblyTreeAccordionNode key={child.id} node={child} depth={depth + 1} />
+              <AssemblyTreeAccordionNode
+                key={child.id}
+                node={child}
+                depth={depth + 1}
+                expandedNodeIds={expandedNodeIds}
+                setExpandedNodeIds={setExpandedNodeIds}
+              />
             ))}
           </Accordion>
         ) : (
@@ -6681,6 +6759,13 @@ function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; de
 
 function flattenAssemblyTree(node: AssemblyTreeNode): AssemblyTreeNode[] {
   return [node, ...node.children.flatMap(flattenAssemblyTree)];
+}
+
+function collectExpandableAssemblyNodeIds(node: AssemblyTreeNode): string[] {
+  const childIds = node.children.flatMap(collectExpandableAssemblyNodeIds);
+  return node.children.length > 0 || node.isManufactured
+    ? [node.id, ...childIds]
+    : childIds;
 }
 
 function ManufactureStateBadge({ state }: { state: AssemblyManufactureState }) {

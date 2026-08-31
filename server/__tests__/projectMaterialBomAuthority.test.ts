@@ -7,6 +7,10 @@ const routeSource = readFileSync(
   path.join(process.cwd(), 'server/src/routes/projects.ts'),
   'utf8',
 );
+const pageSource = readFileSync(
+  path.join(process.cwd(), 'client/src/pages/ProjectDetailPage.tsx'),
+  'utf8',
+);
 
 describe('project Material tab BOM authority', () => {
   it('calculates demand from the active released effective BOM revision', () => {
@@ -20,5 +24,13 @@ describe('project Material tab BOM authority', () => {
     expect(assemblyQuery).toContain('AND (effective_to IS NULL OR effective_to > NOW())');
     expect(assemblyQuery).toContain('WHERE b.is_active = true');
     expect(assemblyQuery).toContain('line.qty_per');
+  });
+
+  it('nets manufactured child availability before exposing production and raw-material demand', () => {
+    expect(routeSource).toContain('availableManufacturedInventoryByPart');
+    expect(routeSource).toContain('remainingManufacturedInventoryByPart');
+    expect(routeSource).toContain('production_required_quantity');
+    expect(pageSource).toContain("node.sourceType === 'STOCK_SATISFIED'");
+    expect(pageSource).toContain('No child work order or downstream raw-material demand is required.');
   });
 });

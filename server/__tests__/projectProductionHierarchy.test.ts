@@ -102,4 +102,49 @@ describe('buildProjectProductionHierarchy', () => {
     expect(result?.children[0].requiredQuantity).toBe(20);
     expect(result?.children[0].workOrders).toEqual([]);
   });
+
+  it('fulfills manufactured child demand from available inventory and removes downstream material demand', () => {
+    const raw = node('assembly/child/raw', 'RAW', false);
+    raw.quantityPerParent = 0.5;
+    const child = node('assembly/child', 'CHILD', true, [raw]);
+    const result = buildProjectProductionHierarchy({
+      root: node('assembly', 'ASSEMBLY', true, [child]),
+      orderedQuantity: 10,
+      workOrders: [],
+      productionOrders: [],
+      remainingManufacturedInventoryByPart: new Map([['child', 10]]),
+    });
+
+    expect(result?.children[0]).toMatchObject({
+      sourceType: 'STOCK_SATISFIED',
+      grossRequiredQuantity: 10,
+      requiredQuantity: 0,
+      inventoryFulfilledQuantity: 10,
+      children: [],
+    });
+  });
+
+  it('uses only the uncovered manufactured quantity for downstream material demand', () => {
+    const raw = node('assembly/child/raw', 'RAW', false);
+    raw.quantityPerParent = 0.5;
+    const child = node('assembly/child', 'CHILD', true, [raw]);
+    const result = buildProjectProductionHierarchy({
+      root: node('assembly', 'ASSEMBLY', true, [child]),
+      orderedQuantity: 10,
+      workOrders: [],
+      productionOrders: [],
+      remainingManufacturedInventoryByPart: new Map([['child', 4]]),
+    });
+
+    expect(result?.children[0]).toMatchObject({
+      sourceType: 'MANUFACTURED_WORK_ORDER',
+      grossRequiredQuantity: 10,
+      requiredQuantity: 6,
+      inventoryFulfilledQuantity: 4,
+    });
+    expect(result?.children[0].children[0]).toMatchObject({
+      sourceType: 'PURCHASED_MATERIAL',
+      requiredQuantity: 3,
+    });
+  });
 });

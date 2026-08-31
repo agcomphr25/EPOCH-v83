@@ -110,9 +110,12 @@ function ProductionHierarchyNode({ node, isRoot = false }: { node: any; isRoot?:
   const demand = node.productionDemand ?? {};
   const departments = Array.isArray(demand.departments) ? demand.departments : [];
   const isPurchased = node.sourceType === 'PURCHASED_MATERIAL';
+  const isStockSatisfied = node.sourceType === 'STOCK_SATISFIED';
   if (isPurchased) return null;
   const typeLabel = node.sourceType === 'ASSEMBLY_WORK_ORDER'
     ? 'Assembly work order'
+    : isStockSatisfied
+      ? 'Fulfilled from inventory'
     : isPurchased
       ? 'Purchased material'
       : `${departments.join(' / ') || 'Manufactured'} work order`;
@@ -126,12 +129,20 @@ function ProductionHierarchyNode({ node, isRoot = false }: { node: any; isRoot?:
             <p className="truncate text-xs text-muted-foreground">{node.partName || 'No part description'}</p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge variant={isPurchased ? 'secondary' : 'default'}>{typeLabel}</Badge>
-            <Badge variant="outline">Required {Number(node.requiredQuantity ?? 0).toLocaleString()}</Badge>
+            <Badge variant={isStockSatisfied ? 'secondary' : isPurchased ? 'secondary' : 'default'}>{typeLabel}</Badge>
+            <Badge variant="outline">Gross demand {Number(node.grossRequiredQuantity ?? node.requiredQuantity ?? 0).toLocaleString()}</Badge>
+            {Number(node.inventoryFulfilledQuantity ?? 0) > 0 && (
+              <Badge variant="secondary">From stock {Number(node.inventoryFulfilledQuantity).toLocaleString()}</Badge>
+            )}
+            {!isStockSatisfied && (
+              <Badge variant="outline">Production required {Number(node.requiredQuantity ?? 0).toLocaleString()}</Badge>
+            )}
           </div>
         </div>
         {isPurchased ? (
           <p className="mt-2 text-xs text-muted-foreground">Purchase demand only - no production work order.</p>
+        ) : isStockSatisfied ? (
+          <p className="mt-2 text-xs text-muted-foreground">No child work order or downstream raw-material demand is required.</p>
         ) : workOrders.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-2">
             {workOrders.map((wo: any) => (
@@ -163,7 +174,7 @@ function ProductionHierarchyNode({ node, isRoot = false }: { node: any; isRoot?:
 
 function hasMissingManufacturingWorkOrder(node: any): boolean {
   if (!node) return false;
-  const required = node.sourceType !== 'PURCHASED_MATERIAL';
+  const required = !['PURCHASED_MATERIAL', 'STOCK_SATISFIED'].includes(node.sourceType);
   if (required && (!Array.isArray(node.workOrders) || node.workOrders.length === 0)) return true;
   return Array.isArray(node.children) && node.children.some(hasMissingManufacturingWorkOrder);
 }
@@ -3971,8 +3982,12 @@ export default function ProjectDetailPage() {
                                   <p className="text-sm text-muted-foreground">{item.part_name || 'No description'}</p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
-                                  <Badge variant="outline">Required {formatQuantityLabel(item.quantity)}</Badge>
-                                  <Badge variant={item.progress === 'Completed' ? 'default' : 'secondary'}>{item.progress}</Badge>
+                                  <Badge variant="outline">Gross demand {formatQuantityLabel(item.gross_required_quantity ?? item.quantity)}</Badge>
+                                  {Number(item.inventory_fulfilled_quantity ?? 0) > 0 && (
+                                    <Badge variant="secondary">From stock {formatQuantityLabel(item.inventory_fulfilled_quantity)}</Badge>
+                                  )}
+                                  <Badge variant="outline">Production required {formatQuantityLabel(item.production_required_quantity ?? item.quantity)}</Badge>
+                                  <Badge variant={['Completed', 'Stock Fulfilled'].includes(item.progress) ? 'default' : 'secondary'}>{item.progress}</Badge>
                                   <Badge variant="outline">On hand {formatQuantityLabel(item.quantity_on_hand)}</Badge>
                                 </div>
                               </div>
@@ -3982,7 +3997,8 @@ export default function ProjectDetailPage() {
                                     {workOrder.workOrderNumber ?? workOrder.work_order_number} · {workOrder.status ?? 'Unknown'}
                                   </Badge>
                                 ))}
-                                {(item.work_orders ?? []).length === 0 && <span className="text-xs text-amber-700">Work order has not been provisioned.</span>}
+                                {(item.work_orders ?? []).length === 0 && item.progress !== 'Stock Fulfilled' && <span className="text-xs text-amber-700">Work order has not been provisioned.</span>}
+                                {item.progress === 'Stock Fulfilled' && <span className="text-xs text-muted-foreground">Inventory fully covers this manufactured demand; downstream raw material is excluded.</span>}
                               </div>
                             </div>
                           ))}

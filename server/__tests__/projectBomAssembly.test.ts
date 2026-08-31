@@ -116,4 +116,30 @@ describe('buildProjectBomAssemblyTree', () => {
       quantity: 2.2, bom_occurrence_count: 1,
     }]);
   });
+
+  it('suppresses downstream raw-material demand covered by manufactured child inventory', () => {
+    const tree = buildProjectBomAssemblyTree([
+      row({}),
+      row({
+        node_key: ['root:1000', 'line:1'], parent_key: ['root:1000'], part_number: 'CHILD-1',
+        part_name: 'Manufactured child', inventory_item_id: 2000, item_type: 'MANUFACTURED', qty_per: '1', depth: 1, bom_id: 'bom-child', latest_revision_id: 'rev-child',
+      }),
+      row({
+        node_key: ['root:1000', 'line:1', 'line:2'], parent_key: ['root:1000', 'line:1'], part_number: 'RAW-1',
+        part_name: 'Raw material', inventory_item_id: 3000, item_type: 'PURCHASED', qty_per: '0.5', depth: 2, bom_id: null, latest_revision_id: null,
+      }),
+    ]);
+
+    expect(collectPurchasedBomParts(
+      tree,
+      new Map([['1000', 10]]),
+      new Map([['child-1', 10]])
+    )).toEqual([]);
+
+    expect(collectPurchasedBomParts(
+      tree,
+      new Map([['1000', 10]]),
+      new Map([['child-1', 4]])
+    )).toMatchObject([{ part_number: 'RAW-1', quantity: 3 }]);
+  });
 });

@@ -4018,7 +4018,7 @@ router.get('/:id/p2-hub', async (req, res) => {
           (Number.isFinite(quantity) ? quantity : 0)
       );
     });
-    const purchasedBomParts = collectPurchasedBomParts(
+    const grossPurchasedBomParts = collectPurchasedBomParts(
       assemblyTree,
       orderedQuantityByRootPart
     );
@@ -4027,7 +4027,7 @@ router.get('/:id/p2-hub', async (req, res) => {
       orderedQuantityByRootPart
     );
     const bomInventoryPartNumbers = Array.from(new Set([
-      ...purchasedBomParts.map((part) => part.part_number),
+      ...grossPurchasedBomParts.map((part) => part.part_number),
       ...manufacturedBomParts.map((part) => part.part_number),
     ]));
     const inventoryBalanceRows = bomInventoryPartNumbers.length > 0
@@ -4085,6 +4085,29 @@ router.get('/:id/p2-hub', async (req, res) => {
       rows.push(balance);
       inventoryBalancesByPart.set(key, rows);
     });
+    const availableInventoryByPart = new Map(
+      Array.from(inventoryBalancesByPart.entries()).map(([partNumber, balances]) => [
+        partNumber,
+        Math.max(
+          0,
+          balances.reduce(
+            (sum, balance) => sum + Number(balance.quantity_available ?? 0),
+            0
+          )
+        ),
+      ])
+    );
+    const availableManufacturedInventoryByPart = new Map(
+      manufacturedBomParts.map((part) => {
+        const partKey = part.part_number.trim().toLowerCase();
+        return [partKey, availableInventoryByPart.get(partKey) ?? 0] as const;
+      })
+    );
+    const purchasedBomParts = collectPurchasedBomParts(
+      assemblyTree,
+      orderedQuantityByRootPart,
+      new Map(availableManufacturedInventoryByPart)
+    );
     const addInventoryBalances = <T extends { part_number: string }>(part: T) => {
       const inventoryBalances = inventoryBalancesByPart.get(part.part_number.trim().toLowerCase()) ?? [];
       return {
@@ -4294,7 +4317,21 @@ router.get('/:id/p2-hub', async (req, res) => {
         .map((workOrder) => workOrder.assignedDepartment ?? workOrder.assigned_department ?? workOrder.departmentName ?? workOrder.department_name ?? workOrder.department)
         .filter(Boolean)));
       const statuses = relatedWorkOrders.map((workOrder) => String(workOrder.status ?? '').trim()).filter(Boolean);
-      const progress = statuses.some((status) => ['COMPLETED', 'COMPLETE', 'CLOSED'].includes(status.toUpperCase()))
+      const partKey = normalizeProductionKey(part.part_number);
+      const isAssemblyRoot = assemblyTree.some(
+        (root) => normalizeProductionKey(root.partNumber) === partKey
+      );
+      const availableQuantity = isAssemblyRoot
+        ? 0
+        : availableManufacturedInventoryByPart.get(partKey) ?? 0;
+      const inventoryFulfilledQuantity = Math.min(part.quantity, availableQuantity);
+      const productionRequiredQuantity = Math.max(
+        part.quantity - inventoryFulfilledQuantity,
+        0
+      );
+      const progress = productionRequiredQuantity === 0 && part.quantity > 0
+        ? 'Stock Fulfilled'
+        : statuses.some((status) => ['COMPLETED', 'COMPLETE', 'CLOSED'].includes(status.toUpperCase()))
         ? 'Completed'
         : statuses.some((status) => ['IN_PROGRESS', 'ACTIVE', 'STARTED'].includes(status.toUpperCase()))
           ? 'In Production'
@@ -4303,6 +4340,9 @@ router.get('/:id/p2-hub', async (req, res) => {
             : relatedWorkOrders.length > 0 ? 'Pending' : 'Work Order Required';
       return addInventoryBalances({
         ...part,
+        gross_required_quantity: part.quantity,
+        inventory_fulfilled_quantity: inventoryFulfilledQuantity,
+        production_required_quantity: productionRequiredQuantity,
         department: departments.join(' / ') || 'Unassigned',
         progress,
         work_orders: relatedWorkOrders,
@@ -4317,6 +4357,9 @@ router.get('/:id/p2-hub', async (req, res) => {
         projectMaterialCustodyRows
       ),
     }));
+    const remainingManufacturedInventoryByPart = new Map(
+      availableManufacturedInventoryByPart
+    );
     const poLinePlacements = activePoItems.map((item: LegacyProjectValue) => {
       const lineId = Number(item.id);
       const lineSerializedItems = serializedByLineId.get(lineId) ?? [];
@@ -4378,6 +4421,7 @@ router.get('/:id/p2-hub', async (req, res) => {
           orderedQuantity,
           workOrders,
           productionOrders: lineProductionOrders,
+          remainingManufacturedInventoryByPart,
         }),
         serializedItems: lineSerializedItems.map(
           (serializedItem: LegacyProjectValue) => ({

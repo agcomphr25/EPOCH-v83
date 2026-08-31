@@ -9,9 +9,13 @@ export type ProjectProductionHierarchyNode = {
   sourceType:
     | 'ASSEMBLY_WORK_ORDER'
     | 'MANUFACTURED_WORK_ORDER'
+    | 'STOCK_SATISFIED'
     | 'PURCHASED_MATERIAL';
   quantityPerParent: number;
+  grossRequiredQuantity: number;
   requiredQuantity: number;
+  inventoryAvailableQuantity: number;
+  inventoryFulfilledQuantity: number;
   workOrders: ProductionRecord[];
   productionDemand: {
     recordCount: number;
@@ -37,6 +41,7 @@ export function buildProjectProductionHierarchy(input: {
   orderedQuantity: number;
   workOrders: ProductionRecord[];
   productionOrders: ProductionRecord[];
+  remainingManufacturedInventoryByPart?: Map<string, number>;
 }): ProjectProductionHierarchyNode | null {
   if (!input.root) return null;
   const workOrdersByPart = new Map<string, ProductionRecord[]>();
@@ -60,10 +65,29 @@ export function buildProjectProductionHierarchy(input: {
     parentRequiredQuantity: number,
     root = false
   ): ProjectProductionHierarchyNode => {
-    const requiredQuantity = root
+    const grossRequiredQuantity = root
       ? Math.max(0, input.orderedQuantity)
       : parentRequiredQuantity * Math.max(0, node.quantityPerParent);
     const key = normalized(node.partNumber);
+    const inventoryAvailableQuantity =
+      !root && node.isManufactured
+        ? Math.max(
+            0,
+            input.remainingManufacturedInventoryByPart?.get(key) ?? 0
+          )
+        : 0;
+    const inventoryFulfilledQuantity = Math.min(
+      grossRequiredQuantity,
+      inventoryAvailableQuantity
+    );
+    const requiredQuantity =
+      grossRequiredQuantity - inventoryFulfilledQuantity;
+    if (!root && node.isManufactured && input.remainingManufacturedInventoryByPart) {
+      input.remainingManufacturedInventoryByPart.set(
+        key,
+        inventoryAvailableQuantity - inventoryFulfilledQuantity
+      );
+    }
     const demandRows = productionOrdersByPart.get(key) ?? [];
     const totalQuantity = demandRows.reduce(
       (total, record) => total + finiteQuantity(record.quantity),
@@ -91,10 +115,15 @@ export function buildProjectProductionHierarchy(input: {
       sourceType: root
         ? 'ASSEMBLY_WORK_ORDER'
         : node.isManufactured
-          ? 'MANUFACTURED_WORK_ORDER'
+          ? requiredQuantity === 0
+            ? 'STOCK_SATISFIED'
+            : 'MANUFACTURED_WORK_ORDER'
           : 'PURCHASED_MATERIAL',
       quantityPerParent: root ? 1 : node.quantityPerParent,
+      grossRequiredQuantity,
       requiredQuantity,
+      inventoryAvailableQuantity,
+      inventoryFulfilledQuantity,
       workOrders: workOrdersByPart.get(key) ?? [],
       productionDemand: {
         recordCount: demandRows.length,
@@ -105,7 +134,10 @@ export function buildProjectProductionHierarchy(input: {
           demandRows.every((record) => finiteQuantity(record.quantity) === 1),
         departments,
       },
-      children: node.children.map((child) => visit(child, requiredQuantity)),
+      children:
+        requiredQuantity === 0 && !root
+          ? []
+          : node.children.map((child) => visit(child, requiredQuantity)),
     };
   };
 

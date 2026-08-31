@@ -102,13 +102,15 @@ export function buildProjectBomAssemblyTree(rows: ProjectBomAssemblyRow[]): Proj
 
 export function collectPurchasedBomParts(
   roots: ProjectBomAssemblyNode[],
-  orderedQuantityByRootPart: ReadonlyMap<string, number>
+  orderedQuantityByRootPart: ReadonlyMap<string, number>,
+  availableManufacturedQuantityByPart?: Map<string, number>
 ): ProjectPurchasedBomPart[] {
   const purchasedByPart = new Map<string, ProjectPurchasedBomPart>();
 
   const visit = (node: ProjectBomAssemblyNode, extendedParentQuantity: number) => {
     const requiredQuantity = extendedParentQuantity * node.quantityPerParent;
     if (node.isInventoryItem && !node.isManufactured) {
+      if (requiredQuantity <= 0) return;
       const normalizedPartNumber = node.partNumber.trim().toLowerCase();
       const existing = purchasedByPart.get(normalizedPartNumber);
       if (existing) {
@@ -126,7 +128,25 @@ export function collectPurchasedBomParts(
       return;
     }
 
-    node.children.forEach((child) => visit(child, requiredQuantity));
+    let downstreamQuantity = requiredQuantity;
+    if (node.isManufactured && availableManufacturedQuantityByPart) {
+      const normalizedPartNumber = node.partNumber.trim().toLowerCase();
+      const availableQuantity = Math.max(
+        0,
+        availableManufacturedQuantityByPart.get(normalizedPartNumber) ?? 0
+      );
+      const inventoryFulfilledQuantity = Math.min(
+        requiredQuantity,
+        availableQuantity
+      );
+      downstreamQuantity = requiredQuantity - inventoryFulfilledQuantity;
+      availableManufacturedQuantityByPart.set(
+        normalizedPartNumber,
+        availableQuantity - inventoryFulfilledQuantity
+      );
+    }
+
+    node.children.forEach((child) => visit(child, downstreamQuantity));
   };
 
   roots.forEach((root) => {

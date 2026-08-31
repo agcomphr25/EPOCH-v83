@@ -365,6 +365,7 @@ export const safeMigrationFiles = [
   '0312_stock_build_release_readiness.sql',
   '0313_product_teardown_capture.sql',
   '0314_transportation_non_inventory_classification.sql',
+  '0315_lock_prj026_ag_priv_inventory_link.sql',
   '0315_layup_schedule_order_source_integrity.sql',
   'investigation_308_order_duplication.sql',
 ];
@@ -480,6 +481,7 @@ export const criticalMigrationFiles = new Set([
   '0311_stock_build_request_authority.sql',
   '0312_stock_build_release_readiness.sql',
   '0314_transportation_non_inventory_classification.sql',
+  '0315_lock_prj026_ag_priv_inventory_link.sql',
   '0315_layup_schedule_order_source_integrity.sql',
 ]);
 

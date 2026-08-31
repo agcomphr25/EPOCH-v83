@@ -3133,9 +3133,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
         for (const item of body.lineItems) {
           const itemId = Number(item.id);
+          const existingItem = itemId ? existingById.get(itemId) : null;
           const itemData = {
             poId,
-            inventoryItemId: item.inventoryItemId || null,
+            // The project BOM/Routing source-part link is authoritative once set.
+            // PO edit payloads frequently omit inventoryItemId, so never erase an
+            // established AG identity merely because that field was not posted.
+            inventoryItemId:
+              item.inventoryItemId || existingItem?.inventoryItemId || null,
             partNumber: item.partNumber,
             partName: item.description || item.partName || item.partNumber,
             quantity: Number(item.quantity) || 1,
@@ -3547,7 +3552,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               quantity: item.quantity,
               dueDate: item.dueDate || null,
               unitPrice: item.unitPrice || 0,
-              inventoryItemId: item.inventoryItemId || null,
+              // Carry the canonical AG identity forward when a revision payload
+              // omits it; source-part relinking remains the explicit change path.
+              inventoryItemId:
+                item.inventoryItemId || sourceItem?.inventory_item_id || null,
             };
           });
         } else {

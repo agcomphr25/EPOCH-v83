@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const migrationPath = path.resolve(
   process.cwd(),
-  'migrations/0315_layup_schedule_order_source_integrity.sql'
+  'migrations/0316_layup_schedule_order_source_integrity.sql'
 );
 const migration = fs.readFileSync(migrationPath, 'utf8');
 
@@ -19,7 +19,12 @@ describe('layup schedule order source integrity migration', () => {
   it('retains database-level referential integrity', () => {
     expect(migration).toContain('CREATE CONSTRAINT TRIGGER layup_schedule_order_source_guard');
     expect(migration).toContain("USING ERRCODE = '23503'");
-    expect(migration).toContain(
+  });
+
+  it('preserves historical orphan rows without blocking application startup', () => {
+    expect(migration).toContain('orphaned_schedule_count');
+    expect(migration).toContain('RAISE WARNING');
+    expect(migration).not.toContain(
       'layup_schedule contains an order_id with no authoritative source'
     );
   });

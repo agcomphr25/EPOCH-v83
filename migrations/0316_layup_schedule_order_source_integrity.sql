@@ -38,22 +38,29 @@ DEFERRABLE INITIALLY IMMEDIATE
 FOR EACH ROW
 EXECUTE FUNCTION validate_layup_schedule_order_source();
 
+-- Historical rows predate the union-source guard and must not make startup
+-- unavailable. Preserve them for traceability, report their count, and enforce
+-- the authoritative-source rule prospectively through the trigger above.
 DO $$
+DECLARE
+  orphaned_schedule_count bigint;
 BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM layup_schedule schedule
-    WHERE NOT EXISTS (
-      SELECT 1 FROM production_queue queue_order
-      WHERE queue_order.order_id = schedule.order_id
-    )
-      AND NOT EXISTS (
-        SELECT 1 FROM production_orders po_order
-        WHERE po_order.order_id = schedule.order_id
-      )
-  ) THEN
-    RAISE EXCEPTION
-      'layup_schedule contains an order_id with no authoritative source';
+  SELECT COUNT(*)
+    INTO orphaned_schedule_count
+  FROM layup_schedule schedule
+  WHERE NOT EXISTS (
+    SELECT 1 FROM production_queue queue_order
+    WHERE queue_order.order_id = schedule.order_id
+  )
+    AND NOT EXISTS (
+      SELECT 1 FROM production_orders po_order
+      WHERE po_order.order_id = schedule.order_id
+    );
+
+  IF orphaned_schedule_count > 0 THEN
+    RAISE WARNING
+      'Preserving % historical layup_schedule row(s) with no authoritative source; prospective source guard is active',
+      orphaned_schedule_count;
   END IF;
 END;
 $$;

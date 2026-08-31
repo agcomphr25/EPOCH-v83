@@ -2554,7 +2554,7 @@ ${materialBudgetExpression}
         )
         SELECT
           COALESCE(SUM(effective_extended_cost) FILTER (WHERE status = 'pending_pm_acceptance'), 0) AS "pendingReceivedCost",
-          COALESCE(SUM(effective_extended_cost) FILTER (WHERE status = 'accepted'), 0) AS "acceptedReceivedCost"
+          COALESCE(SUM(effective_extended_cost) FILTER (WHERE status IN ('accepted', 'accepted_transferred')), 0) AS "acceptedReceivedCost"
         FROM received_costs
       `, [projectId])
     : [{ pendingReceivedCost: '0', acceptedReceivedCost: '0' }];
@@ -2714,7 +2714,7 @@ ${materialBudgetExpression}
           COALESCE(ru.lot_number, ml.supplier_lot_number) AS "lotNumber",
           COALESCE(ru.internal_control_number, ml.internal_control_number) AS "internalControlNumber",
           prm.quantity::numeric AS "qtyRequired",
-          CASE WHEN prm.status IN ('pending_pm_acceptance', 'accepted') THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyAllocated",
+          CASE WHEN prm.status IN ('pending_pm_acceptance', 'accepted', 'accepted_transferred') THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyAllocated",
           0::numeric AS "qtyIssued",
           0::numeric AS "qtyOnHand",
           ii.lead_time_days AS "leadTimeDays",
@@ -2722,11 +2722,11 @@ ${materialBudgetExpression}
             WHEN prm.quantity::numeric <> 0 THEN cost.effective_extended_cost / prm.quantity::numeric
             ELSE cost.effective_extended_cost
           END AS "unitCost",
-          CASE WHEN prm.status IN ('pending_pm_acceptance', 'accepted') THEN cost.effective_extended_cost ELSE 0::numeric END AS "committedCost",
+          CASE WHEN prm.status IN ('pending_pm_acceptance', 'accepted', 'accepted_transferred') THEN cost.effective_extended_cost ELSE 0::numeric END AS "committedCost",
           0::numeric AS "consumedCost",
           CASE
             WHEN prm.status = 'pending_pm_acceptance' THEN 'PENDING_PM_ACCEPTANCE'
-            WHEN prm.status = 'accepted' THEN 'RECEIVED_ACCEPTED'
+            WHEN prm.status IN ('accepted', 'accepted_transferred') THEN 'RECEIVED_ACCEPTED'
             ELSE 'RECEIVED_REJECTED'
           END AS "status",
           prm.id AS "projectReceivedMaterialId",
@@ -2755,7 +2755,7 @@ ${materialBudgetExpression}
           ) AS effective_extended_cost
         ) cost
         WHERE prm.project_id = $1
-          AND prm.status IN ('pending_pm_acceptance', 'accepted')
+          AND prm.status IN ('pending_pm_acceptance', 'accepted', 'accepted_transferred')
         ORDER BY
           CASE WHEN prm.status = 'pending_pm_acceptance' THEN 0 ELSE 1 END,
           prm.created_at DESC

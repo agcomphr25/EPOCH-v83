@@ -101,4 +101,19 @@ describe('buildProjectBomAssemblyTree', () => {
       { id: 'bom-manufactured:2000', part_number: '2000', part_name: 'Manufactured child', quantity: 20, bom_occurrence_count: 1 },
     ]);
   });
+
+  it('preserves fractional BOM usage when calculating purchased material demand', () => {
+    const tree = buildProjectBomAssemblyTree([
+      row({}),
+      row({
+        node_key: ['root:1000', 'line:1'], parent_key: ['root:1000'], part_number: 'SHEET-1',
+        part_name: 'Sheet material', inventory_item_id: 3000, item_type: 'PURCHASED', qty_per: '0.02', depth: 1, bom_id: null,
+      }),
+    ]);
+
+    expect(collectPurchasedBomParts(tree, new Map([['1000', 110]]))).toEqual([{
+      id: 'bom-purchased:sheet-1', part_number: 'SHEET-1', part_name: 'Sheet material',
+      quantity: 2.2, bom_occurrence_count: 1,
+    }]);
+  });
 });

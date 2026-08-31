@@ -758,6 +758,26 @@ import {
   formatOrderId,
 } from './utils/orderIdGenerator';
 import { generateOrderPdf, PdfIntent, createOrderSnapshot } from './services/orderPdfService';
+
+function withInventoryItemEnumCasts<T extends Partial<InsertInventoryItem>>(
+  data: T
+): T {
+  const enumSafeData: any = { ...data };
+
+  if (typeof data.itemType === 'string') {
+    enumSafeData.itemType = sql`${data.itemType}::inventory_item_type`;
+  }
+  if (typeof data.manufacturedCategory === 'string') {
+    enumSafeData.manufacturedCategory =
+      sql`${data.manufacturedCategory}::inventory_manufactured_category`;
+  }
+  if (typeof data.manufacturingLevel === 'string') {
+    enumSafeData.manufacturingLevel =
+      sql`${data.manufacturingLevel}::inventory_manufacturing_level`;
+  }
+
+  return enumSafeData;
+}
 import { normalizeKey } from './lib/customerKey';
 import { computeP1Queue } from './src/helpers/p1POQueueHelper';
 import {
@@ -6724,8 +6744,11 @@ export class DatabaseStorage implements IStorage {
     console.log('🔧 Storage data keys:', Object.keys(data));
     console.log('🔧 Storage data has id?:', 'id' in data);
     console.log('🔧 Storage data.id value:', (data as any).id);
-    
-    const [item] = await db.insert(inventoryItems).values([data]).returning();
+
+    const [item] = await db
+      .insert(inventoryItems)
+      .values([withInventoryItemEnumCasts(data)])
+      .returning();
     return item;
   }
 
@@ -6734,7 +6757,7 @@ export class DatabaseStorage implements IStorage {
     data: Partial<InsertInventoryItem>
   ): Promise<InventoryItem> {
     // Convert Date objects to strings for date fields
-    const updateData: any = { ...data };
+    const updateData: any = withInventoryItemEnumCasts(data);
     if (updateData.orderDate instanceof Date) {
       updateData.orderDate = updateData.orderDate.toISOString().split('T')[0];
     }

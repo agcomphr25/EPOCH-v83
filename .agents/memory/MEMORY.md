@@ -3,3 +3,4 @@
 - [Volatile-default column provisioning hang](volatile-default-column-provisioning.md) — Drizzle diff generates slow ADD COLUMN volatile_func() NOT NULL that hangs Replit provisioning; fix by temporarily stripping DEFAULT+NOT NULL on dev DB, publish, then restore
 - [npm schema-diff lifecycle collision](npm-schema-diff-lifecycle-collision.md) — an npm `predb:push` script runs automatically before `db:push`, blocking Replit’s schema-diff flow; use an explicit non-lifecycle helper name instead
 - [Publishing stale build lock](publishing-stale-build-lock.md) — a completed build can remain marked “in progress”; restart compute and reopen Publishing before republishing
+- [Inventory enum writes](inventory-enum-writes.md) — cast inventory classification values explicitly at the shared write boundary; production may reject text bindings accepted in development

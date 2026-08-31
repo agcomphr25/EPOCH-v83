@@ -14,6 +14,29 @@ describe('P2 project source-part inventory relink', () => {
     );
   });
 
+  it('casts inventory classification values at the shared write boundary', () => {
+    const storage = readFileSync(
+      join(process.cwd(), 'server/storage.ts'),
+      'utf8'
+    );
+
+    expect(storage).toMatch(
+      /sql`\$\{data\.itemType\}::inventory_item_type`/
+    );
+    expect(storage).toMatch(
+      /sql`\$\{data\.manufacturedCategory\}::inventory_manufactured_category`/
+    );
+    expect(storage).toMatch(
+      /sql`\$\{data\.manufacturingLevel\}::inventory_manufacturing_level`/
+    );
+    expect(storage).toMatch(
+      /\.values\(\[withInventoryItemEnumCasts\(data\)\]\)/
+    );
+    expect(storage).toMatch(
+      /const updateData: any = withInventoryItemEnumCasts\(data\)/
+    );
+  });
+
   it('preserves source-part inventory identity across PO edits and revisions', () => {
     const indexRoute = readFileSync(
       join(process.cwd(), 'server/src/routes/index.ts'),

@@ -3717,7 +3717,6 @@ router.get('/:id/p2-hub', async (req, res) => {
           .filter(Boolean)
       )
     );
-
     const [
       productionOrders,
       serializedItems,
@@ -3877,26 +3876,31 @@ router.get('/:id/p2-hub', async (req, res) => {
              ORDER BY is_active DESC, updated_at DESC`,
         linkedAgPartNumbers.length > 0 ? [id, linkedAgPartNumbers] : [id]
       ),
-      partNumbers.length > 0
+      partNumbers.length > 0 || poInventoryItemIds.length > 0
         ? optionalHubQuery<LegacyProjectValue>(
             'BOM records',
-            `SELECT b.id, b.parent_part_ag_number, b.code, b.description, b.is_active,
+            `SELECT b.id, b.parent_inventory_item_id, b.parent_part_ag_number,
+                    b.code, b.description, b.is_active,
                     br.id AS latest_revision_id, br.rev_code AS latest_rev_code,
+                    br.is_released AS latest_revision_is_released,
+                    br.lifecycle_status AS latest_revision_lifecycle_status,
                     br.created_at AS latest_rev_created_at,
                     COUNT(bl.id)::int AS line_count
              FROM boms b
              LEFT JOIN LATERAL (
-               SELECT id, rev_code, created_at
+               SELECT id, rev_code, is_released, lifecycle_status, created_at
                FROM bom_revisions
                WHERE bom_id = b.id
                ORDER BY created_at DESC
                LIMIT 1
              ) br ON true
              LEFT JOIN bom_lines bl ON bl.revision_id = br.id
-             WHERE b.parent_part_ag_number = ANY($1::text[])
-             GROUP BY b.id, br.id, br.rev_code, br.created_at
+             WHERE b.parent_inventory_item_id = ANY($1::int[])
+                OR b.parent_part_ag_number = ANY($2::text[])
+             GROUP BY b.id, br.id, br.rev_code, br.is_released,
+                      br.lifecycle_status, br.created_at
              ORDER BY b.is_active DESC, br.created_at DESC NULLS LAST`,
-            [partNumbers]
+            [poInventoryItemIds, partNumbers]
           )
         : Promise.resolve([]),
       optionalHubQuery<LegacyProjectValue>(
@@ -3938,13 +3942,14 @@ router.get('/:id/p2-hub', async (req, res) => {
         ? await optionalHubQuery<ProjectBomAssemblyRow>(
             'BOM assembly tree',
             `WITH RECURSIVE ranked_boms AS (
-             SELECT b.id AS bom_id, b.parent_part_ag_number, b.code AS bom_code,
+             SELECT b.id AS bom_id, b.parent_inventory_item_id,
+                    b.parent_part_ag_number, b.code AS bom_code,
                     b.description AS bom_description, b.is_active AS bom_is_active,
                     br.id AS latest_revision_id, br.rev_code AS latest_rev_code,
                     br.created_at AS latest_rev_created_at,
                     COUNT(bl.id)::int AS line_count,
                     ROW_NUMBER() OVER (
-                      PARTITION BY b.parent_part_ag_number
+                      PARTITION BY COALESCE(b.parent_inventory_item_id::text, b.parent_part_ag_number)
                       ORDER BY b.is_active DESC, br.created_at DESC NULLS LAST, b.created_at DESC
                     ) AS bom_rank
              FROM boms b
@@ -3976,22 +3981,38 @@ router.get('/:id/p2-hub', async (req, res) => {
                     sb.latest_revision_id, sb.latest_rev_code, sb.latest_rev_created_at, sb.line_count
              FROM unnest($1::text[]) AS root(part_number)
              LEFT JOIN inventory_items inventory ON inventory.ag_part_number = root.part_number
-             LEFT JOIN selected_boms sb ON sb.parent_part_ag_number = root.part_number
+             LEFT JOIN selected_boms sb
+               ON sb.parent_inventory_item_id = inventory.id
+               OR (
+                 sb.parent_inventory_item_id IS NULL
+                 AND LOWER(TRIM(sb.parent_part_ag_number)) = LOWER(TRIM(root.part_number))
+               )
              UNION ALL
              SELECT tree.node_key || ('line:' || line.id::text), tree.node_key,
-                    tree.root_part_number, line.child_part_ag_number,
+                    tree.root_part_number,
+                    COALESCE(inventory.ag_part_number, line.child_part_ag_number),
                     inventory.name, inventory.id,
                     COALESCE(inventory.item_type::text, inventory.type),
                     line.qty_per, line.operation_seq, tree.depth + 1,
-                    tree.part_path || line.child_part_ag_number,
+                    tree.part_path || COALESCE(inventory.ag_part_number, line.child_part_ag_number),
                     child_bom.bom_id, child_bom.bom_code, child_bom.bom_description,
                     child_bom.bom_is_active, child_bom.latest_revision_id,
                     child_bom.latest_rev_code, child_bom.latest_rev_created_at, child_bom.line_count
              FROM assembly_tree tree
              JOIN bom_lines line ON line.revision_id = tree.latest_revision_id
-             LEFT JOIN inventory_items inventory ON inventory.ag_part_number = line.child_part_ag_number
-             LEFT JOIN selected_boms child_bom ON child_bom.parent_part_ag_number = line.child_part_ag_number
-             WHERE NOT line.child_part_ag_number = ANY(tree.part_path)
+             LEFT JOIN inventory_items inventory
+               ON inventory.id = line.child_inventory_item_id
+               OR (
+                 line.child_inventory_item_id IS NULL
+                 AND LOWER(TRIM(inventory.ag_part_number)) = LOWER(TRIM(line.child_part_ag_number))
+               )
+             LEFT JOIN selected_boms child_bom
+               ON child_bom.parent_inventory_item_id = inventory.id
+               OR (
+                 child_bom.parent_inventory_item_id IS NULL
+                 AND LOWER(TRIM(child_bom.parent_part_ag_number)) = LOWER(TRIM(line.child_part_ag_number))
+               )
+             WHERE NOT COALESCE(inventory.ag_part_number, line.child_part_ag_number) = ANY(tree.part_path)
            )
            SELECT node_key, parent_key, root_part_number, part_number, part_name, inventory_item_id, item_type,
                   qty_per, operation_seq, depth, bom_id, bom_code, bom_description,
@@ -4192,6 +4213,26 @@ router.get('/:id/p2-hub', async (req, res) => {
     const sourceParts = activePoItems.map((item: LegacyProjectValue) => {
       const inventoryItem =
         poInventoryItemById.get(Number(item.inventory_item_id)) ?? null;
+      const linkedAgPartNumber = String(
+        inventoryItem?.ag_part_number ?? ''
+      ).trim();
+      const assemblyRoot = linkedAgPartNumber
+        ? assemblyTree.find(
+            (root) =>
+              root.partNumber.trim().toLowerCase() ===
+              linkedAgPartNumber.toLowerCase()
+          )
+        : undefined;
+      const matchingBomRecords = inventoryItem
+        ? bomRecords.filter(
+            (bom) =>
+              Number(bom.parent_inventory_item_id) ===
+                Number(inventoryItem.id) ||
+              String(bom.parent_part_ag_number ?? '')
+                .trim()
+                .toLowerCase() === linkedAgPartNumber.toLowerCase()
+          )
+        : [];
       const itemType = String(
         inventoryItem?.item_type ?? inventoryItem?.type ?? ''
       )
@@ -4210,6 +4251,29 @@ router.get('/:id/p2-hub', async (req, res) => {
         manufacturedCategory: inventoryItem?.manufactured_category ?? null,
         isNonInventory: inventoryItem?.utilized_in_non_inventory === true,
         isManufactured: itemType === 'MANUFACTURED',
+        bomAuthority: {
+          linked: Boolean(assemblyRoot?.bomId),
+          released: Boolean(assemblyRoot?.revisionId),
+          bomId: assemblyRoot?.bomId ?? matchingBomRecords[0]?.id ?? null,
+          revisionId:
+            assemblyRoot?.revisionId ??
+            matchingBomRecords[0]?.latest_revision_id ??
+            null,
+          revisionCode:
+            assemblyRoot?.revisionCode ??
+            matchingBomRecords[0]?.latest_rev_code ??
+            null,
+          lifecycleStatus:
+            assemblyRoot?.revisionId
+              ? 'RELEASED'
+              : matchingBomRecords[0]?.latest_revision_lifecycle_status ??
+                (matchingBomRecords.length > 0 ? 'DRAFT' : 'MISSING'),
+          message: assemblyRoot?.revisionId
+            ? 'Released Robust BOM is linked through the inventory item identity.'
+            : matchingBomRecords.length > 0
+              ? 'A Robust BOM exists, but it must have an active released revision before project demand can be provisioned.'
+              : 'Create or link a Robust BOM for this AG inventory item, then release its revision.',
+        },
       };
     });
     const normalizeProductionKey = (value: unknown) =>

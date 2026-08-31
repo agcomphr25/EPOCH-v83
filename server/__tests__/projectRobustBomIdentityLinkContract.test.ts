@@ -15,7 +15,7 @@ const robustBomPage = readFileSync(
   'utf8',
 );
 
-test('project BOM discovery uses the linked inventory identity before the AG-number fallback', () => {
+test('project BOM discovery resolves released BOMs through canonical linked AG identity', () => {
   assert.match(
     projectRoutes,
     /b\.parent_inventory_item_id = ANY\(\$1::int\[\]\)/,
@@ -34,7 +34,15 @@ test('project BOM discovery uses the linked inventory identity before the AG-num
   );
   assert.match(
     projectRoutes,
-    /sb\.parent_inventory_item_id IS NULL[\s\S]*sb\.parent_part_ag_number/,
+    /parent_inventory\.id = b\.parent_inventory_item_id/,
+  );
+  assert.match(
+    projectRoutes,
+    /NULLIF\(sb\.parent_inventory_ag_part_number, ''\)[\s\S]*sb\.parent_part_ag_number/,
+  );
+  assert.match(
+    projectRoutes,
+    /NULLIF\(child_bom\.parent_inventory_ag_part_number, ''\)[\s\S]*child_bom\.parent_part_ag_number/,
   );
 });
 

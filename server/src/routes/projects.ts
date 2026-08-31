@@ -3440,7 +3440,9 @@ router.post('/:id/p2-hub/source-parts/inventory-item', async (req, res) => {
       const isNonInventory = existingItem.utilized_in_non_inventory === true;
       const updated = await pool.query<LegacyProjectValue>(
         `UPDATE inventory_items
-         SET item_type = CASE WHEN $3::boolean THEN 'PURCHASED' ELSE 'MANUFACTURED' END,
+         SET item_type = (
+               CASE WHEN $3::boolean THEN 'PURCHASED' ELSE 'MANUFACTURED' END
+             )::inventory_item_type,
              type = CASE WHEN $3::boolean THEN 'Purchased' ELSE 'Manufactured' END,
              manufactured_category = CASE
                WHEN $3::boolean THEN NULL

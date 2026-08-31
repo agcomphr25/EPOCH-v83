@@ -3950,15 +3950,21 @@ router.get('/:id/p2-hub', async (req, res) => {
             `WITH RECURSIVE ranked_boms AS (
              SELECT b.id AS bom_id, b.parent_inventory_item_id,
                     b.parent_part_ag_number, b.code AS bom_code,
+                    parent_inventory.ag_part_number AS parent_inventory_ag_part_number,
                     b.description AS bom_description, b.is_active AS bom_is_active,
                     br.id AS latest_revision_id, br.rev_code AS latest_rev_code,
                     br.created_at AS latest_rev_created_at,
                     COUNT(bl.id)::int AS line_count,
                     ROW_NUMBER() OVER (
-                      PARTITION BY COALESCE(b.parent_inventory_item_id::text, b.parent_part_ag_number)
+                      PARTITION BY LOWER(TRIM(COALESCE(
+                        NULLIF(parent_inventory.ag_part_number, ''),
+                        b.parent_part_ag_number
+                      )))
                       ORDER BY b.is_active DESC, br.created_at DESC NULLS LAST, b.created_at DESC
                     ) AS bom_rank
              FROM boms b
+             LEFT JOIN inventory_items parent_inventory
+               ON parent_inventory.id = b.parent_inventory_item_id
              JOIN LATERAL (
                SELECT id, rev_code, created_at
                FROM bom_revisions
@@ -3971,7 +3977,8 @@ router.get('/:id/p2-hub', async (req, res) => {
              ) br ON true
              LEFT JOIN bom_lines bl ON bl.revision_id = br.id
              WHERE b.is_active = true
-             GROUP BY b.id, br.id, br.rev_code, br.created_at
+             GROUP BY b.id, parent_inventory.ag_part_number,
+                      br.id, br.rev_code, br.created_at
            ), selected_boms AS (
              SELECT * FROM ranked_boms WHERE bom_rank = 1
            ), assembly_tree AS (
@@ -3989,10 +3996,10 @@ router.get('/:id/p2-hub', async (req, res) => {
              LEFT JOIN inventory_items inventory ON inventory.ag_part_number = root.part_number
              LEFT JOIN selected_boms sb
                ON sb.parent_inventory_item_id = inventory.id
-               OR (
-                 sb.parent_inventory_item_id IS NULL
-                 AND LOWER(TRIM(sb.parent_part_ag_number)) = LOWER(TRIM(root.part_number))
-               )
+               OR LOWER(TRIM(COALESCE(
+                    NULLIF(sb.parent_inventory_ag_part_number, ''),
+                    sb.parent_part_ag_number
+                  ))) = LOWER(TRIM(root.part_number))
              UNION ALL
              SELECT tree.node_key || ('line:' || line.id::text), tree.node_key,
                     tree.root_part_number,
@@ -4014,10 +4021,13 @@ router.get('/:id/p2-hub', async (req, res) => {
                )
              LEFT JOIN selected_boms child_bom
                ON child_bom.parent_inventory_item_id = inventory.id
-               OR (
-                 child_bom.parent_inventory_item_id IS NULL
-                 AND LOWER(TRIM(child_bom.parent_part_ag_number)) = LOWER(TRIM(line.child_part_ag_number))
-               )
+               OR LOWER(TRIM(COALESCE(
+                    NULLIF(child_bom.parent_inventory_ag_part_number, ''),
+                    child_bom.parent_part_ag_number
+                  ))) = LOWER(TRIM(COALESCE(
+                    inventory.ag_part_number,
+                    line.child_part_ag_number
+                  )))
              WHERE NOT COALESCE(inventory.ag_part_number, line.child_part_ag_number) = ANY(tree.part_path)
            )
            SELECT node_key, parent_key, root_part_number, part_number, part_name, inventory_item_id, item_type,

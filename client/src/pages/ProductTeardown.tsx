@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, CheckCircle2, ChevronRight, CircleAlert, ClipboardPlus, PackageSearch, Plus, Search } from 'lucide-react';
+import { Archive, Camera, CheckCircle2, ChevronRight, CircleAlert, ClipboardPlus, PackageSearch, Plus, RotateCcw, Search } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,24 +30,28 @@ const classificationLabels: Record<string, string> = {
   unclassified: 'Unclassified', manufactured: 'Manufactured', purchased: 'Purchased', feature: 'Feature only',
 };
 
-function SuggestionField({ id, label, value, onChange, placeholder, options }: any) {
+function SuggestionField({ id, label, value, onChange, placeholder, options, inputRef }: any) {
   const listId = `${id}-suggestions`;
-  return <div className="space-y-1.5"><Label htmlFor={id}>{label}</Label><Input id={id} list={listId} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /><datalist id={listId}>{options.map((option: string) => <option key={option} value={option} />)}</datalist></div>;
+  return <div className="space-y-1.5"><Label htmlFor={id}>{label}</Label><Input ref={inputRef} id={id} list={listId} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /><datalist id={listId}>{options.map((option: string) => <option key={option} value={option} />)}</datalist></div>;
 }
 
 export default function ProductTeardown() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const firstCaptureFieldRef = useRef<HTMLInputElement>(null);
+  const observationFieldRef = useRef<HTMLInputElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureCycle, setCaptureCycle] = useState(0);
+  const [captureConfirmation, setCaptureConfirmation] = useState('');
   const [beginCaptureAfterCreate, setBeginCaptureAfterCreate] = useState(false);
   const [product, setProduct] = useState(blankProduct);
   const [item, setItem] = useState(blankItem);
   const [assemblyFilter, setAssemblyFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [classificationFilter, setClassificationFilter] = useState('all');
+  const [sessionFilter, setSessionFilter] = useState<'active' | 'inactive'>('active');
   const [search, setSearch] = useState('');
   const [verifyItem, setVerifyItem] = useState<any>(null);
   const [matchOptions, setMatchOptions] = useState<any[]>([]);
@@ -97,10 +101,22 @@ export default function ProductTeardown() {
     onSuccess: (result, variables) => {
       refreshTeardown(); queryClient.invalidateQueries({ queryKey: ['/api/product-teardowns/suggestions'] });
       setItem({ ...blankItem, physicalLocation: variables.payload.physicalLocation, assemblyName: variables.payload.assemblyName, parentAssemblyName: variables.payload.parentAssemblyName });
+      setCaptureCycle((cycle) => cycle + 1);
+      setCaptureConfirmation(`Saved “${variables.payload.itemName}”. Ready for the next observation.`);
       setCaptureOpen(variables.keepOpen);
-      if (variables.keepOpen) window.setTimeout(() => firstCaptureFieldRef.current?.focus(), 50);
+      if (variables.keepOpen) window.setTimeout(() => observationFieldRef.current?.focus(), 50);
       toast({ title: result.item.inventory_match_state === 'found' ? `Captured and matched to ${result.item.inventory_part_number}` : result.item.inventory_match_state === 'possible' ? 'Captured — possible inventory match needs verification' : 'Observation captured' });
     },
+    onError: (error: any) => toast({ title: 'Observation was not captured', description: error?.message || 'Please review the entry and try again.', variant: 'destructive' }),
+  });
+  const updateTeardownStatus = useMutation({
+    mutationFn: ({ teardownId, isActive }: { teardownId: string; isActive: boolean }) => json(`/api/product-teardowns/${teardownId}/status`, { method: 'PATCH', body: { isActive } }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/product-teardowns'] });
+      if (selectedId === variables.teardownId && !variables.isActive) setSelectedId(null);
+      toast({ title: variables.isActive ? 'Teardown restored' : 'Teardown made inactive' });
+    },
+    onError: (error: any) => toast({ title: 'Teardown status was not changed', description: error?.message || 'Please try again.', variant: 'destructive' }),
   });
   const updateItem = useMutation({ mutationFn: ({ row, patch }: any) => json(`/api/product-teardowns/${selectedId}/items/${row.id}`, { method: 'PATCH', body: patch }), onSuccess: refreshTeardown });
   const toggleMatch = useMutation({ mutationFn: ({ row, checked }: any) => json(`/api/product-teardowns/${selectedId}/items/${row.id}/match`, { method: 'PATCH', body: { inventoryItemId: checked ? row.inventory_item_id : null, confirmed: checked } }), onSuccess: refreshTeardown });
@@ -110,6 +126,7 @@ export default function ProductTeardown() {
   const items = details?.items ?? [];
   const assemblies = [...new Set(items.map((row: any) => row.assembly_name).filter(Boolean))] as string[];
   const locations = [...new Set(items.map((row: any) => row.physical_location).filter(Boolean))] as string[];
+  const visibleSessions = sessions.filter((session: any) => sessionFilter === 'active' ? session.is_active !== false : session.is_active === false);
   const filtered = items.filter((row: any) => (assemblyFilter === 'all' || row.assembly_name === assemblyFilter) && (locationFilter === 'all' || row.physical_location === locationFilter) && (classificationFilter === 'all' || row.classification === classificationFilter) && (!search || `${row.item_name} ${row.entered_part_number ?? ''} ${row.characteristic_name ?? ''} ${row.characteristic_value ?? ''}`.toLowerCase().includes(search.toLowerCase())));
   const consolidated = useMemo(() => {
     const groups = new Map<string, any>();
@@ -133,13 +150,15 @@ export default function ProductTeardown() {
       <Textarea aria-label="Product notes" placeholder="Notes" value={product.notes} onChange={(event) => setProduct({ ...product, notes: event.target.value })} />
       <Button disabled={!product.productName.trim() || createSession.isPending} onClick={() => createSession.mutate()}><ClipboardPlus className="mr-2 h-4 w-4" />{createSession.isPending ? 'Creating teardown…' : 'Create and begin teardown'}</Button>
     </CardContent></Card>}
-    <div className="grid gap-4 md:grid-cols-2">{sessions.map((session: any) => <Card key={session.id} className="cursor-pointer transition-colors hover:border-primary" onClick={() => setSelectedId(session.id)}><CardContent className="flex items-center justify-between p-5"><div><div className="font-semibold">{session.product_name}</div><div className="text-sm text-muted-foreground">{session.model_number || 'No model'} {session.revision ? `• Rev ${session.revision}` : ''}</div></div><ChevronRight /></CardContent></Card>)}</div>
+    <div className="flex items-center gap-2"><Button size="sm" variant={sessionFilter === 'active' ? 'default' : 'outline'} onClick={() => setSessionFilter('active')}>Active ({sessions.filter((session: any) => session.is_active !== false).length})</Button><Button size="sm" variant={sessionFilter === 'inactive' ? 'default' : 'outline'} onClick={() => setSessionFilter('inactive')}>Inactive ({sessions.filter((session: any) => session.is_active === false).length})</Button></div>
+    <div className="grid gap-4 md:grid-cols-2">{visibleSessions.map((session: any) => <Card key={session.id} className="cursor-pointer transition-colors hover:border-primary" onClick={() => setSelectedId(session.id)}><CardContent className="flex items-center justify-between gap-3 p-5"><div className="min-w-0"><div className="font-semibold">{session.product_name}</div><div className="text-sm text-muted-foreground">{session.model_number || 'No model'} {session.revision ? `• Rev ${session.revision}` : ''}</div></div><div className="flex items-center gap-2"><Button size="sm" variant="ghost" disabled={updateTeardownStatus.isPending} onClick={(event) => { event.stopPropagation(); updateTeardownStatus.mutate({ teardownId: session.id, isActive: session.is_active === false }); }}>{session.is_active === false ? <><RotateCcw className="mr-1 h-4 w-4" />Restore</> : <><Archive className="mr-1 h-4 w-4" />Make inactive</>}</Button><ChevronRight /></div></CardContent></Card>)}</div>
+    {visibleSessions.length === 0 && <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">No {sessionFilter} teardowns.</div>}
   </div>;
 
   if (isLoading) return <div className="p-8">Creating teardown workspace…</div>;
   if (detailsFailed || !details) return <div className="mx-auto max-w-xl space-y-4 p-8"><h1 className="text-xl font-semibold">The teardown was created, but its workspace could not be opened.</h1><p className="text-sm text-muted-foreground">{(detailsError as any)?.message || 'Refresh the page or return to the teardown list and open it again.'}</p><Button variant="outline" onClick={() => { setBeginCaptureAfterCreate(false); setSelectedId(null); }}>Return to teardown list</Button></div>;
   return <div className="mx-auto max-w-[1500px] space-y-5 p-6">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><Button variant="ghost" className="mb-2 px-0" onClick={() => setSelectedId(null)}>← All teardowns</Button><h1 className="text-3xl font-semibold">{details.product_name}</h1><p className="text-muted-foreground">{[details.model_number, details.product_part_number, details.revision && `Rev ${details.revision}`].filter(Boolean).join(' • ')}</p><div className="mt-3 flex gap-2">{details.photos?.map((photo: any) => <img key={photo.id} src={photo.file_url} alt={`${details.product_name} teardown`} className="h-20 w-20 rounded-md border object-cover" />)}</div></div><div className="flex flex-wrap gap-2"><label className="cursor-pointer"><Input className="hidden" type="file" accept="image/*" onChange={(event) => event.target.files?.[0] && uploadPhoto(event.target.files[0])} /><Button asChild variant="outline"><span><Camera className="mr-2 h-4 w-4" />Product photo</span></Button></label><Button onClick={() => setCaptureOpen(true)}><Plus className="mr-2 h-4 w-4" />Capture next observation</Button></div></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><Button variant="ghost" className="mb-2 px-0" onClick={() => setSelectedId(null)}>← All teardowns</Button><h1 className="text-3xl font-semibold">{details.product_name}</h1><p className="text-muted-foreground">{[details.model_number, details.product_part_number, details.revision && `Rev ${details.revision}`].filter(Boolean).join(' • ')}</p><div className="mt-3 flex gap-2">{details.photos?.map((photo: any) => <img key={photo.id} src={photo.file_url} alt={`${details.product_name} teardown`} className="h-20 w-20 rounded-md border object-cover" />)}</div></div><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={updateTeardownStatus.isPending} onClick={() => updateTeardownStatus.mutate({ teardownId: details.id, isActive: false })}><Archive className="mr-2 h-4 w-4" />Make inactive</Button><label className="cursor-pointer"><Input className="hidden" type="file" accept="image/*" onChange={(event) => event.target.files?.[0] && uploadPhoto(event.target.files[0])} /><Button asChild variant="outline"><span><Camera className="mr-2 h-4 w-4" />Product photo</span></Button></label><Button onClick={() => { setCaptureConfirmation(''); setCaptureOpen(true); }}><Plus className="mr-2 h-4 w-4" />Capture next observation</Button></div></div>
     <Card><CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4"><div><p className="text-xs text-muted-foreground">Captured</p><p className="text-xl font-semibold">{items.length}</p></div><div><p className="text-xs text-muted-foreground">Locations</p><p className="text-xl font-semibold">{locations.length}</p></div><div><p className="text-xs text-muted-foreground">Components</p><p className="text-xl font-semibold">{assemblies.length}</p></div><div><p className="text-xs text-muted-foreground">Parts/BOM candidates</p><p className="text-xl font-semibold">{items.filter((row: any) => row.include_in_bom_comparison).length}</p></div></CardContent></Card>
     <div className="flex flex-wrap gap-3"><div className="relative min-w-64 flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Search captured observations" placeholder="Search observations" value={search} onChange={(event) => setSearch(event.target.value)} /></div><Select value={locationFilter} onValueChange={setLocationFilter}><SelectTrigger className="w-52"><SelectValue placeholder="All locations" /></SelectTrigger><SelectContent><SelectItem value="all">All locations</SelectItem>{locations.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select><Select value={assemblyFilter} onValueChange={setAssemblyFilter}><SelectTrigger className="w-52"><SelectValue placeholder="All components" /></SelectTrigger><SelectContent><SelectItem value="all">All components</SelectItem>{assemblies.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select><Select value={classificationFilter} onValueChange={setClassificationFilter}><SelectTrigger className="w-52"><SelectValue placeholder="All classifications" /></SelectTrigger><SelectContent><SelectItem value="all">All classifications</SelectItem>{Object.entries(classificationLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
     <Tabs defaultValue="occurrences"><TabsList><TabsTrigger value="occurrences">Observation log ({filtered.length})</TabsTrigger><TabsTrigger value="consolidated">Consolidated parts ({consolidated.length})</TabsTrigger><TabsTrigger value="bom">Latest BOM check</TabsTrigger></TabsList>
@@ -153,18 +172,19 @@ export default function ProductTeardown() {
       <TabsContent value="consolidated"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{consolidated.map((row: any) => <Card key={`${row.item_name}-${row.entered_part_number}`}><CardContent className="p-5"><div className="flex justify-between gap-3"><div><div className="font-semibold">{row.item_name}</div><div className="text-xs text-muted-foreground">{row.inventory_part_number || row.entered_part_number}</div></div><Badge>{row.total} total</Badge></div><div className="mt-3 space-y-2 text-sm">{row.occurrences.map((occurrence: any) => <div key={occurrence.id} className="rounded-md bg-muted p-2">{Number(occurrence.quantity)} × {occurrence.assembly_name || 'No component'} · {occurrence.physical_location || 'No location'}</div>)}</div></CardContent></Card>)}</div></TabsContent>
       <TabsContent value="bom"><Card><CardHeader><CardTitle className="flex items-center gap-2"><PackageSearch className="h-5 w-5" />Latest released BOM {comparison?.revision && <Badge>Rev {comparison.revision}</Badge>}</CardTitle></CardHeader><CardContent>{!comparison?.revision ? <p className="text-muted-foreground">No latest released BOM was found for product part number “{details.product_part_number || 'not entered'}”.</p> : <div className="grid gap-5 md:grid-cols-3"><Comparison title="Observed, missing from BOM" items={comparison.missingFromBom} render={(value: any) => value.item_name} /><Comparison title="BOM item not observed" items={comparison.bomOnly} render={(value: any) => `${value.child_name_snapshot || value.child_part_ag_number} (${value.child_part_ag_number})`} /><Comparison title="Possible match—verify" items={comparison.possible} render={(value: any) => `${value.item.item_name} ↔ ${value.bomLine.child_name_snapshot || value.bomLine.child_part_ag_number}`} /></div>}</CardContent></Card></TabsContent>
     </Tabs>
-    <CaptureDialog open={captureOpen} onOpenChange={setCaptureOpen} item={item} setItem={setItem} values={values} firstFieldRef={firstCaptureFieldRef} setObservationKind={setObservationKind} pending={addItem.isPending} capture={(keepOpen: boolean) => addItem.mutate({ payload: item, keepOpen })} />
+    <CaptureDialog open={captureOpen} onOpenChange={setCaptureOpen} item={item} setItem={setItem} values={values} firstFieldRef={firstCaptureFieldRef} observationFieldRef={observationFieldRef} setObservationKind={setObservationKind} pending={addItem.isPending} captureCycle={captureCycle} confirmation={captureConfirmation} capture={(keepOpen: boolean) => addItem.mutate({ payload: item, keepOpen })} clearAll={() => { setCaptureConfirmation(''); setCaptureCycle((cycle) => cycle + 1); setItem(blankItem); window.setTimeout(() => firstCaptureFieldRef.current?.focus(), 50); }} />
     <Dialog open={Boolean(verifyItem)} onOpenChange={(open) => !open && setVerifyItem(null)}><DialogContent><DialogHeader><DialogTitle>Verify inventory match</DialogTitle><DialogDescription>Choose the inventory item matching “{verifyItem?.item_name}”.</DialogDescription></DialogHeader><div className="space-y-2">{matchOptions.map((option: any) => <button key={option.id} className="flex w-full cursor-pointer items-center justify-between rounded-md border p-3 text-left transition-colors hover:border-primary" onClick={() => { toggleMatch.mutate({ row: { ...verifyItem, inventory_item_id: option.id }, checked: true }); setVerifyItem(null); }}><span><span className="font-medium">{option.name}</span><span className="block text-xs text-muted-foreground">{option.description}</span></span><Badge variant="outline">{option.ag_part_number}</Badge></button>)}</div></DialogContent></Dialog>
   </div>;
 }
 
-function CaptureDialog({ open, onOpenChange, item, setItem, values, firstFieldRef, setObservationKind, pending, capture }: any) {
+function CaptureDialog({ open, onOpenChange, item, setItem, values, firstFieldRef, observationFieldRef, setObservationKind, pending, captureCycle, confirmation, capture, clearAll }: any) {
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Capture an observation</DialogTitle><DialogDescription>Tab through the fields. Saving and continuing keeps the location and component ready for the next entry.</DialogDescription></DialogHeader>
-    <div className="grid gap-4 py-2 md:grid-cols-3">
+    {confirmation && <div role="status" className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800"><CheckCircle2 className="h-4 w-4 shrink-0" />{confirmation}</div>}
+    <div key={captureCycle} className="grid gap-4 py-2 md:grid-cols-3">
       <div className="space-y-1.5"><Label htmlFor="capture-location">1. Physical location</Label><Input ref={firstFieldRef} id="capture-location" list="capture-location-suggestions" value={item.physicalLocation} onChange={(event) => setItem({ ...item, physicalLocation: event.target.value })} placeholder="Front, middle, underside…" /><datalist id="capture-location-suggestions">{values('locations').map((option: string) => <option key={option} value={option} />)}</datalist></div>
       <SuggestionField id="capture-component" label="2. Component / assembly" placeholder="Nose, leg, housing…" options={values('assemblies')} value={item.assemblyName} onChange={(value: string) => setItem({ ...item, assemblyName: value })} />
       <SuggestionField id="capture-parent" label="3. Parent component (optional)" placeholder="Body, front assembly…" options={values('assemblies')} value={item.parentAssemblyName} onChange={(value: string) => setItem({ ...item, parentAssemblyName: value })} />
-      <SuggestionField id="capture-item" label="4. Observed item / feature" placeholder="Nostril, toes, screw…" options={values('names')} value={item.itemName} onChange={(value: string) => setItem({ ...item, itemName: value })} />
+      <SuggestionField id="capture-item" inputRef={observationFieldRef} label="4. Observed item / feature" placeholder="Nostril, toes, screw…" options={values('names')} value={item.itemName} onChange={(value: string) => setItem({ ...item, itemName: value })} />
       <div className="space-y-1.5"><Label>5. Observation type</Label><Select value={item.observationKind} onValueChange={setObservationKind}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="part">Part or component</SelectItem><SelectItem value="characteristic">Feature or characteristic</SelectItem></SelectContent></Select></div>
       <div className="grid grid-cols-2 gap-2"><div className="space-y-1.5"><Label htmlFor="capture-quantity">6. Quantity</Label><Input id="capture-quantity" type="number" min="0.001" step="any" value={item.quantity} onChange={(event) => setItem({ ...item, quantity: Number(event.target.value) })} /></div><div className="space-y-1.5"><Label htmlFor="capture-basis">Basis</Label><Input id="capture-basis" value={item.quantityBasis} onChange={(event) => setItem({ ...item, quantityBasis: event.target.value })} placeholder="legs, per side…" /></div></div>
       <SuggestionField id="capture-characteristic" label="7. Characteristic" placeholder="Diameter, count, size…" options={values('characteristics')} value={item.characteristicName} onChange={(value: string) => setItem({ ...item, characteristicName: value })} />
@@ -180,7 +200,7 @@ function CaptureDialog({ open, onOpenChange, item, setItem, values, firstFieldRe
       <div className="space-y-1.5"><Label htmlFor="capture-material">Material / finish</Label><Input id="capture-material" value={item.materialFinish} onChange={(event) => setItem({ ...item, materialFinish: event.target.value })} /></div>
       <div className="space-y-1.5 md:col-span-3"><Label htmlFor="capture-notes">Notes</Label><Textarea id="capture-notes" value={item.notes} onChange={(event) => setItem({ ...item, notes: event.target.value })} placeholder="Anything else observed at this occurrence" /></div>
     </div>
-    <DialogFooter className="gap-2 sm:justify-between"><p className="mr-auto text-xs text-muted-foreground">Location and component stay filled after “Capture & next.”</p><Button variant="outline" disabled={!item.itemName || pending} onClick={() => capture(false)}>Capture & close</Button><Button disabled={!item.itemName || pending} onClick={() => capture(true)}><Plus className="mr-2 h-4 w-4" />Capture & next</Button></DialogFooter>
+    <DialogFooter className="gap-2 sm:justify-between"><div className="mr-auto flex items-center gap-2"><p className="text-xs text-muted-foreground">Location and component stay filled after “Capture & next.”</p><Button type="button" size="sm" variant="ghost" onClick={clearAll}>Clear all</Button></div><Button variant="outline" disabled={!item.itemName || pending} onClick={() => capture(false)}>{pending ? 'Saving…' : 'Capture & close'}</Button><Button disabled={!item.itemName || pending} onClick={() => capture(true)}><Plus className="mr-2 h-4 w-4" />{pending ? 'Saving…' : 'Capture & next'}</Button></DialogFooter>
   </DialogContent></Dialog>;
 }
 

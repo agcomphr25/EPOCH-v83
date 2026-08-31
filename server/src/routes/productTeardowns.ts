@@ -80,6 +80,19 @@ router.post('/', asyncRoute(async (req: any, res: any) => {
   res.status(201).json(rows[0]);
 }));
 
+router.patch('/:id/status', asyncRoute(async (req: any, res: any) => {
+  const body = z.object({ isActive: z.boolean() }).parse(req.body);
+  const rows = await pool.query(
+    `UPDATE product_teardowns
+        SET is_active=$1, updated_at=NOW()
+      WHERE id=$2
+      RETURNING *`,
+    [body.isActive, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Product teardown not found' });
+  res.json(rows[0]);
+}));
+
 router.get('/suggestions', asyncRoute(async (_req: any, res: any) => {
   const [names, assemblies, locations, parts, characteristics, units] = await Promise.all([
     pool.query(`SELECT DISTINCT item_name AS value FROM product_teardown_items ORDER BY value`),

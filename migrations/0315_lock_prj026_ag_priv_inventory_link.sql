@@ -1,15 +1,24 @@
 -- Restore the PRJ-026 AG-PRIV-01 Rev A source-part identity to AG 26336.
 -- Preserve the generated inventory item and all history; only the PO-family
--- source link is corrected. Replays are idempotent.
+-- source link is corrected. Replays are idempotent. On schema-only or
+-- non-target databases, missing production rows are an intentional no-op.
 DO $$
 DECLARE
   target_inventory_item_id integer;
   target_line_count integer;
 BEGIN
   SELECT id
-    INTO STRICT target_inventory_item_id
+    INTO target_inventory_item_id
   FROM inventory_items
-  WHERE LOWER(TRIM(ag_part_number)) = '26336';
+  WHERE LOWER(TRIM(ag_part_number)) = '26336'
+  ORDER BY id
+  LIMIT 1;
+
+  IF target_inventory_item_id IS NULL THEN
+    RAISE NOTICE
+      'Skipped PRJ-026 source-part repair: inventory item AG 26336 is absent';
+    RETURN;
+  END IF;
 
   WITH project_family_roots AS (
     SELECT DISTINCT COALESCE(po.parent_po_id, po.id) AS family_root_id
@@ -29,8 +38,9 @@ BEGIN
   WHERE LOWER(TRIM(poi.part_number)) = 'ag-priv-01 rev a';
 
   IF target_line_count = 0 THEN
-    RAISE EXCEPTION
-      'PRJ-026 source part AG-PRIV-01 Rev A was not found; no inventory link changed';
+    RAISE NOTICE
+      'Skipped PRJ-026 source-part repair: AG-PRIV-01 Rev A is absent from the project PO family';
+    RETURN;
   END IF;
 
   WITH project_family_roots AS (

@@ -4348,7 +4348,14 @@ export default function ProjectDetailPage() {
                   </div>
                   <div className="space-y-2">
                   <Accordion type="multiple" className="space-y-2">
-                    {hubMaterial.parts.map((part: any) => (
+                    {hubMaterial.parts.map((part: any) => {
+                      const procurement = part.procurement ?? { status: 'Not Requested', quantity_ordered: 0, quantity_received: 0, quantity_available: 0, quantity_pending_acceptance: 0, po_numbers: [] };
+                      const procurementVariant = procurement.status === 'Received'
+                        ? 'default'
+                        : ['On PO', 'Pending Acceptance', 'Partially Received'].includes(procurement.status)
+                          ? 'secondary'
+                          : 'outline';
+                      return (
                       <AccordionItem key={part.id} value={String(part.id)} className="rounded-md border px-3">
                         <AccordionTrigger className="hover:no-underline">
                           <span className="flex w-full flex-wrap items-center justify-between gap-3 pr-3 text-left">
@@ -4358,25 +4365,33 @@ export default function ProjectDetailPage() {
                             </span>
                             <span className="flex flex-wrap gap-2">
                               <Badge variant="outline">Required {formatQuantityLabel(part.quantity)}</Badge>
-                              <Badge variant={Number(part.quantity_available ?? 0) > 0 ? 'default' : 'secondary'}>
-                                Available {formatQuantityLabel(part.quantity_available)}
+                              <Badge variant={Number(procurement.quantity_available ?? 0) > 0 ? 'default' : 'secondary'}>
+                                Project Available {formatQuantityLabel(procurement.quantity_available)}
+                              </Badge>
+                              <Badge variant={procurementVariant} data-testid={`procurement-status-${part.part_number}`}>
+                                {procurement.status}
                               </Badge>
                             </span>
                           </span>
                         </AccordionTrigger>
                         <AccordionContent className="space-y-3 pb-3">
-                          {(part.inventory_balances ?? []).length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No inventory balance exists for this purchased item.</p>
-                          ) : (
-                            <div className="grid gap-2 md:grid-cols-2">
-                              {part.inventory_balances.map((balance: any) => (
-                                <div key={balance.id ?? balance.location_id} className="rounded-md border bg-muted/20 p-3 text-sm">
-                                  <p className="font-medium">{balance.location_id}</p>
-                                  <p className="text-muted-foreground">
-                                    On hand {formatQuantityLabel(balance.quantity_on_hand)} · Allocated {formatQuantityLabel(balance.quantity_allocated)} · Available {formatQuantityLabel(balance.quantity_available)}
-                                  </p>
-                                </div>
-                              ))}
+                          <div className="rounded-md border bg-muted/20 p-3 text-sm">
+                            <p className="font-medium">Company inventory — information only</p>
+                            <p className="text-muted-foreground">
+                              On hand {formatQuantityLabel(part.company_quantity_on_hand)} · Available {formatQuantityLabel(part.company_quantity_available)} · Not available to this project without an admin transfer
+                            </p>
+                          </div>
+                          {procurement.status !== 'Not Requested' && (
+                            <div className="flex flex-wrap gap-3 rounded-md border bg-muted/20 p-3 text-sm">
+                              <span>Ordered <strong>{formatQuantityLabel(procurement.quantity_ordered)}</strong></span>
+                              <span>Accepted for project <strong>{formatQuantityLabel(procurement.quantity_received)}</strong></span>
+                              <span>Project available <strong>{formatQuantityLabel(procurement.quantity_available)}</strong></span>
+                              {Number(procurement.quantity_pending_acceptance ?? 0) > 0 && (
+                                <span>Pending PM acceptance <strong>{formatQuantityLabel(procurement.quantity_pending_acceptance)}</strong></span>
+                              )}
+                              {procurement.po_numbers?.length > 0 && (
+                                <span>PO <strong>{procurement.po_numbers.join(', ')}</strong></span>
+                              )}
                             </div>
                           )}
                           <Button
@@ -4389,7 +4404,8 @@ export default function ProjectDetailPage() {
                           </Button>
                         </AccordionContent>
                       </AccordionItem>
-                    ))}
+                      );
+                    })}
                   </Accordion>
                   </div>
                 </div>

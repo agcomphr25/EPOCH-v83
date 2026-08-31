@@ -44,6 +44,7 @@ import {
   collectPurchasedBomParts,
   type ProjectBomAssemblyRow,
 } from '../services/projectBomAssembly';
+import { deriveProjectMaterialProcurement } from '../services/projectMaterialProcurement';
 import { buildProjectProductionHierarchy } from '../services/projectProductionHierarchy';
 import {
   getActiveWorkflowInstanceForProject,
@@ -4040,6 +4041,42 @@ router.get('/:id/p2-hub', async (req, res) => {
           [bomInventoryPartNumbers]
         )
       : [];
+    const vendorPoMaterialRows = bomInventoryPartNumbers.length > 0
+      ? await optionalHubQuery<LegacyProjectValue>(
+          'project BOM vendor PO material status',
+          `SELECT vpi.ag_part_number, vpi.quantity, vpi.received_quantity,
+                  vp.id AS vendor_po_id,
+                  COALESCE(vp.po_number, vp.external_po_number) AS po_number,
+                  vp.status AS po_status
+           FROM vendor_po_items vpi
+           JOIN vendor_pos vp ON vp.id = vpi.vendor_po_id
+           WHERE vpi.ag_part_number = ANY($1::text[])
+             AND COALESCE(vp.is_current_revision, TRUE) = TRUE
+             AND LOWER(COALESCE(vp.status, '')) NOT IN ('cancelled', 'voided')
+             AND vpi.project_id = $2
+           ORDER BY vp.id, vpi.line_number`,
+          [bomInventoryPartNumbers, id]
+        )
+      : [];
+    const projectMaterialCustodyRows = bomInventoryPartNumbers.length > 0
+      ? await optionalHubQuery<LegacyProjectValue>(
+          'project BOM received material custody',
+          `SELECT COALESCE(rl.ag_part_number, vpi.ag_part_number) AS ag_part_number,
+                  prm.quantity, prm.status, ru.disposition,
+                  LEAST(prm.quantity, COALESCE(ml.remaining_qty, prm.quantity)) AS quantity_available
+           FROM project_received_materials prm
+           JOIN received_units ru ON ru.id = prm.received_unit_id
+           JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
+           JOIN vendor_po_items vpi ON vpi.id = rl.vendor_po_item_id
+           LEFT JOIN material_lots ml ON ml.id = prm.material_lot_id
+           WHERE prm.project_id = $2
+             AND ru.target_project_id = $2
+             AND (vpi.project_id = $2 OR prm.status = 'accepted_transferred')
+             AND COALESCE(rl.ag_part_number, vpi.ag_part_number) = ANY($1::text[])
+           ORDER BY prm.created_at`,
+          [bomInventoryPartNumbers, id]
+        )
+      : [];
     const inventoryBalancesByPart = new Map<string, LegacyProjectValue[]>();
     inventoryBalanceRows.forEach((balance) => {
       const key = String(balance.ag_part_number ?? '').trim().toLowerCase();
@@ -4052,6 +4089,8 @@ router.get('/:id/p2-hub', async (req, res) => {
       const inventoryBalances = inventoryBalancesByPart.get(part.part_number.trim().toLowerCase()) ?? [];
       return {
         ...part,
+        company_quantity_on_hand: inventoryBalances.reduce((sum, row) => sum + Number(row.quantity_on_hand ?? 0), 0),
+        company_quantity_available: inventoryBalances.reduce((sum, row) => sum + Number(row.quantity_available ?? 0), 0),
         quantity_on_hand: inventoryBalances.reduce((sum, row) => sum + Number(row.quantity_on_hand ?? 0), 0),
         quantity_available: inventoryBalances.reduce((sum, row) => sum + Number(row.quantity_available ?? 0), 0),
         inventory_balances: inventoryBalances,
@@ -4269,7 +4308,15 @@ router.get('/:id/p2-hub', async (req, res) => {
         work_orders: relatedWorkOrders,
       });
     });
-    const purchasedItems = purchasedBomParts.map(addInventoryBalances);
+    const purchasedItems = purchasedBomParts.map((part) => ({
+      ...addInventoryBalances(part),
+      procurement: deriveProjectMaterialProcurement(
+        part.part_number,
+        partsRequests,
+        vendorPoMaterialRows,
+        projectMaterialCustodyRows
+      ),
+    }));
     const poLinePlacements = activePoItems.map((item: LegacyProjectValue) => {
       const lineId = Number(item.id);
       const lineSerializedItems = serializedByLineId.get(lineId) ?? [];

@@ -67,6 +67,10 @@ import {
   recordP2ReceivingBarcodePrint,
   resolveP2ReceivingBarcodeIdentity,
 } from '../services/p2ReceivingBarcodeService';
+import {
+  canAdministerP2ProjectCustody,
+  getP2ReceiptCustodyError,
+} from '../services/p2ProjectCustody';
 
 const router = Router();
 
@@ -429,6 +433,44 @@ async function assertUnitOwnership(
   return unit ?? null;
 }
 
+async function getP2ReceiptCustodyContext(
+  receiptId: number,
+  lineId: number,
+  targetProjectId: string | null
+) {
+  const result = await db.execute(sql`
+    SELECT
+      CASE WHEN UPPER(COALESCE(vpo.production_line, '')) = 'P2' THEN TRUE ELSE FALSE END AS "isP2",
+      vpi.project_id::text AS "poLineProjectId"
+    FROM receipt_lines rl
+    JOIN receipts r ON r.id = rl.receipt_id
+    LEFT JOIN vendor_pos vpo ON vpo.id = r.vendor_po_id
+    LEFT JOIN vendor_po_items vpi ON vpi.id = rl.vendor_po_item_id
+    WHERE rl.id = ${lineId}
+      AND rl.receipt_id = ${receiptId}
+    LIMIT 1
+  `);
+  const [row] = sqlRows<{
+    isP2: boolean;
+    poLineProjectId: string | null;
+  }>(result);
+  return {
+    isP2: Boolean(row?.isP2),
+    poLineProjectId: row?.poLineProjectId ?? null,
+    targetProjectId,
+  };
+}
+
+async function assertP2ReceiptCustody(
+  receiptId: number,
+  lineId: number,
+  targetProjectId: string | null
+): Promise<string | null> {
+  return getP2ReceiptCustodyError(
+    await getP2ReceiptCustodyContext(receiptId, lineId, targetProjectId)
+  );
+}
+
 async function getOpenReceivingProjectTargets(): Promise<
   Array<{
     id: string;
@@ -480,6 +522,18 @@ async function resolveDefaultTargetProjectId(
   if (!receipt.vendorPoId) return null;
 
   try {
+    if (line.vendorPoItemId) {
+      const directResult = await db.execute(sql`
+        SELECT project_id::text AS id
+        FROM vendor_po_items
+        WHERE id = ${line.vendorPoItemId}
+          AND vendor_po_id = ${receipt.vendorPoId}
+        LIMIT 1
+      `);
+      const directRows = sqlRows<{ id: string | null }>(directResult);
+      if (directRows[0]?.id) return directRows[0].id;
+    }
+
     const partsRequestResult = await db.execute(sql`
       SELECT p.id::text AS id
       FROM parts_requests pr
@@ -620,7 +674,7 @@ async function syncProjectReceivedMaterial(
           status = 'pending_pm_acceptance',
           notes = EXCLUDED.notes,
           updated_at = NOW()
-      WHERE project_received_materials.status <> 'accepted'
+      WHERE project_received_materials.status NOT IN ('accepted', 'accepted_transferred')
   `);
 }
 
@@ -1517,6 +1571,18 @@ router.post(
             ? null
             : await resolveDefaultTargetProjectId(receipt, line);
 
+      const custodyError = await assertP2ReceiptCustody(
+        receiptId,
+        lineId,
+        targetProjectId ?? null
+      );
+      if (custodyError) {
+        return res.status(422).json({
+          error: custodyError,
+          code: 'P2_PROJECT_CUSTODY_REQUIRED',
+        });
+      }
+
       const body = insertReceivedUnitSchema.parse({
         ...req.body,
         receiptId,
@@ -1690,6 +1756,45 @@ router.patch(
         });
       }
 
+      const targetProjectChanged =
+        'targetProjectId' in updates &&
+        (updates.targetProjectId ?? null) !== (unit.targetProjectId ?? null);
+      const custodyContext = await getP2ReceiptCustodyContext(
+        receiptId,
+        unit.receiptLineId,
+        finalTargetProjectId ?? null
+      );
+      if (custodyContext.isP2 && targetProjectChanged) {
+        if (!canAdministerP2ProjectCustody(user?.role)) {
+          return res.status(403).json({
+            error:
+              'Only an administrator may transfer or release accepted P2 project material.',
+            code: 'P2_PROJECT_CUSTODY_ADMIN_REQUIRED',
+          });
+        }
+        if (unit.disposition !== 'accepted') {
+          return res.status(422).json({
+            error:
+              'Correct the project on the vendor PO line before receiving. P2 project transfer or release is available only after material is accepted.',
+            code: 'P2_PROJECT_CUSTODY_PO_CORRECTION_REQUIRED',
+          });
+        }
+        const acceptedResult = await db.execute(sql`
+          SELECT id
+          FROM project_received_materials
+          WHERE received_unit_id = ${unitId}
+            AND status IN ('accepted', 'accepted_transferred')
+          LIMIT 1
+        `);
+        if (sqlRows(acceptedResult).length === 0) {
+          return res.status(422).json({
+            error:
+              'P2 material must complete project acceptance before it can be transferred or released.',
+            code: 'P2_PROJECT_CUSTODY_ACCEPTANCE_REQUIRED',
+          });
+        }
+      }
+
       // Audit traceability-affecting changes (location, freezer, allocation, disposition fields)
       const auditableKeys: (keyof typeof updates)[] = [
         'quantity',
@@ -1847,6 +1952,30 @@ router.patch(
           .where(eq(receivedUnits.id, unitId))
           .returning();
 
+        if (custodyContext.isP2 && targetProjectChanged) {
+          const displayName = actorName(user);
+          if (finalTargetProjectId) {
+            await tx.execute(sql`
+              UPDATE project_received_materials
+              SET project_id = ${finalTargetProjectId}::uuid,
+                  status = 'accepted_transferred',
+                  notes = CONCAT_WS(E'\n', notes, ${`Transferred to project ${finalTargetProjectId} by ${displayName}`}),
+                  updated_at = NOW()
+              WHERE received_unit_id = ${unitId}
+                AND status IN ('accepted', 'accepted_transferred')
+            `);
+          } else {
+            await tx.execute(sql`
+              UPDATE project_received_materials
+              SET status = 'released_to_general',
+                  notes = CONCAT_WS(E'\n', notes, ${`Released to general inventory by ${displayName}`}),
+                  updated_at = NOW()
+              WHERE received_unit_id = ${unitId}
+                AND status IN ('accepted', 'accepted_transferred')
+            `);
+          }
+        }
+
         if (quantityAdjustment) {
           const txValues: InsertMaterialLotTransaction =
             insertMaterialLotTransactionSchema.parse({
@@ -1962,14 +2091,31 @@ router.patch(
       }
 
       if ('targetProjectId' in updates || 'targetRdProjectId' in updates) {
-        const assigned = updates.targetProjectId || updates.targetRdProjectId;
-        await syncProjectReceivedMaterial(
-          unitId,
-          user,
-          assigned
-            ? 'Project target assigned from receiving putaway'
-            : 'Project target cleared from receiving putaway'
-        );
+        if (custodyContext.isP2 && targetProjectChanged) {
+          await logAudit(
+            receiptId,
+            finalTargetProjectId
+              ? 'p2_project_material_transferred'
+              : 'p2_project_material_released_to_general',
+            user?.employeeId,
+            actorName(user),
+            {
+              unitId,
+              barcode: unit.barcode,
+              fromProjectId: unit.targetProjectId ?? null,
+              toProjectId: finalTargetProjectId ?? null,
+            }
+          );
+        } else {
+          const assigned = updates.targetProjectId || updates.targetRdProjectId;
+          await syncProjectReceivedMaterial(
+            unitId,
+            user,
+            assigned
+              ? 'Project target assigned from receiving putaway'
+              : 'Project target cleared from receiving putaway'
+          );
+        }
       }
 
       res.json(updated);
@@ -2031,6 +2177,18 @@ router.post(
 
       // Expiration gate: cannot accept or issue expired material
       if (disposition === 'accepted') {
+        const custodyError = await assertP2ReceiptCustody(
+          receiptId,
+          unitCheck.receiptLineId,
+          unitCheck.targetProjectId ?? null
+        );
+        if (custodyError) {
+          return res.status(422).json({
+            error: custodyError,
+            code: 'P2_PROJECT_CUSTODY_REQUIRED',
+          });
+        }
+
         const expStatus = receivedUnitExpirationStatus(
           unitCheck.expirationDate ?? undefined
         );
@@ -3088,6 +3246,18 @@ router.post(
           receipt,
           line
         );
+        const custodyError = await assertP2ReceiptCustody(
+          receiptId,
+          line.id,
+          targetProjectId
+        );
+        if (custodyError) {
+          return res.status(422).json({
+            error: custodyError,
+            code: 'P2_PROJECT_CUSTODY_REQUIRED',
+            lineId: line.id,
+          });
+        }
         const body = insertReceivedUnitSchema.parse({
           receiptId,
           receiptLineId: line.id,

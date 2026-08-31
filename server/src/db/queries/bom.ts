@@ -118,8 +118,8 @@ export async function buildBOMTree(revisionId: string) {
     return (Array.isArray(result) ? result : result.rows || []) as any[];
   }
   
-  async function findReleasedRevisionForParentPart(partAgNumber: string) {
-    const query = sql`
+  async function findPreferredRevisionForParentPart(partAgNumber: string) {
+    const releasedQuery = sql`
       SELECT br.id AS rev_id
       FROM boms bo 
       JOIN bom_revisions br ON br.bom_id = bo.id
@@ -129,9 +129,27 @@ export async function buildBOMTree(revisionId: string) {
       LIMIT 1;
     `;
     
-    const result = await db.execute(query);
-    const rows = Array.isArray(result) ? result : result.rows || [];
-    return rows?.[0]?.rev_id as string | undefined;
+    const releasedResult = await db.execute(releasedQuery);
+    const releasedRows = Array.isArray(releasedResult) ? releasedResult : releasedResult.rows || [];
+    if (releasedRows?.[0]?.rev_id) {
+      return releasedRows[0].rev_id as string;
+    }
+
+    // Match the explosion dialog's root-revision selection: when a child BOM has
+    // not been released yet, use its newest revision instead of treating the
+    // manufactured child as a zero-cost leaf component.
+    const latestQuery = sql`
+      SELECT br.id AS rev_id
+      FROM boms bo
+      JOIN bom_revisions br ON br.bom_id = bo.id
+      WHERE bo.parent_part_ag_number = ${partAgNumber}
+      ORDER BY br.created_at DESC NULLS LAST
+      LIMIT 1;
+    `;
+
+    const latestResult = await db.execute(latestQuery);
+    const latestRows = Array.isArray(latestResult) ? latestResult : latestResult.rows || [];
+    return latestRows?.[0]?.rev_id as string | undefined;
   }
   
   async function buildNode(currentRevId: string): Promise<any> {
@@ -148,7 +166,7 @@ export async function buildBOMTree(revisionId: string) {
       const effectiveQty = qtyPer * (1 + scrapPct / 100);
       
       // Check if this part has a BOM (is a make part / sub-assembly)
-      const childRevId = await findReleasedRevisionForParentPart(line.child_part_ag_number);
+      const childRevId = await findPreferredRevisionForParentPart(line.child_part_ag_number);
       
       if (childRevId) {
         // This is a sub-assembly, recurse into it

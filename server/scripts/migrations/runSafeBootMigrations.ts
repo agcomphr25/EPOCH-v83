@@ -367,6 +367,7 @@ export const safeMigrationFiles = [
   '0314_transportation_non_inventory_classification.sql',
   '0315_lock_prj026_ag_priv_inventory_link.sql',
   '0316_layup_schedule_order_source_integrity.sql',
+  '0318_backfill_active_bom_revision_release.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -483,6 +484,7 @@ export const criticalMigrationFiles = new Set([
   '0314_transportation_non_inventory_classification.sql',
   '0315_lock_prj026_ag_priv_inventory_link.sql',
   '0316_layup_schedule_order_source_integrity.sql',
+  '0318_backfill_active_bom_revision_release.sql',
 ]);
 
 export async function runSafeBootMigrations() {

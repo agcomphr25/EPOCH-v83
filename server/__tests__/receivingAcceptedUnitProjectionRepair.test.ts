@@ -21,4 +21,9 @@ describe('accepted receiving unit inventory projection repair', () => {
     expect(fabricRepair).toMatch(/await tx\s*\.insert\(cuttingFabricInventory\)/);
     expect(fabricRepair).toMatch(/await tx\.insert\(cuttingFabricInventoryTransactions\)/);
   });
+
+  it('uses the Fabric (Cutting Table) flag without requiring production-line flags', () => {
+    expect(handler).toContain('const isCuttingFabric = Boolean(invItem.is_fabric)');
+    expect(handler).not.toMatch(/isCuttingFabric[\s\S]{0,150}utilized_in_pl[12]/);
+  });
 });

@@ -3091,9 +3091,10 @@ async function handleAcceptedUnit(
         },
       });
 
-    const isCuttingFabric = Boolean(
-      invItem.is_fabric && (invItem.utilized_in_pl1 || invItem.utilized_in_pl2)
-    );
+    // `is_fabric` is the authoritative "Fabric (Cutting Table)" selection in
+    // Inventory Items. Production-line utilization is independent metadata and
+    // must not prevent a checked fabric from reaching Fabric Inventory Admin.
+    const isCuttingFabric = Boolean(invItem.is_fabric);
     if (isCuttingFabric) {
       const toDateOnly = (
         value: Date | string | null | undefined

@@ -465,7 +465,18 @@ router.get('/items/purchased', async (req: Request, res: Response) => {
 router.get('/items/fabric-items', async (req: Request, res: Response) => {
   try {
     const result = await db.execute(
-      sql`SELECT id, ag_part_number as "agPartNumber", name, source, supplier_part_number as "supplierPartNumber" FROM inventory_items WHERE is_fabric = true AND (is_active = true OR is_active IS NULL) ORDER BY ag_part_number`
+      sql`SELECT
+            ii.id,
+            ii.ag_part_number as "agPartNumber",
+            ii.name,
+            ii.source,
+            ii.supplier_part_number as "supplierPartNumber",
+            COALESCE(SUM(ib.quantity_on_hand), 0)::double precision as "quantityOnHand"
+          FROM inventory_items ii
+          LEFT JOIN inventory_balances ib ON ib.ag_part_number = ii.ag_part_number
+          WHERE ii.is_fabric = true AND (ii.is_active = true OR ii.is_active IS NULL)
+          GROUP BY ii.id, ii.ag_part_number, ii.name, ii.source, ii.supplier_part_number
+          ORDER BY ii.ag_part_number`
     );
     res.json(result.rows || []);
   } catch (error) {

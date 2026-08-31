@@ -4139,9 +4139,9 @@ export const productionQueue = pgTable('production_queue', {
 
 export const layupSchedule = pgTable('layup_schedule', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id')
-    .references(() => productionQueue.orderId)
-    .notNull(),
+  // May reference either production_queue (legacy orders) or production_orders
+  // (P1 PO units). Migration 0315 enforces that union-source relationship.
+  orderId: text('order_id').notNull(),
   scheduledDate: timestamp('scheduled_date').notNull(),
   moldId: text('mold_id')
     .references(() => molds.moldId)

@@ -3415,7 +3415,21 @@ export default function ProjectDetailPage() {
                                     Category: {sourcePart.manufacturedCategory || (sourcePart.isManufactured ? 'Component default' : 'Not manufactured')}
                                   </span>
                                 )}
+                                {sourcePart.bomAuthority?.released ? (
+                                  <span className="rounded bg-green-50 px-2 py-1 text-green-800" data-testid={`source-part-bom-linked-${rowKey}`}>
+                                    Robust BOM: Rev {sourcePart.bomAuthority.revisionCode || 'released'} linked
+                                  </span>
+                                ) : (
+                                  <span className="rounded bg-amber-50 px-2 py-1 text-amber-800" data-testid={`source-part-bom-missing-${rowKey}`}>
+                                    Robust BOM: {sourcePart.bomAuthority?.lifecycleStatus === 'DRAFT' ? 'release required' : 'not linked'}
+                                  </span>
+                                )}
                               </div>
+                              {sourcePart.agPartNumber && sourcePart.bomAuthority?.message && (
+                                <p className="text-xs text-muted-foreground">
+                                  {sourcePart.bomAuthority.message}
+                                </p>
+                              )}
                             </div>
                             <div className="space-y-1">
                               <Label htmlFor={`source-part-internal-${rowKey}`} className="text-xs">
@@ -3496,7 +3510,9 @@ export default function ProjectDetailPage() {
                   <AccordionContent className="px-6 pb-6">
                     {bomAssemblyTree.length === 0 ? (
                       <div className="rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground">
-                        No assembly structure is available for the linked PO parts yet.
+                        {bomRoutingSourceParts.some((part: any) => part.agPartNumber)
+                          ? 'No released Robust BOM hierarchy is available for the linked AG parts. Open Robust BOM, confirm the inventory item identity, and release the applicable revision.'
+                          : 'Link each PO source part to its AG inventory item to resolve the Robust BOM and build the assembly tree.'}
                       </div>
                     ) : (
                       <div className="space-y-4 rounded-md bg-muted/30 p-3">

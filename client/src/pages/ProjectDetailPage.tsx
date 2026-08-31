@@ -2552,6 +2552,32 @@ export default function ProjectDetailPage() {
                           </Button>
                         )}
                       </div>
+                      {summary.attachments.length > 0 && (
+                        <div className="mt-3 space-y-2 border-t pt-3">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Attached documents
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {summary.attachments.map((attachment) => (
+                              <Button
+                                key={attachment.id}
+                                variant="outline"
+                                size="sm"
+                                className="h-auto max-w-full justify-start py-1.5"
+                                onClick={() => setPreviewAttachment({
+                                  url: `/api/project-step-attachments/download/${attachment.id}`,
+                                  name: attachment.originalFileName,
+                                })}
+                                title={`Preview ${attachment.originalFileName}`}
+                                data-testid={`button-preview-summary-attachment-${attachment.id}`}
+                              >
+                                <Eye className="mr-1.5 h-4 w-4 shrink-0" />
+                                <span className="truncate">Preview {attachment.originalFileName}</span>
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

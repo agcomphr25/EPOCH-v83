@@ -52,7 +52,40 @@ export type ProjectManufacturedBomPart = {
   bom_occurrence_count: number;
 };
 
+export type ProjectAssemblySourceItem = {
+  id: number;
+  inventory_item_id?: number | null;
+};
+
+export type ProjectAssemblyInventoryItem = {
+  id: number;
+  item_type?: string | null;
+  type?: string | null;
+  utilized_in_non_inventory?: boolean | null;
+};
+
 const keyFor = (segments: string[]) => segments.join('/');
+
+export function selectProjectAssemblySourceItems<T extends ProjectAssemblySourceItem>(
+  activePoItems: T[],
+  projectPoItemId: number | null | undefined,
+  inventoryItemById: ReadonlyMap<number, ProjectAssemblyInventoryItem>,
+): T[] {
+  if (projectPoItemId) {
+    const controlledLine = activePoItems.find(
+      (item) => Number(item.id) === Number(projectPoItemId),
+    );
+    if (controlledLine) return [controlledLine];
+  }
+
+  return activePoItems.filter((item) => {
+    const inventoryItem = inventoryItemById.get(Number(item.inventory_item_id));
+    if (!inventoryItem || inventoryItem.utilized_in_non_inventory === true) return false;
+    return String(inventoryItem.item_type ?? inventoryItem.type ?? '')
+      .trim()
+      .toUpperCase() === 'MANUFACTURED';
+  });
+}
 
 export function buildProjectBomAssemblyTree(rows: ProjectBomAssemblyRow[]): ProjectBomAssemblyNode[] {
   const nodes = new Map<string, ProjectBomAssemblyNode>();

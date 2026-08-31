@@ -10,6 +10,10 @@ const projectPage = readFileSync(
   new URL('../../client/src/pages/ProjectDetailPage.tsx', import.meta.url),
   'utf8',
 );
+const robustBomPage = readFileSync(
+  new URL('../../client/src/pages/RobustBOMAdministration.tsx', import.meta.url),
+  'utf8',
+);
 
 test('project BOM discovery uses the linked inventory identity before the AG-number fallback', () => {
   assert.match(
@@ -43,4 +47,10 @@ test('project source parts expose released Robust BOM authority and actionable m
   assert.match(projectPage, /source-part-bom-linked-/);
   assert.match(projectPage, /source-part-bom-missing-/);
   assert.match(projectPage, /No released Robust BOM hierarchy is available/);
+});
+
+test('Robust BOM explosion declares the recursive TreeNode used by the dialog', () => {
+  assert.match(robustBomPage, /function TreeNode\(\{/);
+  assert.match(robustBomPage, /<TreeNode[\s\S]*level=\{level \+ 1\}/);
+  assert.match(robustBomPage, /expandedNodes\.has\(nodeId\)/);
 });

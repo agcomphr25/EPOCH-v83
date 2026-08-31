@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,20 +28,15 @@ import {
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import {
+  buildWadDepartmentOptions,
+  LEGACY_WAD_DEPARTMENTS,
+  syncUnmodifiedBudgetHours,
+  type WadDepartmentRecord,
+} from './wadDepartmentOptions';
 
 // ─── Department Enum ─────────────────────────────────────────────────────────
-export const WAD_DEPARTMENTS = [
-  { key: 'CUTTING_KITTING', label: 'Cutting / Kitting', isSpecialProcess: false, requiresCertification: false },
-  { key: 'LAYUP', label: 'Layup', isSpecialProcess: true, requiresCertification: true },
-  { key: 'CURE', label: 'Cure', isSpecialProcess: true, requiresCertification: true },
-  { key: 'CNC', label: 'CNC', isSpecialProcess: false, requiresCertification: false },
-  { key: 'SUB_ASSEMBLY', label: 'Sub Assembly', isSpecialProcess: false, requiresCertification: false },
-  { key: 'ASSEMBLY', label: 'Assembly', isSpecialProcess: false, requiresCertification: false },
-  { key: 'FINISH', label: 'Finish', isSpecialProcess: false, requiresCertification: false },
-  { key: 'PAINT', label: 'Paint', isSpecialProcess: true, requiresCertification: true },
-  { key: 'QC', label: 'Quality Control', isSpecialProcess: false, requiresCertification: false },
-  { key: 'SHIPPING', label: 'Shipping', isSpecialProcess: false, requiresCertification: false },
-];
+export const WAD_DEPARTMENTS = LEGACY_WAD_DEPARTMENTS;
 
 const DOCUMENT_CHECKLIST_ITEMS = [
   { key: 'customer_po', name: 'Customer PO' },
@@ -900,6 +895,20 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
     });
   }, [wad]);
 
+  const handleStep3Change = useCallback((v: WizardData['step3']) => {
+    setData(prev => {
+      const next: WizardData = { ...prev, step3: v };
+      if (!prev.step4?.chargeCodes?.length) return next;
+      const synced = syncUnmodifiedBudgetHours(
+        prev.step4.chargeCodes,
+        v?.rows ?? [],
+        prev.step3?.rows ?? []
+      );
+      if (synced !== prev.step4.chargeCodes) next.step4 = { chargeCodes: synced };
+      return next;
+    });
+  }, []);
+
   // Auto-fill Step 1 from upstream docs on FIRST OPEN ONLY.
   // If step1 already exists in saved wizard data we do nothing — the user's
   // saved state (including any manual edits) is always authoritative after
@@ -1241,7 +1250,7 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
               departments={data.step2?.departments ?? []}
               scopeDescription={data.step2?.scopeDescription ?? ''}
               data={data.step3}
-              onChange={(v) => patch('step3', v)}
+              onChange={handleStep3Change}
               onRemoveDepartment={(dept) => {
                 const currentStep2 = data.step2 ?? { scopeDescription: '', departments: [] as string[] };
                 const nextDepts = (currentStep2.departments ?? []).filter(d => d !== dept);
@@ -1648,6 +1657,15 @@ function Step2ScopeOfWork({ data, onChange }: {
     deliverables: '',
     ...(data ?? {}),
   };
+  const {
+    data: departments = [],
+    isLoading: departmentsLoading,
+    isError: departmentsError,
+  } = useQuery<WadDepartmentRecord[]>({ queryKey: ['/api/inventory/departments'] });
+  const departmentOptions = useMemo(
+    () => buildWadDepartmentOptions(departments, base.departments ?? []),
+    [departments, base.departments]
+  );
 
   const set = (k: keyof NonNullable<WizardData['step2']>, v: unknown) =>
     onChange({ ...base, [k]: v } as WizardData['step2']);
@@ -1689,7 +1707,7 @@ function Step2ScopeOfWork({ data, onChange }: {
         {(base.departments ?? []).length > 0 && (
           <div className="flex flex-wrap gap-2">
             {(base.departments ?? []).map(key => {
-              const dept = WAD_DEPARTMENTS.find(d => d.key === key);
+              const dept = departmentOptions.find(d => d.key === key);
               const label = dept?.label ?? key;
               return (
                 <Badge key={key} variant="secondary" className="gap-1 pl-2 pr-1">
@@ -1708,8 +1726,18 @@ function Step2ScopeOfWork({ data, onChange }: {
             })}
           </div>
         )}
+        {departmentsLoading && <p className="text-sm text-muted-foreground">Loading manufacturing departments…</p>}
+        {departmentsError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Manufacturing departments could not be loaded. Previously selected departments remain visible,
+              but new selections are unavailable until the department service recovers.
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="grid grid-cols-2 gap-2">
-          {WAD_DEPARTMENTS.map(dept => (
+          {departmentOptions.map(dept => (
             <div
               key={dept.key}
               className={`flex items-center gap-2 rounded border p-2 cursor-pointer transition-colors ${
@@ -1724,6 +1752,7 @@ function Step2ScopeOfWork({ data, onChange }: {
               />
               <div>
                 <p className="text-sm font-medium">{dept.label}</p>
+                {dept.isHistorical && <p className="text-xs text-muted-foreground">Previously selected</p>}
                 {(dept.isSpecialProcess || dept.requiresCertification) && (
                   <p className="text-xs text-amber-600">
                     {dept.isSpecialProcess ? 'Special Process' : ''}
@@ -2029,9 +2058,14 @@ function Step4ChargeCodes({ wadId, rows: wbRows, data, onChange }: {
     if (existing.length > 0) return existing;
     return buildDefault();
   });
+  const previousBreakdownRows = useRef<WorkBreakdownRow[]>(wbRows);
 
   useEffect(() => {
-    if (!data?.chargeCodes?.length) setRows(buildDefault());
+    const existing = data?.chargeCodes?.length ? data.chargeCodes : buildDefault();
+    const next = syncUnmodifiedBudgetHours(existing, wbRows, previousBreakdownRows.current);
+    previousBreakdownRows.current = wbRows;
+    setRows(next);
+    if (next !== existing) onChange({ chargeCodes: next });
   }, [wbRows]);
 
   const setRow = (idx: number, patch: Partial<ChargeCodeRow>) => {

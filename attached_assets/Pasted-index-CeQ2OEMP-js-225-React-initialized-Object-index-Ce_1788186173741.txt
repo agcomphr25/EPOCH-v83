@@ -1,0 +1,76 @@
+index-CeQ2OEMP.js:225 React initialized: Object
+index-CeQ2OEMP.js:225 React hooks: Object
+index-CeQ2OEMP.js:225 [EPOCH SYNC] Sync engine starting
+index-CeQ2OEMP.js:225 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-CeQ2OEMP.js:222 App component is rendering...
+index-CeQ2OEMP.js:222 Environment: production
+index-CeQ2OEMP.js:222 Base URL: /
+index-CeQ2OEMP.js:189 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-CeQ2OEMP.js:189 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 135000ms, deployment: true)
+index-CeQ2OEMP.js:189 [EPOCH] Install prompt captured and ready
+production-queue:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+api/vendor-pos/compliance-backfill?filter=enforced:1  Failed to load resource: the server responded with a status of 503 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 503 ()
+api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 503 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/auth/login:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+index-CeQ2OEMP.js:225 💥 API Request failed for /api/vendor-pos/compliance-backfill?filter=enforced: Error: layup_schedule contains an order_id with no authoritative source
+    at Ip (index-CeQ2OEMP.js:189:6805)
+    at async Si (index-CeQ2OEMP.js:189:7202)
+    at async rn (index-CeQ2OEMP.js:189:10928)
+console.error @ index-CeQ2OEMP.js:225
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+index-CeQ2OEMP.js:225 Login error: Error: layup_schedule contains an order_id with no authoritative source
+    at Ip (index-CeQ2OEMP.js:189:6805)
+    at async Si (index-CeQ2OEMP.js:189:7202)
+    at async T (index-CeQ2OEMP.js:222:23940)
+console.error @ index-CeQ2OEMP.js:225
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+api/auth/login:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+index-CeQ2OEMP.js:225 Login error: Error: layup_schedule contains an order_id with no authoritative source
+    at Ip (index-CeQ2OEMP.js:189:6805)
+    at async Si (index-CeQ2OEMP.js:189:7202)
+    at async T (index-CeQ2OEMP.js:222:23940)
+console.error @ index-CeQ2OEMP.js:225
+api/auth/login:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+index-CeQ2OEMP.js:225 Login error: Error: layup_schedule contains an order_id with no authoritative source
+    at Ip (index-CeQ2OEMP.js:189:6805)
+    at async Si (index-CeQ2OEMP.js:189:7202)
+    at async T (index-CeQ2OEMP.js:222:23940)
+console.error @ index-CeQ2OEMP.js:225
+api/auth/login:1  Failed to load resource: the server responded with a status of 503 ()
+api/boot-status:1  Failed to load resource: the server responded with a status of 503 ()
+index-CeQ2OEMP.js:225 Login error: Error: layup_schedule contains an order_id with no authoritative source
+    at Ip (index-CeQ2OEMP.js:189:6805)
+    at async Si (index-CeQ2OEMP.js:189:7202)
+    at async T (index-CeQ2OEMP.js:222:23940)
+console.error @ index-CeQ2OEMP.js:225
+index-CeQ2OEMP.js:189  GET https://agcompepoch.xyz/api/boot-status 503 (Service Unavailable)
+Ip @ index-CeQ2OEMP.js:189
+(anonymous) @ index-CeQ2OEMP.js:194

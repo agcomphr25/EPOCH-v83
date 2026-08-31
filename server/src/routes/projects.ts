@@ -3945,14 +3945,18 @@ router.get('/:id/p2-hub', async (req, res) => {
                       ORDER BY b.is_active DESC, br.created_at DESC NULLS LAST, b.created_at DESC
                     ) AS bom_rank
              FROM boms b
-             LEFT JOIN LATERAL (
+             JOIN LATERAL (
                SELECT id, rev_code, created_at
                FROM bom_revisions
                WHERE bom_id = b.id
-               ORDER BY created_at DESC
+                 AND is_released = true
+                 AND (effective_from IS NULL OR effective_from <= NOW())
+                 AND (effective_to IS NULL OR effective_to > NOW())
+               ORDER BY effective_from DESC NULLS LAST, created_at DESC
                LIMIT 1
              ) br ON true
              LEFT JOIN bom_lines bl ON bl.revision_id = br.id
+             WHERE b.is_active = true
              GROUP BY b.id, br.id, br.rev_code, br.created_at
            ), selected_boms AS (
              SELECT * FROM ranked_boms WHERE bom_rank = 1

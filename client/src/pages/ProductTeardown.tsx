@@ -15,7 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 
-const json = async (url: string, options?: any) => (await apiRequest(url, options)).json();
+// apiRequest already parses JSON responses; callers receive the response body.
+const json = async (url: string, options?: any) => apiRequest(url, options);
 const blankProduct = { productName: '', modelNumber: '', productPartNumber: '', revision: '', customer: '', notes: '' };
 const blankItem = {
   itemName: '', enteredPartNumber: '', quantity: 1, quantityBasis: '',

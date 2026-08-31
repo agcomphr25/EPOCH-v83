@@ -133,6 +133,7 @@ type FabricItem = {
   name: string;
   source: string | null;
   supplierPartNumber: string | null;
+  quantityOnHand: number;
 };
 
 const emptyForm = {
@@ -165,7 +166,12 @@ type PrintSelection = {
 };
 
 type FabricGroup = {
+  key: string;
   fabricName: string;
+  fabricPartNumber: string | null;
+  configuredItem: FabricItem | null;
+  isConfiguredOnly: boolean;
+  usesInventoryBalance: boolean;
   totalQuantity: number;
   rollCount: number;
   rolls: FabricInventory[];
@@ -444,6 +450,21 @@ export default function FabricInventoryPage() {
 
   const handleAdd = () => {
     setForm(emptyForm);
+    setConformanceLinkType("url");
+    setUploadedFileName("");
+    setAdditionalRolls([]);
+    setIsAddDialogOpen(true);
+  };
+
+  const handleAddConfiguredFabric = (item: FabricItem) => {
+    setForm({
+      ...emptyForm,
+      inventoryItemId: String(item.id),
+      fabric: item.name,
+      fabricPartNumber: item.agPartNumber,
+      source: item.source || "",
+      supplierPartNumber: item.supplierPartNumber || "",
+    });
     setConformanceLinkType("url");
     setUploadedFileName("");
     setAdditionalRolls([]);
@@ -822,17 +843,47 @@ export default function FabricInventoryPage() {
     return material?.materialName || "-";
   };
 
-  // Group fabrics by name, calculate totals, and sort rolls by FIFO (oldest manufacture date first)
+  // Include every Inventory Item configured as "Fabric (Cutting Table)", even
+  // before its first traceable roll is received.
   const fabricGroups: FabricGroup[] = (() => {
     const groupMap: Record<string, FabricGroup> = {};
+
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (statusFilter !== "depleted") {
+      fabricItems.forEach(item => {
+        const matchesSearch = [item.name, item.agPartNumber, item.source, item.supplierPartNumber]
+          .some(value => (value || "").toLowerCase().includes(normalizedQuery));
+        if (!matchesSearch) return;
+
+        const key = `inventory-item-${item.id}`;
+        groupMap[key] = {
+          key,
+          fabricName: item.name?.trim() || item.agPartNumber,
+          fabricPartNumber: item.agPartNumber,
+          configuredItem: item,
+          isConfiguredOnly: true,
+          usesInventoryBalance: true,
+          totalQuantity: Number(item.quantityOnHand) || 0,
+          rollCount: 0,
+          rolls: [],
+        };
+      });
+    }
     
     filteredInventory.forEach(item => {
       const fabricName = item.fabric?.trim() || "Unknown";
-      const key = fabricName.toLowerCase();
+      const key = item.inventoryItemId
+        ? `inventory-item-${item.inventoryItemId}`
+        : `legacy-${fabricName.toLowerCase()}`;
       
       if (!groupMap[key]) {
         groupMap[key] = {
+          key,
           fabricName,
+          fabricPartNumber: item.fabricPartNumber,
+          configuredItem: null,
+          isConfiguredOnly: false,
+          usesInventoryBalance: false,
           totalQuantity: 0,
           rollCount: 0,
           rolls: [],
@@ -840,8 +891,11 @@ export default function FabricInventoryPage() {
       }
       
       groupMap[key].rolls.push(item);
-      groupMap[key].totalQuantity += item.quantityInStock || 0;
+      if (!groupMap[key].usesInventoryBalance) {
+        groupMap[key].totalQuantity += item.quantityInStock || 0;
+      }
       groupMap[key].rollCount += 1;
+      groupMap[key].isConfiguredOnly = false;
     });
     
     // Sort rolls within each group by FIFO (oldest manufacture date first)
@@ -1331,7 +1385,7 @@ export default function FabricInventoryPage() {
             <div>
               <CardTitle>Inventory Items</CardTitle>
               <CardDescription>
-                {filteredInventory.length} of {fabricInventory.length} items
+                {fabricGroups.length} configured fabric{fabricGroups.length !== 1 ? "s" : ""} · {filteredInventory.length} of {fabricInventory.length} rolls
                 {selectedForPrint.size > 0 && (
                   <span className="ml-2 text-blue-600 font-medium">
                     ({selectedForPrint.size} selected for printing)
@@ -1375,22 +1429,22 @@ export default function FabricInventoryPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isLoading || isLoadingFabricItems ? (
             <div className="flex items-center justify-center h-48">
               <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : filteredInventory.length === 0 ? (
+          ) : fabricGroups.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
               <Package className="h-12 w-12 mb-4" />
-              <p>No fabric inventory items found</p>
-              <Button variant="link" onClick={handleAdd}>Add your first fabric</Button>
+              <p>No configured fabric inventory items found</p>
+              <Button variant="link" onClick={handleAdd}>Add your first fabric roll</Button>
             </div>
           ) : (
             <Accordion type="multiple" className="w-full space-y-2">
               {fabricGroups.map((group) => (
                 <AccordionItem 
-                  key={group.fabricName} 
-                  value={group.fabricName}
+                  key={group.key}
+                  value={group.key}
                   className="border rounded-lg px-4"
                   data-testid={`accordion-fabric-${group.fabricName.toLowerCase().replace(/\s+/g, '-')}`}
                 >
@@ -1398,19 +1452,33 @@ export default function FabricInventoryPage() {
                     <div className="flex items-center justify-between w-full pr-4">
                       <div className="flex items-center gap-3">
                         <span className="font-semibold text-lg">{group.fabricName}</span>
+                        {group.fabricPartNumber && (
+                          <Badge variant="secondary" className="font-mono">{group.fabricPartNumber}</Badge>
+                        )}
                         <Badge variant="outline" className="font-mono">
                           {group.rollCount} roll{group.rollCount !== 1 ? 's' : ''}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">
-                          Total Qty: <span className="font-mono font-medium">{group.totalQuantity}</span>
+                          On Hand: <span className="font-mono font-medium">{group.totalQuantity}</span>
                         </span>
                       </div>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="pt-2 pb-4">
+                      {group.isConfiguredOnly ? (
+                        <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          <p>Current on hand: <span className="font-mono font-medium">{group.totalQuantity}</span>. No traceable rolls have been received yet.</p>
+                          <Button
+                            variant="link"
+                            onClick={() => group.configuredItem && handleAddConfiguredFabric(group.configuredItem)}
+                          >
+                            Add fabric roll
+                          </Button>
+                        </div>
+                      ) : (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -1573,6 +1641,7 @@ export default function FabricInventoryPage() {
                           ))}
                         </TableBody>
                       </Table>
+                      )}
                     </div>
                   </AccordionContent>
                 </AccordionItem>

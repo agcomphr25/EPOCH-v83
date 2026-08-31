@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildProjectBomAssemblyTree, collectManufacturedBomParts, collectPurchasedBomParts, type ProjectBomAssemblyRow } from '../src/services/projectBomAssembly';
+import { buildProjectBomAssemblyTree, collectManufacturedBomParts, collectPurchasedBomParts, selectProjectAssemblySourceItems, type ProjectBomAssemblyRow } from '../src/services/projectBomAssembly';
 
 const row = (overrides: Partial<ProjectBomAssemblyRow>): ProjectBomAssemblyRow => ({
   node_key: ['root:1000'],
@@ -18,6 +18,36 @@ const row = (overrides: Partial<ProjectBomAssemblyRow>): ProjectBomAssemblyRow =
 });
 
 describe('buildProjectBomAssemblyTree', () => {
+  it('uses the project-controlled PO line as the only assembly root', () => {
+    const items = [
+      { id: 10, inventory_item_id: 1000, part_number: '26336' },
+      { id: 20, inventory_item_id: 2000, part_number: '26439' },
+      { id: 30, inventory_item_id: 3000, part_number: 'Transportation' },
+    ];
+    const inventory = new Map([
+      [1000, { id: 1000, item_type: 'MANUFACTURED' }],
+      [2000, { id: 2000, item_type: 'PURCHASED' }],
+      [3000, { id: 3000, item_type: 'PURCHASED', utilized_in_non_inventory: true }],
+    ]);
+
+    expect(selectProjectAssemblySourceItems(items, 10, inventory)).toEqual([items[0]]);
+  });
+
+  it('fails closed to manufactured inventory roots and excludes non-inventory PO lines', () => {
+    const items = [
+      { id: 10, inventory_item_id: 1000, part_number: '26336' },
+      { id: 20, inventory_item_id: 2000, part_number: '26439' },
+      { id: 30, inventory_item_id: 3000, part_number: 'Transportation' },
+    ];
+    const inventory = new Map([
+      [1000, { id: 1000, item_type: 'MANUFACTURED' }],
+      [2000, { id: 2000, item_type: 'PURCHASED' }],
+      [3000, { id: 3000, item_type: 'MANUFACTURED', utilized_in_non_inventory: true }],
+    ]);
+
+    expect(selectProjectAssemblySourceItems(items, null, inventory)).toEqual([items[0]]);
+  });
+
   it('nests manufactured child BOMs and leaf components in assembly order', () => {
     const tree = buildProjectBomAssemblyTree([
       row({

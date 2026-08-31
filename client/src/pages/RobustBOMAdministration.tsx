@@ -50,6 +50,101 @@ const bomLineSchema = z.object({
   operationSequence: z.number().int().min(1).optional(),
 });
 
+type BomExplosionNode = {
+  partId?: string;
+  sku?: string;
+  name?: string;
+  type?: 'assembly' | 'component';
+  qtyPer?: number;
+  scrapPct?: number;
+  uom?: string;
+  operationSeq?: number | null;
+  reference?: string | null;
+  unitCost?: number;
+  extendedCost?: number;
+  children?: BomExplosionNode[];
+};
+
+function TreeNode({
+  node,
+  nodeKey,
+  level,
+  expandedNodes,
+  onToggleExpand,
+}: {
+  node: BomExplosionNode;
+  nodeKey: string;
+  level: number;
+  expandedNodes: Set<string>;
+  onToggleExpand: (nodeId: string) => void;
+}) {
+  const nodeId = nodeKey;
+  const children = Array.isArray(node.children) ? node.children : [];
+  const hasChildren = children.length > 0;
+  const isExpanded = expandedNodes.has(nodeId);
+  const formatCost = (value: number | undefined) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number(value) || 0);
+
+  return (
+    <div className="space-y-1">
+      <div
+        className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2"
+        style={{ marginLeft: `${level * 20}px` }}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          {hasChildren ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={() => onToggleExpand(nodeId)}
+              aria-label={isExpanded ? 'Collapse assembly' : 'Expand assembly'}
+            >
+              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </Button>
+          ) : (
+            <span className="h-7 w-7 shrink-0" />
+          )}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono font-semibold">{node.sku || node.partId || 'Unknown part'}</span>
+              <Badge variant={node.type === 'assembly' ? 'default' : 'secondary'}>
+                {node.type === 'assembly' ? 'Assembly' : 'Component'}
+              </Badge>
+            </div>
+            <p className="truncate text-sm text-muted-foreground">{node.name || 'No description'}</p>
+            <p className="text-xs text-muted-foreground">
+              Qty {Number(node.qtyPer ?? 0).toLocaleString()} {node.uom || ''}
+              {Number(node.scrapPct ?? 0) > 0 ? ` · Scrap ${Number(node.scrapPct).toLocaleString()}%` : ''}
+              {node.operationSeq != null ? ` · Op ${node.operationSeq}` : ''}
+            </p>
+          </div>
+        </div>
+        <div className="grid shrink-0 grid-cols-2 gap-4 text-right text-sm">
+          <span className="min-w-[80px]">{formatCost(node.unitCost)}</span>
+          <span className="min-w-[90px] font-medium">{formatCost(node.extendedCost)}</span>
+        </div>
+      </div>
+      {hasChildren && isExpanded && children.map((child, index) => (
+        <TreeNode
+          key={`${child.partId || child.sku || 'part'}:${index}`}
+          node={child}
+          nodeKey={`${nodeKey}/${child.partId || child.sku || 'part'}:${index}`}
+          level={level + 1}
+          expandedNodes={expandedNodes}
+          onToggleExpand={onToggleExpand}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function RobustBOMAdministration() {
   const [selectedTab, setSelectedTab] = useState<string>(MANUFACTURED_CATEGORY_ORDER[0]);
 
@@ -1612,6 +1707,7 @@ function BOMsTab({ searchTerm, setSearchTerm, category }: { searchTerm: string; 
                           <TreeNode 
                             key={index} 
                             node={child} 
+                            nodeKey={`${child.partId || child.sku || 'part'}:${index}`}
                             level={0}
                             expandedNodes={expandedNodes}
                             onToggleExpand={(nodeId: string) => {

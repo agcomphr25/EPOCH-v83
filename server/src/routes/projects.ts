@@ -42,6 +42,7 @@ import {
   buildProjectBomAssemblyTree,
   collectManufacturedBomParts,
   collectPurchasedBomParts,
+  selectProjectAssemblySourceItems,
   type ProjectBomAssemblyRow,
 } from '../services/projectBomAssembly';
 import { deriveProjectMaterialProcurement } from '../services/projectMaterialProcurement';
@@ -3703,9 +3704,14 @@ router.get('/:id/p2-hub', async (req, res) => {
           .filter(Boolean),
       ])
     );
-    const assemblySourceItems = activePoId
+    const activePoItemsForAssembly = activePoId
       ? poItems.filter((item: LegacyProjectValue) => item.po_id === activePoId)
       : poItems;
+    const assemblySourceItems = selectProjectAssemblySourceItems(
+      activePoItemsForAssembly,
+      project.p2PoItemId,
+      poInventoryItemById,
+    );
     const assemblyRootPartNumbers = Array.from(
       new Set(
         assemblySourceItems

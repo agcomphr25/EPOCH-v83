@@ -840,12 +840,15 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
       }
     });
 
-    // Ensure all material partIds are strings in departmentConfig
+    // Serialize only active routing departments. Persisted departmentConfig can
+    // also contain metadata such as __wadDocumentationRequirements, which is
+    // not a DepartmentConfiguration and therefore has no materials array.
     const sanitizedDepartmentConfig: Record<string, DepartmentConfiguration> = {};
-    Object.entries(departmentConfig).forEach(([dept, config]) => {
+    selectedDepartments.forEach((dept) => {
+      const config = getOrCreateDeptConfig(dept);
       sanitizedDepartmentConfig[dept] = {
         ...config,
-        materials: config.materials.map(m => ({
+        materials: (config.materials ?? []).map(m => ({
           ...m,
           partId: String(m.partId), // Ensure partId is string
         })),

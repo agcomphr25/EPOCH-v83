@@ -167,6 +167,78 @@ const resolveEffectiveOrderMethod = (request: PartsRequest, vendor?: Vendor | nu
   return request.inventoryItem?.defaultOrderMethod || vendor?.defaultOrderMethod || 'PO';
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Whole days elapsed since a request was raised; null when the date is missing or unparseable. */
+const getRequestAgeDays = (value?: string | null): number | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - date.getTime()) / DAY_MS));
+};
+
+const formatAgeShort = (days: number | null) => {
+  if (days === null) return 'no date';
+  if (days === 0) return 'today';
+  if (days < 60) return `${days}d`;
+  return `${Math.floor(days / 30)}mo`;
+};
+
+const formatAgeTitle = (value?: string | null) => {
+  const days = getRequestAgeDays(value);
+  if (days === null) return 'Request date not recorded';
+  return `Requested ${new Date(value!).toLocaleDateString()} - ${days} day${days === 1 ? '' : 's'} ago`;
+};
+
+/** Green = fresh, grey = normal, amber = aging, red = stale. */
+const ageToneClasses = (days: number | null) => {
+  if (days === null) return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+  if (days <= 2) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+  if (days <= 6) return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200';
+  if (days <= 13) return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+  return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+};
+
+const RequestAgeBadge = ({
+  requestDate,
+  label,
+  className = '',
+}: {
+  requestDate?: string | null;
+  label?: string;
+  className?: string;
+}) => {
+  const days = getRequestAgeDays(requestDate);
+  return (
+    <span
+      title={formatAgeTitle(requestDate)}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${ageToneClasses(days)} ${className}`}
+      data-testid="request-age-badge"
+    >
+      <Clock className="h-3 w-3" />
+      {label ? `${label} ${formatAgeShort(days)}` : formatAgeShort(days)}
+    </span>
+  );
+};
+
+/** Age of the oldest request in a set - drives vendor-level staleness in the queue. */
+const getOldestAgeDays = (requests: PartsRequest[]): number | null => {
+  const ages = requests
+    .map((request) => getRequestAgeDays(request.requestDate))
+    .filter((value): value is number => value !== null);
+  return ages.length ? Math.max(...ages) : null;
+};
+
+const getOldestRequestIso = (requests: PartsRequest[]): string | null => {
+  const timestamps = requests
+    .map((request) => new Date(request.requestDate).getTime())
+    .filter((time) => Number.isFinite(time));
+  return timestamps.length ? new Date(Math.min(...timestamps)).toISOString() : null;
+};
+
+const byOldestFirst = (a: PartsRequest, b: PartsRequest) =>
+  new Date(a.requestDate).getTime() - new Date(b.requestDate).getTime();
+
 export default function ConsolidatedNeedsListPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -179,8 +251,10 @@ export default function ConsolidatedNeedsListPage() {
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
   const [focusedVendorKey, setFocusedVendorKey] = useState('');
-  const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor'>('by-vendor');
+  const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor' | 'approvals'>('by-vendor');
+  const [selectedApprovals, setSelectedApprovals] = useState<Set<number>>(new Set());
   const [vendorFilterTab, setVendorFilterTab] = useState<'all' | 'po' | 'website' | 'email'>('all');
+  const [queueSort, setQueueSort] = useState<'oldest' | 'ready' | 'urgent'>('oldest');
   const [vendorRequestViews, setVendorRequestViews] = useState<Record<string, VendorRequestView>>({});
   const [statusView, setStatusView] = useState<StatusView>('OPEN');
   const [selectedVendorRequests, setSelectedVendorRequests] = useState<Set<number>>(new Set());
@@ -335,6 +409,7 @@ export default function ConsolidatedNeedsListPage() {
       }
       
       setSelectedVendorRequests(new Set());
+      setSelectedApprovals(new Set());
       setIsVendorAssignDialogOpen(false);
       setIsBulkOrderDialogOpen(false);
       setBulkExpectedDelivery('');
@@ -809,6 +884,7 @@ export default function ConsolidatedNeedsListPage() {
   );
   const archivedParts = useMemo(() => consolidateByPart(archivedRequests), [archivedRequests]);
   const pendingRequests = useMemo(() => consolidateByPart(activeNeedsRequests.filter(r => r.status === 'PENDING')), [activeNeedsRequests]);
+  const pendingApprovalCount = useMemo(() => activeNeedsRequests.filter(r => r.status === 'PENDING').length, [activeNeedsRequests]);
   const approvedRequests = useMemo(() => consolidateByPart(activeNeedsRequests.filter(r => r.status === 'APPROVED')), [activeNeedsRequests]);
   const orderedRequests = useMemo(() => consolidateByPart(activeNeedsRequests.filter(r => ['ORDERED', 'ORDERED_PARTIAL'].includes(r.status))), [activeNeedsRequests]);
   const receivedRequests = useMemo(() => consolidateByPart(activeNeedsRequests.filter(r => r.status === 'RECEIVED_PARTIAL')), [activeNeedsRequests]);
@@ -1092,6 +1168,32 @@ export default function ConsolidatedNeedsListPage() {
         newSet.add(vendorKey);
       }
       return newSet;
+    });
+  };
+
+  /**
+   * Approve without the confirmation dialog. The dialog only ever collected an *optional*
+   * note for approvals, so it added friction without adding information. Rejections still
+   * go through handleAction because they require a reason.
+   */
+  const approveRequests = (requests: PartsRequest[]) => {
+    if (!user) return;
+    const ids = requests.filter((request) => request.status === 'PENDING').map((request) => request.id);
+    if (ids.length === 0) {
+      toast({
+        title: 'Nothing to approve',
+        description: 'Those requests are no longer pending.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      requestIds: ids,
+      updates: {
+        status: 'APPROVED',
+        approvedBy: `${user.firstName} ${user.lastName}`,
+        approvedDate: new Date().toISOString(),
+      },
     });
   };
 
@@ -1915,6 +2017,173 @@ export default function ConsolidatedNeedsListPage() {
     );
   };
 
+  /**
+   * Flat, cross-vendor approval queue. The by-vendor workspace is the right shape for
+   * *ordering* (one PO per vendor) but forces a click through every vendor when the job is
+   * simply clearing approvals, so this view drops the vendor axis and sorts by age instead.
+   */
+  const renderApprovalsQueue = () => {
+    if (isLoading) {
+      return <div className="py-12 text-center text-sm text-muted-foreground">Loading approvals...</div>;
+    }
+
+    const pending = [...activeNeedsRequests.filter((request) => request.status === 'PENDING')].sort(byOldestFirst);
+
+    if (pending.length === 0) {
+      return (
+        <div className="rounded-lg border border-dashed p-10 text-center">
+          <CheckCircle className="mx-auto mb-3 h-8 w-8 text-green-600" />
+          <p className="font-medium">Nothing is waiting on your approval.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {searchTerm.trim() ? 'No pending requests match your search.' : 'Every request raised so far has been approved, rejected, or ordered.'}
+          </p>
+        </div>
+      );
+    }
+
+    const selectedPending = pending.filter((request) => selectedApprovals.has(request.id));
+    const allSelected = selectedPending.length === pending.length;
+    const staleCount = pending.filter((request) => (getRequestAgeDays(request.requestDate) ?? 0) >= 14).length;
+    const oldestIso = getOldestRequestIso(pending);
+    const pendingSpend = pending.reduce(
+      (sum, request) => sum + Number(request.estimatedCost || 0) * Number(request.quantity || 0),
+      0,
+    );
+
+    const toggleApproval = (requestId: number) => {
+      setSelectedApprovals((prev) => {
+        const next = new Set(prev);
+        if (next.has(requestId)) next.delete(requestId);
+        else next.add(requestId);
+        return next;
+      });
+    };
+
+    const toggleSelectAll = () => {
+      setSelectedApprovals(allSelected ? new Set() : new Set(pending.map((request) => request.id)));
+    };
+
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg border bg-white p-4 dark:bg-gray-950">
+            <div className="text-2xl font-semibold text-amber-600">{pending.length}</div>
+            <div className="font-medium">Awaiting approval</div>
+            <div className="text-sm text-muted-foreground">Across all vendors</div>
+          </div>
+          <div className="rounded-lg border bg-white p-4 dark:bg-gray-950">
+            <div className={`text-2xl font-semibold ${staleCount ? 'text-red-600' : 'text-green-600'}`}>{staleCount}</div>
+            <div className="font-medium">Stale (14d+)</div>
+            <div className="text-sm text-muted-foreground">Sitting too long</div>
+          </div>
+          <div className="rounded-lg border bg-white p-4 dark:bg-gray-950">
+            <div className="text-2xl font-semibold">{formatAgeShort(getRequestAgeDays(oldestIso))}</div>
+            <div className="font-medium">Oldest request</div>
+            <div className="text-sm text-muted-foreground">{formatAgeTitle(oldestIso)}</div>
+          </div>
+          <div className="rounded-lg border bg-white p-4 dark:bg-gray-950">
+            <div className="text-2xl font-semibold text-blue-600">
+              ${pendingSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="font-medium">Estimated pending spend</div>
+            <div className="text-sm text-muted-foreground">Cost x quantity, where known</div>
+          </div>
+        </div>
+
+        <Input
+          aria-label="Search pending approvals"
+          placeholder="Search by part, department, or requester..."
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          data-testid="input-approvals-search"
+        />
+
+        <div className="overflow-hidden rounded-lg border bg-white dark:bg-gray-950">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-gray-50 px-4 py-3 dark:bg-gray-900">
+            <div className="flex items-center gap-3">
+              <Checkbox
+                aria-label="Select all pending requests"
+                checked={allSelected}
+                onCheckedChange={toggleSelectAll}
+                data-testid="checkbox-approvals-select-all"
+              />
+              <span className="text-sm font-medium">
+                {selectedPending.length > 0 ? `${selectedPending.length} selected` : 'Select all'}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {selectedPending.length > 0 && (
+                <Button size="sm" variant="ghost" onClick={() => setSelectedApprovals(new Set())}>
+                  Clear
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => approveRequests(selectedPending.length > 0 ? selectedPending : pending)}
+                disabled={bulkUpdateMutation.isPending}
+                data-testid="button-approvals-bulk-approve"
+              >
+                <CheckCircle className="mr-1 h-4 w-4" />
+                {bulkUpdateMutation.isPending
+                  ? 'Approving...'
+                  : selectedPending.length > 0
+                    ? `Approve selected (${selectedPending.length})`
+                    : `Approve all (${pending.length})`}
+              </Button>
+            </div>
+          </div>
+
+          <div className="max-h-[640px] divide-y overflow-y-auto">
+            {pending.map((request) => {
+              const vendor = getResolvedVendorForRequest(request);
+              return (
+                <div
+                  key={request.id}
+                  className="grid gap-3 p-4 sm:grid-cols-[auto_minmax(200px,2fr)_75px_minmax(90px,0.7fr)_minmax(110px,0.9fr)_auto_auto] sm:items-center"
+                  data-testid={`approval-row-${request.id}`}
+                >
+                  <Checkbox
+                    aria-label={`Select ${request.partName}`}
+                    checked={selectedApprovals.has(request.id)}
+                    onCheckedChange={() => toggleApproval(request.id)}
+                  />
+                  <button type="button" onClick={() => openInventoryProfile(request)} className="min-w-0 text-left">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium hover:underline">{request.partName}</span>
+                      {(request.urgency === 'HIGH' || request.urgency === 'CRITICAL') && (
+                        <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">{request.urgency}</Badge>
+                      )}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {request.partNumber} · requested by {request.requestedBy} · {request.estimatedCost ? `$${request.estimatedCost.toFixed(2)} ea` : 'cost missing'}
+                    </span>
+                  </button>
+                  <div className="text-sm">{request.quantity} units</div>
+                  <div className="text-sm">{request.department}</div>
+                  <div className="truncate text-sm text-muted-foreground">
+                    {vendor?.name || request.supplier || 'Unassigned'}
+                  </div>
+                  <div><RequestAgeBadge requestDate={request.requestDate} /></div>
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="outline" onClick={() => handleAction(request, 'reject')}>Reject</Button>
+                    <Button
+                      size="sm"
+                      onClick={() => approveRequests([request])}
+                      disabled={bulkUpdateMutation.isPending}
+                      data-testid={`button-approve-queue-${request.id}`}
+                    >
+                      Approve
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderPurchasingWorkspace = () => {
     if (isLoading) {
       return <div className="py-12 text-center text-sm text-muted-foreground">Loading purchasing queue...</div>;
@@ -1937,6 +2206,14 @@ export default function ConsolidatedNeedsListPage() {
     const actionableGroups = filteredVendorGroups
       .filter((group) => readyForGroup(group).length > 0 || blockedForGroup(group).length > 0)
       .sort((a, b) => {
+        if (queueSort === 'oldest') {
+          const ageDelta = (getOldestAgeDays(b.requests) ?? -1) - (getOldestAgeDays(a.requests) ?? -1);
+          if (ageDelta) return ageDelta;
+        }
+        if (queueSort === 'urgent') {
+          const urgencyDelta = urgencyRank(b) - urgencyRank(a);
+          if (urgencyDelta) return urgencyDelta;
+        }
         const readyDelta = readyForGroup(b).length - readyForGroup(a).length;
         return readyDelta || urgencyRank(b) - urgencyRank(a);
       });
@@ -1952,8 +2229,9 @@ export default function ConsolidatedNeedsListPage() {
     }
 
     const focusedGroup = actionableGroups.find((group) => group.key === focusedVendorKey) || actionableGroups[0];
-    const readyRequests = readyForGroup(focusedGroup);
-    const blockedRequests = blockedForGroup(focusedGroup);
+    const readyRequests = [...readyForGroup(focusedGroup)].sort(byOldestFirst);
+    const blockedRequests = [...blockedForGroup(focusedGroup)].sort(byOldestFirst);
+    const focusedOldestIso = getOldestRequestIso(focusedGroup.requests);
     const totalReady = actionableGroups.reduce((sum, group) => sum + readyForGroup(group).length, 0);
     const totalBlocked = actionableGroups.reduce((sum, group) => sum + blockedForGroup(group).length, 0);
     const readySpend = actionableGroups.reduce((groupSum, group) => (
@@ -2034,6 +2312,19 @@ export default function ConsolidatedNeedsListPage() {
                   <TabsTrigger value="email">Email</TabsTrigger>
                 </TabsList>
               </Tabs>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-xs text-muted-foreground">Sort</span>
+                <Select value={queueSort} onValueChange={(value) => setQueueSort(value as typeof queueSort)}>
+                  <SelectTrigger className="h-8 text-xs" aria-label="Sort vendor queue" data-testid="select-queue-sort">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="oldest">Oldest request first</SelectItem>
+                    <SelectItem value="ready">Most ready to order</SelectItem>
+                    <SelectItem value="urgent">Most urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="max-h-[570px] overflow-y-auto">
               {actionableGroups.map((group) => {
@@ -2062,6 +2353,7 @@ export default function ConsolidatedNeedsListPage() {
                       <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         {orderMethodBadge(group)}
                         <span>{group.totalQuantity} units</span>
+                        <RequestAgeBadge requestDate={getOldestRequestIso(group.requests)} label="oldest" />
                       </span>
                     </span>
                     <span className="grid grid-cols-2 gap-x-3 text-right text-xs">
@@ -2082,8 +2374,11 @@ export default function ConsolidatedNeedsListPage() {
                   {orderMethodBadge(focusedGroup)}
                   {urgencyRank(focusedGroup) >= 3 && <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Urgent</Badge>}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {focusedGroup.requests.length} open · {readyRequests.length} ready · {blockedRequests.length} need approval · ${focusedGroup.totalEstimatedCost.toFixed(2)} estimated
+                <p className="mt-1 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+                  <span>
+                    {focusedGroup.requests.length} open · {readyRequests.length} ready · {blockedRequests.length} need approval · ${focusedGroup.totalEstimatedCost.toFixed(2)} estimated ·
+                  </span>
+                  <RequestAgeBadge requestDate={focusedOldestIso} label="oldest" />
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2122,7 +2417,7 @@ export default function ConsolidatedNeedsListPage() {
                 ) : (
                   <div className="divide-y">
                     {readyRequests.map((request) => (
-                      <div key={request.id} className="grid gap-3 p-4 sm:grid-cols-[auto_minmax(160px,1.5fr)_55px_minmax(100px,0.8fr)_105px_auto] sm:items-center">
+                      <div key={request.id} className="grid gap-3 p-4 sm:grid-cols-[auto_minmax(160px,1.5fr)_55px_minmax(100px,0.8fr)_105px_auto_auto] sm:items-center">
                         <Checkbox aria-label={`Select ${request.partName}`} checked={selectedVendorRequests.has(request.id)} onCheckedChange={() => toggleRequestSelection(request.id)} />
                         <button type="button" onClick={() => openInventoryProfile(request)} className="min-w-0 text-left">
                           <span className="block truncate text-sm font-medium hover:underline">{request.partName}</span>
@@ -2131,6 +2426,7 @@ export default function ConsolidatedNeedsListPage() {
                         <div className="text-sm">{getRemainingRequestQuantity(request)}</div>
                         <div className="text-sm"><span className="block text-xs text-muted-foreground">Department</span>{request.department}</div>
                         <div className="text-sm font-medium">{request.estimatedCost ? `$${request.estimatedCost.toFixed(2)}` : <span className="text-amber-700">Cost missing</span>}</div>
+                        <div><RequestAgeBadge requestDate={request.requestDate} /></div>
                         <Button size="sm" variant="ghost" onClick={() => setDetailRequest(request)}><Eye className="mr-1 h-4 w-4" />View</Button>
                       </div>
                     ))}
@@ -2144,23 +2440,51 @@ export default function ConsolidatedNeedsListPage() {
                     <h3 className="font-semibold">Needs approval</h3>
                     <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">{blockedRequests.length}</Badge>
                   </div>
-                  <span className="text-xs text-muted-foreground">Not included in vendor order</span>
+                  <div className="flex items-center gap-3">
+                    <span className="hidden text-xs text-muted-foreground sm:inline">Not included in vendor order</span>
+                    {blockedRequests.length > 0 && (
+                      <Button
+                        size="sm"
+                        onClick={() => approveRequests(blockedRequests)}
+                        disabled={bulkUpdateMutation.isPending}
+                        data-testid="button-approve-all-vendor"
+                      >
+                        <CheckCircle className="mr-1 h-4 w-4" />
+                        Approve all ({blockedRequests.length})
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 {blockedRequests.length === 0 ? (
                   <p className="p-5 text-sm text-muted-foreground">No approval blockers for this vendor.</p>
                 ) : (
                   <div className="divide-y divide-amber-100">
                     {blockedRequests.map((request) => (
-                      <div key={request.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(160px,1fr)_70px_minmax(100px,0.7fr)_auto] sm:items-center">
+                      <div key={request.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(160px,1fr)_70px_minmax(100px,0.7fr)_auto_auto] sm:items-center">
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium">{request.partName}</div>
-                          <div className="truncate text-xs text-muted-foreground">{getVendorSkuDisplay(request) || 'SKU missing'} · requested by {request.requestedBy}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium">{request.partName}</span>
+                            {(request.urgency === 'HIGH' || request.urgency === 'CRITICAL') && (
+                              <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">{request.urgency}</Badge>
+                            )}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {getVendorSkuDisplay(request) || 'SKU missing'} · requested by {request.requestedBy} · {request.estimatedCost ? `$${request.estimatedCost.toFixed(2)} ea` : 'cost missing'}
+                          </div>
                         </div>
                         <div className="text-sm">{request.quantity} units</div>
                         <div className="text-sm">{request.department}</div>
+                        <div><RequestAgeBadge requestDate={request.requestDate} /></div>
                         <div className="flex justify-end gap-2">
                           <Button size="sm" variant="outline" onClick={() => handleAction(request, 'reject')}>Reject</Button>
-                          <Button size="sm" onClick={() => handleAction(request, 'approve')}>Approve</Button>
+                          <Button
+                            size="sm"
+                            onClick={() => approveRequests([request])}
+                            disabled={bulkUpdateMutation.isPending}
+                            data-testid={`button-approve-inline-${request.id}`}
+                          >
+                            Approve
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -2180,9 +2504,11 @@ export default function ConsolidatedNeedsListPage() {
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Consolidated Parts Needs</h1>
         <p className="text-muted-foreground mt-1">
-          {mainViewTab === 'by-vendor'
-            ? 'Prioritized vendors with open needs requiring action'
-            : 'Manage all parts requests across departments - grouped by part number or vendor'}
+          {mainViewTab === 'approvals'
+            ? 'Every pending request across all vendors, oldest first'
+            : mainViewTab === 'by-vendor'
+              ? 'Prioritized vendors with open needs requiring action'
+              : 'Manage all parts requests across departments - grouped by part number or vendor'}
         </p>
       </div>
 
@@ -2302,6 +2628,13 @@ export default function ConsolidatedNeedsListPage() {
             <Building2 className="w-4 h-4 mr-2" />
             By Vendor
           </TabsTrigger>
+          <TabsTrigger value="approvals" data-testid="tab-approvals">
+            <CheckCircle className="w-4 h-4 mr-2" />
+            Approvals
+            {pendingApprovalCount > 0 && (
+              <Badge className="ml-2 bg-amber-100 text-amber-800 hover:bg-amber-100">{pendingApprovalCount}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="by-status">
@@ -2358,6 +2691,10 @@ export default function ConsolidatedNeedsListPage() {
 
         <TabsContent value="by-vendor">
           {renderPurchasingWorkspace()}
+        </TabsContent>
+
+        <TabsContent value="approvals">
+          {renderApprovalsQueue()}
         </TabsContent>
       </Tabs>
 

@@ -2180,6 +2180,8 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
         expectedDelivery?: string | null;
         orderDate?: string | null;
         notes?: string | null;
+        approvedBy?: string | null;
+        approvedDate?: string | null;
       };
     };
     
@@ -2200,10 +2202,16 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
     if (updates.orderDate !== undefined) {
       updateData.orderDate = updates.orderDate ? new Date(updates.orderDate) : null;
     }
+    if (updates.approvedBy !== undefined) updateData.approvedBy = updates.approvedBy;
+    if (updates.approvedDate !== undefined) {
+      updateData.approvedDate = updates.approvedDate ? new Date(updates.approvedDate) : null;
+    }
     updateData.updatedAt = new Date();
     
     // Define valid status transitions
     const validTransitions: Record<string, string> = {
+      'APPROVED': 'PENDING',       // Can only approve a request that is still PENDING
+      'REJECTED': 'PENDING',       // Can only reject a request that is still PENDING
       'ORDERED': 'APPROVED',       // Can only mark ORDERED if currently APPROVED
       'RECEIVED': 'ORDERED',       // Can only mark RECEIVED if currently ORDERED
       'DELIVERED_TO_DEPT': 'RECEIVED', // Can only mark DELIVERED if currently RECEIVED

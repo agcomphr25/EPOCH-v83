@@ -9731,8 +9731,22 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(vendorPOs.vendorId, vendorId));
     }
 
-    if (archived !== undefined) {
-      conditions.push(eq(vendorPOs.archived, archived));
+    if (archived === true) {
+      // Cancelled and voided POs belong in the Archive tab even when they
+      // predate the explicit archived flag.
+      conditions.push(
+        or(
+          eq(vendorPOs.archived, true),
+          inArray(vendorPOs.status, ['Cancelled', 'Voided'])
+        )
+      );
+    } else if (archived === false) {
+      conditions.push(
+        and(
+          eq(vendorPOs.archived, false),
+          notInArray(vendorPOs.status, ['Cancelled', 'Voided'])
+        )
+      );
     }
 
     const whereExpr = conditions.length > 0 ? and(...conditions) : undefined;

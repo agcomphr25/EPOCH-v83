@@ -1184,10 +1184,14 @@ router.put('/items/:id/routing-link', async (req: Request, res: Response) => {
       return res.status(422).json({ error: 'Routing link can only be set for manufactured items' });
     }
 
+    const linkedRoutingType = item.manufacturedCategory === 'MACHINED_PART'
+      ? 'CNC'
+      : undefined;
     const routing = await storage.updatePartRouting(routingId, {
       inventoryItemId: itemId.toString(),
       partNumber: item.agPartNumber || undefined,
       partName: item.name || undefined,
+      ...(linkedRoutingType ? { routingType: linkedRoutingType } : {}),
     } as any);
     res.json(routing);
   } catch (error: any) {

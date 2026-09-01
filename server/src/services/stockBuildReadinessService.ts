@@ -39,12 +39,14 @@ async function loadActiveManufacturedStockBuildParts(tx: Queryable) {
                         AND COALESCE(br.lifecycle_status,'RELEASED')='RELEASED'
                         AND (br.effective_from IS NULL OR br.effective_from<=now())
                         AND (br.effective_to IS NULL OR br.effective_to>now())),0)::int AS released_bom_count,
-            (SELECT max(br.id) FROM boms b JOIN bom_revisions br ON br.bom_id=b.id
+            (SELECT br.id FROM boms b JOIN bom_revisions br ON br.bom_id=b.id
               WHERE (b.parent_inventory_item_id=i.id OR b.parent_part_ag_number=i.ag_part_number)
                 AND b.is_active=true AND br.is_released=true
                 AND COALESCE(br.lifecycle_status,'RELEASED')='RELEASED'
                 AND (br.effective_from IS NULL OR br.effective_from<=now())
-                AND (br.effective_to IS NULL OR br.effective_to>now())) AS released_bom_revision_id,
+                AND (br.effective_to IS NULL OR br.effective_to>now())
+              ORDER BY br.effective_from DESC NULLS LAST,br.created_at DESC,br.id::text DESC
+              LIMIT 1) AS released_bom_revision_id,
             COALESCE((SELECT count(*) FROM part_routings pr WHERE pr.is_active=true AND pr.project_id IS NULL
                         AND (pr.inventory_item_fk=i.id OR pr.inventory_item_id=i.id::text
                              OR lower(pr.part_number)=lower(i.ag_part_number))),0)::int AS active_routing_count,
@@ -55,10 +57,12 @@ async function loadActiveManufacturedStockBuildParts(tx: Queryable) {
                       WHERE tp.inventory_item_id=i.id AND tp.status='RELEASED'
                         AND (tp.effective_from IS NULL OR tp.effective_from<=now())
                         AND (tp.effective_to IS NULL OR tp.effective_to>now())),0)::int AS released_traceability_policy_count
-            ,(SELECT max(tp.id) FROM inventory_item_traceability_policies tp
+            ,(SELECT tp.id FROM inventory_item_traceability_policies tp
                WHERE tp.inventory_item_id=i.id AND tp.status='RELEASED'
                  AND (tp.effective_from IS NULL OR tp.effective_from<=now())
-                 AND (tp.effective_to IS NULL OR tp.effective_to>now())) AS released_traceability_policy_id
+                 AND (tp.effective_to IS NULL OR tp.effective_to>now())
+               ORDER BY tp.effective_from DESC NULLS LAST,tp.created_at DESC,tp.id::text DESC
+               LIMIT 1) AS released_traceability_policy_id
        FROM inventory_items i LEFT JOIN inventory_departments d ON d.id=i.default_department_id
       WHERE i.is_active=true AND i.item_type='MANUFACTURED' ORDER BY i.ag_part_number,i.name`
   );

@@ -22,6 +22,17 @@ describe('stock-build readiness foundation', () => {
     expect(listSection).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/);
   });
 
+  it('selects UUID readiness authorities without unsupported UUID aggregates', () => {
+    const service = read('server/src/services/stockBuildReadinessService.ts');
+    expect(service).not.toMatch(/max\((br|tp)\.id\)/i);
+    expect(service).toContain(
+      'ORDER BY br.effective_from DESC NULLS LAST,br.created_at DESC,br.id::text DESC'
+    );
+    expect(service).toContain(
+      'ORDER BY tp.effective_from DESC NULLS LAST,tp.created_at DESC,tp.id::text DESC'
+    );
+  });
+
   it('fails closed when P1 or P2 classification authority is ambiguous', () => {
     const service = read('server/src/services/stockBuildReadinessService.ts');
     expect(service).toContain(

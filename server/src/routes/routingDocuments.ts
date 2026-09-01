@@ -3684,12 +3684,21 @@ router.post('/:id/generate-routing', async (req: Request, res: Response) => {
     // Create the part routing using storage interface
     const { storage } = await import('../../storage');
     
+    const numericInventoryItemId = Number(inventoryItemId);
+    const inventoryItem = Number.isSafeInteger(numericInventoryItemId) && numericInventoryItemId > 0
+      ? await storage.getInventoryItem(numericInventoryItemId)
+      : undefined;
+    const effectiveRoutingType = inventoryItem?.manufacturedCategory === 'MACHINED_PART'
+      ? 'CNC'
+      : undefined;
+
     const newRouting = await storage.createPartRouting({
       inventoryItemId,
       partNumber,
       partName,
       routingName: routingName || document.title || 'Generated from Document',
       routingRevision: 1,
+      ...(effectiveRoutingType ? { routingType: effectiveRoutingType } : {}),
       departmentSequence,
       traceabilityConfig,
       departmentConfig,

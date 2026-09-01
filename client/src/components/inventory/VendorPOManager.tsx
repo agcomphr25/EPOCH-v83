@@ -3051,7 +3051,7 @@ export default function VendorPOManager({
 
   // Filter vendor POs
   const ACTIVE_STATUSES = ['Draft', 'RFQ Sent', 'Quote Received', 'Sent', 'Partially Received'];
-  const CLOSED_STATUSES = ['Declined', 'Expired', 'Cancelled', 'Voided', 'Fully Received'];
+  const CLOSED_STATUSES = ['Declined', 'Expired', 'Fully Received'];
 
   const filteredVendorPOs = (vendorPOs || []).filter((vendorPo) => {
     const matchesSearch =

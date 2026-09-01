@@ -1058,14 +1058,14 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/vendor-pos/counts - Return tab counts for active, closed, and archived RFQs
+// GET /api/vendor-pos/counts - Return tab counts for active, fulfilled, and archived RFQs
 router.get('/counts', async (_req: Request, res: Response) => {
   try {
     const result = await db.execute(sql`
       SELECT
         SUM(CASE WHEN archived = false AND status IN ('Draft','RFQ Sent','Quote Received','Sent','Partially Received') THEN 1 ELSE 0 END)::int AS active,
-        SUM(CASE WHEN archived = false AND status IN ('Declined','Expired','Cancelled','Voided','Fully Received') THEN 1 ELSE 0 END)::int AS closed,
-        SUM(CASE WHEN archived = true THEN 1 ELSE 0 END)::int AS archived
+        SUM(CASE WHEN archived = false AND status IN ('Declined','Expired','Fully Received') THEN 1 ELSE 0 END)::int AS closed,
+        SUM(CASE WHEN archived = true OR status IN ('Cancelled','Voided') THEN 1 ELSE 0 END)::int AS archived
       FROM vendor_pos
       WHERE is_current_revision = true
     `);

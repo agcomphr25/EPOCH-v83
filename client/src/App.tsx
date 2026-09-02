@@ -290,6 +290,9 @@ const P2Forms = React.lazy(() => import('./pages/P2Forms'));
 const ManufacturingQueue = React.lazy(
   () => import('./pages/ManufacturingQueue')
 );
+const CombinedManufacturingProcessesPage = React.lazy(
+  () => import('./pages/CombinedManufacturingProcessesPage')
+);
 const KitsQueue = React.lazy(() => import('./pages/KitsQueue'));
 const LayupQueue = React.lazy(() => import('./pages/LayupQueue'));
 const CoreQueue = React.lazy(() => import('./pages/CoreQueue'));
@@ -2146,6 +2149,10 @@ function App() {
                         <Route
                           path="/manufacturing-queue"
                           component={ManufacturingQueue}
+                        />
+                        <Route
+                          path="/manufacturing/combined-processes"
+                          component={CombinedManufacturingProcessesPage}
                         />
                         <Route path="/kits-queue" component={KitsQueue} />
                         <Route path="/layup-queue" component={LayupQueue} />

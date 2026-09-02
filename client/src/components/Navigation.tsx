@@ -86,6 +86,7 @@ import {
   HandCoins,
   Thermometer,
   Brain,
+  GitBranch,
 } from 'lucide-react';
 
 interface NavItemDef {
@@ -1435,6 +1436,14 @@ export default function Navigation() {
       description:
         'View and manage manufactured parts queue by department (Cutting Table, CNC, Cores)',
     },
+    ...(import.meta.env.VITE_COMBINED_MANUFACTURING_PROCESS_READS_ENABLED === 'true'
+      ? [{
+          path: '/manufacturing/combined-processes',
+          label: 'Combined Processes',
+          icon: GitBranch,
+          description: 'Define controlled production runs that create multiple manufactured parts',
+        }]
+      : []),
     {
       path: '/kits-queue',
       label: 'Kits Queue',

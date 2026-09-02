@@ -6,6 +6,7 @@ import { requirePermission } from '../../middleware/requirePermission';
 import { resolveUserSnapshot } from '../../utils/userSnapshot';
 import {
   areCombinedManufacturingProcessReadsEnabled,
+  areCombinedManufacturingProcessPlanningWritesEnabled,
   areCombinedManufacturingProcessWritesEnabled,
 } from '../lib/featureFlags';
 import {
@@ -13,7 +14,10 @@ import {
   CombinedProcessError,
   createCombinedManufacturingProcess,
   listCombinedManufacturingProcesses,
+  listCombinedProcessSelections,
   recommendCombinedManufacturingProcesses,
+  selectCombinedProcessRecommendation,
+  withdrawCombinedProcessSelection,
 } from '../services/combinedManufacturingProcessService';
 
 const router = Router();
@@ -43,6 +47,14 @@ const processSchema = z
       path: ['maximumRuns'],
     }
   );
+const selectionSchema = z.object({
+  processId: z.string().uuid(),
+  expectedBaselineChecksum: z.string().trim().min(1),
+  reason: z.string().trim().min(1).max(1000),
+});
+const withdrawalSchema = z.object({
+  reason: z.string().trim().min(1).max(1000),
+});
 
 const enabled = (value: boolean) => {
   if (!value)
@@ -87,6 +99,73 @@ router.get(
     try {
       enabled(areCombinedManufacturingProcessReadsEnabled());
       res.json({ processes: await listCombinedManufacturingProcesses() });
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.get(
+  '/projects/:projectId/frozen-production-demand/:baselineId/combined-process-selections',
+  authenticateToken,
+  requirePermission('manufacturing.combined_processes.view'),
+  async (req, res) => {
+    try {
+      enabled(areCombinedManufacturingProcessReadsEnabled());
+      res.json({
+        selections: await listCombinedProcessSelections(
+          req.params.projectId,
+          req.params.baselineId
+        ),
+      });
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/projects/:projectId/frozen-production-demand/:baselineId/combined-process-selections',
+  authenticateToken,
+  requirePermission('manufacturing.combined_processes.plan'),
+  async (req, res) => {
+    try {
+      enabled(areCombinedManufacturingProcessPlanningWritesEnabled());
+      const body = selectionSchema.parse(req.body);
+      res
+        .status(201)
+        .json(
+          await selectCombinedProcessRecommendation(
+            req.params.projectId,
+            req.params.baselineId,
+            body.processId,
+            body,
+            await actor(req)
+          )
+        );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/projects/:projectId/frozen-production-demand/:baselineId/combined-process-selections/:selectionId/withdraw',
+  authenticateToken,
+  requirePermission('manufacturing.combined_processes.plan'),
+  async (req, res) => {
+    try {
+      enabled(areCombinedManufacturingProcessPlanningWritesEnabled());
+      const body = withdrawalSchema.parse(req.body);
+      res.json(
+        await withdrawCombinedProcessSelection(
+          req.params.projectId,
+          req.params.baselineId,
+          req.params.selectionId,
+          body.reason,
+          await actor(req)
+        )
+      );
     } catch (error) {
       fail(res, error);
     }

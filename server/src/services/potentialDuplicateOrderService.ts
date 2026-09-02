@@ -370,18 +370,21 @@ export async function findPotentialDuplicateOrders(
             ao.features, ao.handedness, ao.is_flattop AS "isFlattop",
             ao.is_cancelled AS "isCancelled", ao.is_replacement AS "isReplacement",
             ao.replaced_order_id AS "replacedOrderId",
-            COALESCE(json_agg(json_build_object('street', ca.street, 'street2', ca.street2, 'city', ca.city,
-              'state', ca.state, 'zipCode', ca.zip_code)) FILTER (WHERE ca.id IS NOT NULL), '[]'::json) AS addresses
+            COALESCE(addresses.addresses, '[]'::json) AS addresses
        FROM all_orders ao
        LEFT JOIN customers c ON c.id::text = ao.customer_id
-       LEFT JOIN customer_addresses ca ON ca.customer_id = c.id
+       LEFT JOIN LATERAL (
+         SELECT json_agg(json_build_object('street', ca.street, 'street2', ca.street2, 'city', ca.city,
+           'state', ca.state, 'zipCode', ca.zip_code)) AS addresses
+           FROM customer_addresses ca
+          WHERE ca.customer_id = c.id
+       ) addresses ON true
       WHERE LOWER(TRIM(COALESCE(ao.model_id, ''))) = LOWER(TRIM($1))
         AND ao.order_id <> $2
         AND ao.order_date >= CURRENT_DATE - INTERVAL '24 months'
         AND COALESCE(ao.is_cancelled, false) = false
         AND ao.scrap_date IS NULL
         AND UPPER(COALESCE(ao.status, '')) NOT IN ('CANCELLED', 'SCRAPPED')
-      GROUP BY ao.id, c.id, c.name, c.email, c.phone
       ORDER BY ao.order_date DESC
       LIMIT 100`,
     [input.modelId, input.orderId]

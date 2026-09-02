@@ -34,14 +34,53 @@ import { sendApiError } from '../../utils/apiErrors';
 import { generateVendorPoPdf } from '../../utils/pdf/vendorPoPdf';
 import { syncLinkedPartsRequestsReceivedForVendorPo } from '../services/partsRequestVendorPoSyncService';
 import fs from 'node:fs';
+import { prepareVendorPoEmail, type VendorPoEmailPurpose } from '../services/vendorPoEmailService';
 
 const router = Router();
 
-const DEFAULT_VENDOR_PO_ISSUE_MESSAGE =
-  'AG Composites has issued a new Purchase Order to your company. Please see the attached purchase order PDF for details.';
-
-const DEFAULT_VENDOR_PO_RESEND_MESSAGE =
-  'AG Composites is resending this Purchase Order. Please see the attached purchase order PDF for details.';
+router.post('/:id/email-preview', requirePermission('purchasing.approve_po'), async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    const purpose: VendorPoEmailPurpose = req.body?.purpose === 'resend' ? 'resend' : 'issue';
+    let vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) return res.status(404).json({ error: 'Vendor PO not found' });
+    const allowedStatuses = purpose === 'issue' ? ['Draft', 'RFQ Sent', 'Quote Received'] : ['Sent', 'Partially Received'];
+    if (!allowedStatuses.includes(vendorPO.status ?? '')) {
+      return res.status(409).json({ error: `Cannot preview a ${purpose} email with status ${vendorPO.status}` });
+    }
+    if (purpose === 'issue' && !vendorPO.poNumber) {
+      const beforeReservation = vendorPO;
+      const reserved = await storage.reserveVendorPONumber(id);
+      vendorPO = reserved.vendorPO;
+      if (reserved.wasReserved) {
+        await recordVendorPoAudit(req, id, 'VENDOR_PO_NUMBER_RESERVED_FOR_EMAIL_PREVIEW', {
+          before: beforeReservation,
+          after: vendorPO,
+          fieldsChanged: buildFieldChanges(beforeReservation, vendorPO, ['poNumber']),
+          meta: { poNumber: vendorPO.poNumber, reason: 'Reserved to guarantee Issue PO email preview/send parity' },
+        });
+      }
+    }
+    const vendor = await storage.getVendor(vendorPO.vendorId);
+    if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
+    const attachmentIds = await validateSelectedVendorPoPdfIds(id, req.body?.attachmentIds);
+    const prepared = await prepareVendorPoEmail({
+      vendorPo: vendorPO,
+      vendor,
+      purpose,
+      recipients: req.body?.recipients,
+      message: req.body?.message,
+      attachmentIds,
+      userEmail: (req as any).user?.email,
+      triggeredBy: String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown'),
+      complianceConfirmation: req.body?.complianceConfirmation,
+    });
+    return res.json(prepared.preview);
+  } catch (error: any) {
+    return res.status(error?.status || 500).json({ error: error?.message || 'Failed to preview vendor PO email' });
+  }
+});
 
 const issueComplianceConfirmationSchema = z.object({
   dpasRated: z.boolean(),
@@ -68,25 +107,6 @@ async function validateSelectedVendorPoPdfIds(vendorPoId: number, raw: unknown):
     }
   }
   return ids;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-function normalizeVendorPoEmailMessage(raw: unknown, fallback: string): { text: string; html: string } {
-  const rawText = typeof raw === 'string' ? raw.trim() : '';
-  const text = (rawText || fallback).slice(0, 4000);
-  const html = text
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
-    .join('\n');
-  return { text, html };
 }
 
 function parseLinkedPartsRequestIds(raw: unknown): number[] {
@@ -2698,6 +2718,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       recipients: additionalRecipients,
       message: emailMessage,
       attachmentIds: selectedAttachmentIds,
+      previewFingerprint,
       complianceConfirmation: rawComplianceConfirmation,
     } = req.body ?? {};
     const skip = Boolean(skipEmail);
@@ -3089,7 +3110,25 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       });
     }
 
-    // Atomic transactional issuance: lock row, generate number, update status
+    const issuePreviewPreparation = await prepareVendorPoEmail({
+      vendorPo: vendorPO,
+      vendor,
+      purpose: 'issue',
+      recipients: additionalRecipients,
+      message: emailMessage,
+      attachmentIds,
+      userEmail: performedByEmail,
+      triggeredBy: performedBy,
+      complianceConfirmation: confirmation,
+    });
+    if (typeof previewFingerprint !== 'string' || previewFingerprint !== issuePreviewPreparation.preview.fingerprint) {
+      return res.status(409).json({
+        error: 'Email preview is out of date',
+        message: 'The PO email changed after it was previewed. Review the refreshed preview before sending.',
+      });
+    }
+
+    // Atomic transactional issuance: lock row, reuse the preview-reserved number, update status
     issueStage = 'database issuance';
     const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id, {
       complianceConfirmation,
@@ -3110,43 +3149,22 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       meta: { poNumber, issuedWithoutEmail: false, complianceConfirmation },
     });
 
-    // Build standard email routing from Vendor PO settings plus the issuing user's email.
-    const issuingUserEmail = (req as any).user?.email as string | undefined;
-    const { returnEmail: issueReplyTo, cc: standardCc } = await getVendorPoEmailRouting(issuingUserEmail);
-
-    // Derive authoritative to/cc from selected recipients (validated against vendor's allowed emails)
-    const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
-    const { to: issueToEmail, cc: issueCcList } = deriveToAndCc(
-      additionalRecipients,
-      vendor.email,
-      allowedEmails,
-      standardCc
-    );
-
-    const normalizedIssueMessage = normalizeVendorPoEmailMessage(emailMessage, DEFAULT_VENDOR_PO_ISSUE_MESSAGE);
-    const issueContext = {
-      vendor_name: vendor.name,
-      vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
-      po_number: poNumber,
-      requested_delivery_date: issuedPO.expectedDeliveryDate
-        ? new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()
-        : '',
-      vendor_message_html: normalizedIssueMessage.html,
-      vendor_message_text: normalizedIssueMessage.text,
-      email_attachment_ids: attachmentIds,
-    };
+    const preparedIssueEmail = await prepareVendorPoEmail({
+      vendorPo: issuedPO,
+      vendor,
+      purpose: 'issue',
+      recipients: additionalRecipients,
+      message: emailMessage,
+      attachmentIds,
+      userEmail: performedByEmail,
+      triggeredBy: performedBy,
+      complianceConfirmation: confirmation,
+    });
+    const issueToEmail = preparedIssueEmail.preview.to;
+    const issueCcList = preparedIssueEmail.preview.cc;
 
     issueStage = 'vendor email delivery';
-    const emailResult = await sendCommunication({
-      templateKey: 'vendor_po_issue',
-      context: issueContext,
-      to: issueToEmail,
-      cc: issueCcList,
-      replyTo: issueReplyTo,
-      triggeredBy: performedBy,
-      capabilityRequired: 'issue_vendor_po',
-      orderId: String(id),
-    });
+    const emailResult = await sendCommunication(preparedIssueEmail.sendOptions);
 
     if (!emailResult.success) {
       const requestId = res.locals.requestId;
@@ -3176,7 +3194,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
     await recordVendorPoAudit(req, id, 'VENDOR_PO_EMAIL_SENT', {
       after: issuedPO,
-      meta: { poNumber, to: issueToEmail, cc: issueCcList, templateKey: 'vendor_po_issue', customMessage: issueContext.vendor_message_text },
+      meta: { poNumber, to: issueToEmail, cc: issueCcList, templateKey: 'vendor_po_issue', customMessage: preparedIssueEmail.sendOptions.context.vendor_message_text },
     });
 
     console.log(`[VendorPOIssuedEmailSent] PO ${poNumber} issued by ${performedBy} — email sent to ${issueToEmail}, cc: ${issueCcList.join(', ')}`);
@@ -3379,7 +3397,7 @@ router.get('/:id/confirmation', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/resend', async (req: Request, res: Response) => {
+router.post('/:id/resend', requirePermission('purchasing.approve_po'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -3414,45 +3432,30 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       });
     }
 
-    const { recipients: additionalRecipients, message: emailMessage, attachmentIds: selectedAttachmentIds } = req.body ?? {};
+    const { recipients: additionalRecipients, message: emailMessage, attachmentIds: selectedAttachmentIds, previewFingerprint } = req.body ?? {};
     const attachmentIds = await validateSelectedVendorPoPdfIds(id, selectedAttachmentIds);
 
     const poNumber = vendorPO.poNumber;
 
-    const resendingUserEmail = (req as any).user?.email as string | undefined;
-    const { returnEmail: resendReplyTo, cc: standardResendCc } = await getVendorPoEmailRouting(resendingUserEmail);
-
-    const resendAllowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
-    const { to: resendToEmail, cc: resendCcList } = deriveToAndCc(
-      additionalRecipients,
-      vendor.email,
-      resendAllowedEmails,
-      standardResendCc
-    );
-
-    const normalizedResendMessage = normalizeVendorPoEmailMessage(emailMessage, DEFAULT_VENDOR_PO_RESEND_MESSAGE);
-    const resendContext = {
-      vendor_name: vendor.name,
-      vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
-      po_number: poNumber,
-      requested_delivery_date: vendorPO.expectedDeliveryDate
-        ? new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()
-        : '',
-      vendor_message_html: normalizedResendMessage.html,
-      vendor_message_text: normalizedResendMessage.text,
-      email_attachment_ids: attachmentIds,
-    };
-
-    const emailResult = await sendCommunication({
-      templateKey: 'vendor_po_resend',
-      context: resendContext,
-      to: resendToEmail,
-      cc: resendCcList,
-      replyTo: resendReplyTo,
+    const preparedResendEmail = await prepareVendorPoEmail({
+      vendorPo: vendorPO,
+      vendor,
+      purpose: 'resend',
+      recipients: additionalRecipients,
+      message: emailMessage,
+      attachmentIds,
+      userEmail: (req as any).user?.email,
       triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
-      capabilityRequired: 'resend_vendor_po',
-      orderId: String(id),
     });
+    if (typeof previewFingerprint !== 'string' || previewFingerprint !== preparedResendEmail.preview.fingerprint) {
+      return res.status(409).json({
+        error: 'Email preview is out of date',
+        message: 'The PO email changed after it was previewed. Review the refreshed preview before sending.',
+      });
+    }
+    const resendToEmail = preparedResendEmail.preview.to;
+    const resendCcList = preparedResendEmail.preview.cc;
+    const emailResult = await sendCommunication(preparedResendEmail.sendOptions);
 
     if (!emailResult.success) {
       console.error('Failed to resend PO email:', emailResult.error);
@@ -3468,7 +3471,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
     console.log(`[VendorPOResent] PO ${poNumber} resent by user ${(req as any).user?.username ?? 'unknown'} — email sent to ${resendToEmail}, cc: ${resendCcList.join(', ')}`);
     await recordVendorPoAudit(req, id, 'VENDOR_PO_RESENT', {
       after: vendorPO,
-      meta: { poNumber, to: resendToEmail, cc: resendCcList, templateKey: 'vendor_po_resend', customMessage: resendContext.vendor_message_text },
+      meta: { poNumber, to: resendToEmail, cc: resendCcList, templateKey: 'vendor_po_resend', customMessage: preparedResendEmail.sendOptions.context.vendor_message_text },
     });
 
     res.json({

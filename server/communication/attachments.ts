@@ -34,7 +34,7 @@ export async function buildAttachments(
     try {
       const poId = parseInt(orderId, 10);
       if (!isNaN(poId)) {
-        const buffer = await generateVendorPoPdf(poId);
+        const buffer = await generateVendorPoPdf(poId, context?.vendor_po_pdf_overrides ?? {});
         const poNumber = context.po_number || `PO-${poId}`;
         const filename = templateKey === 'vendor_rfq'
           ? `Vendor_RFQ_${poNumber}.pdf`

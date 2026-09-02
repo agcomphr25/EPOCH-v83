@@ -568,8 +568,12 @@ function drawTermsAndNotes(state: DrawState, data: VendorPOData, settings: any, 
   return y;
 }
 
-export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
+export async function generateVendorPoPdf(
+  poId: number,
+  poOverrides: Partial<VendorPOData['po']> = {},
+): Promise<Buffer> {
   const data = await fetchVendorPOData(poId);
+  data.po = { ...data.po, ...poOverrides };
   const { po, vendor, items, companySettings, poSettings } = data;
   const isRFQ = !po.poNumber;
   const accentColor = isRFQ ? COLOR.ACCENT_RFQ : COLOR.ACCENT_PO;

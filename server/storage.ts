@@ -2770,6 +2770,7 @@ export interface IStorage {
     meta: { page: number; pageSize: number; total: number; pageCount: number };
   }>;
   getVendorPO(id: number): Promise<any | undefined>;
+  reserveVendorPONumber(id: number): Promise<{ vendorPO: any; wasReserved: boolean }>;
   createVendorPO(data: any): Promise<any>;
   updateVendorPO(id: number, data: any): Promise<any>;
   deleteVendorPO(id: number): Promise<void>;
@@ -10021,6 +10022,33 @@ export class DatabaseStorage implements IStorage {
       }
     }
     return `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
+  }
+
+  async reserveVendorPONumber(id: number): Promise<{ vendorPO: any; wasReserved: boolean }> {
+    return db.transaction(async (tx) => {
+      const [lockedPO] = await tx.select().from(vendorPOs).where(eq(vendorPOs.id, id)).for('update');
+      if (!lockedPO) throw Object.assign(new Error('Vendor PO not found'), { status: 404 });
+      if (!['Draft', 'RFQ Sent', 'Quote Received'].includes(lockedPO.status ?? '') || lockedPO.poNumber) {
+        return { vendorPO: lockedPO, wasReserved: false };
+      }
+
+      const prefix = `VPO-${new Date().getFullYear().toString().slice(-2)}`;
+      const rows = await tx.select({ poNumber: vendorPOs.poNumber })
+        .from(vendorPOs)
+        .where(sql`${vendorPOs.poNumber} LIKE ${`${prefix}%`}`)
+        .for('update');
+      let maxNumber = 0;
+      for (const row of rows) {
+        const match = row.poNumber?.match(/VPO-\d{2}(\d{3})/);
+        if (match) maxNumber = Math.max(maxNumber, Number(match[1]));
+      }
+      const poNumber = `${prefix}${String(maxNumber + 1).padStart(3, '0')}`;
+      const [vendorPO] = await tx.update(vendorPOs)
+        .set({ poNumber, updatedAt: new Date() })
+        .where(eq(vendorPOs.id, id))
+        .returning();
+      return { vendorPO, wasReserved: true };
+    });
   }
 
   async issueVendorPO(

@@ -46,4 +46,14 @@ describe('P2 combined-process planning recommendations', () => {
     expect(source).toContain('Select for planning');
     expect(source).toContain('Withdraw selection');
   });
+
+  it('gates combined work-order materialization independently', () => {
+    expect(source).toContain(
+      'VITE_COMBINED_MANUFACTURING_PROCESS_MATERIALIZATION_WRITES_ENABLED'
+    );
+    expect(source).toMatch(
+      /can\(\s*['"]manufacturing\.combined_processes\.materialize['"]\s*\)/
+    );
+    expect(source).toContain('Create combined work order');
+  });
 });

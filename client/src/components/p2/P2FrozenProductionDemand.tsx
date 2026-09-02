@@ -116,8 +116,15 @@ export default function P2FrozenProductionDemand({
   const combinedProcessPlanningWrites =
     import.meta.env
       .VITE_COMBINED_MANUFACTURING_PROCESS_PLANNING_WRITES_ENABLED === 'true';
+  const combinedProcessMaterializationWrites =
+    import.meta.env
+      .VITE_COMBINED_MANUFACTURING_PROCESS_MATERIALIZATION_WRITES_ENABLED ===
+    'true';
   const canViewCombinedProcesses = can('manufacturing.combined_processes.view');
   const canPlanCombinedProcesses = can('manufacturing.combined_processes.plan');
+  const canMaterializeCombinedProcesses = can(
+    'manufacturing.combined_processes.materialize'
+  );
   const list = useQuery<{
     baselines: Baseline[];
     authority: { canManage: boolean; canRelease: boolean };
@@ -227,6 +234,30 @@ export default function P2FrozenProductionDemand({
     onError: (error: Error) =>
       toast({
         title: 'Selection was not withdrawn',
+        description: error.message,
+        variant: 'destructive',
+      }),
+  });
+  const materializeCombinedSelection = useMutation({
+    mutationFn: (selectionId: string) =>
+      apiRequest(
+        `/api/projects/${projectId}/frozen-production-demand/${current?.id}/combined-process-selections/${selectionId}/materialize`,
+        {
+          method: 'POST',
+          body: {
+            expectedBaselineChecksum: current?.baseline_checksum,
+            requestKey: crypto.randomUUID(),
+          },
+        }
+      ),
+    onSuccess: (result: { workOrderNumber?: string }) =>
+      toast({
+        title: 'Combined work order created',
+        description: result.workOrderNumber,
+      }),
+    onError: (error: Error) =>
+      toast({
+        title: 'Combined work order was not created',
         description: error.message,
         variant: 'destructive',
       }),
@@ -529,6 +560,20 @@ export default function P2FrozenProductionDemand({
                           }
                         >
                           Withdraw selection
+                        </Button>
+                      )}
+                    {combinedProcessMaterializationWrites &&
+                      canMaterializeCombinedProcesses && (
+                        <Button
+                          size="sm"
+                          disabled={materializeCombinedSelection.isPending}
+                          onClick={() =>
+                            materializeCombinedSelection.mutate(
+                              activeCombinedSelection.id
+                            )
+                          }
+                        >
+                          Create combined work order
                         </Button>
                       )}
                   </div>

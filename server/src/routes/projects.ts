@@ -3754,15 +3754,15 @@ router.get('/:id/p2-hub', async (req, res) => {
       poIds.length > 0
         ? optionalHubQuery<LegacyProjectValue>(
             'serialized items',
-            `SELECT id, serial_number, barcode, po_id, po_item_id, po_number,
-                    part_number, part_name, current_department, status, completed_at,
-                    finalized_at, part_routing_id, traveler_barcode, sku,
-                    sequence_number, created_at, updated_at,
+            `SELECT si.id, si.serial_number, si.barcode, si.po_id, si.po_item_id, si.po_number,
+                    si.part_number, si.part_name, si.current_department, si.status, si.completed_at,
+                    si.finalized_at, si.part_routing_id, si.traveler_barcode, si.sku,
+                    si.sequence_number, si.created_at, si.updated_at,
                     active_traveler.traveler_number AS active_traveler_number,
                     active_traveler.status AS active_traveler_status,
                     active_traveler.department_name AS active_traveler_department,
                     active_traveler.started_at AS active_traveler_started_at
-             FROM p2_serialized_items
+              FROM p2_serialized_items si
              LEFT JOIN LATERAL (
                SELECT t.traveler_number, t.status, active_step.department_name, active_step.started_at
                FROM travelers t
@@ -3786,8 +3786,8 @@ router.get('/:id/p2-hub', async (req, res) => {
                  t.updated_at DESC NULLS LAST
                LIMIT 1
              ) active_traveler ON true
-             WHERE po_id = ANY($1::int[])
-             ORDER BY po_number, part_number, sequence_number`,
+              WHERE si.po_id = ANY($1::int[])
+              ORDER BY si.po_number, si.part_number, si.sequence_number`,
             [poIds]
           )
         : Promise.resolve([]),

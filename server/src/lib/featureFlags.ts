@@ -265,6 +265,13 @@ export function areCombinedManufacturingProcessPlanningWritesEnabled(): boolean 
   );
 }
 
+export function areCombinedManufacturingProcessMaterializationWritesEnabled(): boolean {
+  return envBool(
+    'COMBINED_MANUFACTURING_PROCESS_MATERIALIZATION_WRITES_ENABLED',
+    false
+  );
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

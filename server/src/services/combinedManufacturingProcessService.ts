@@ -1,6 +1,11 @@
+import { createHash, randomUUID } from 'node:crypto';
+
 import type { PoolClient } from 'pg';
 
 import { pool } from '../../db';
+
+const checksum = (value: unknown) =>
+  createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 export type CombinedProcessActor = {
   userId: number;
@@ -398,7 +403,7 @@ export async function selectCombinedProcessRecommendation(
       baselineId
     );
     const recommendation = recommendations.find(
-      (candidate: any) => candidate.processId === processId
+      (candidate) => candidate?.processId === processId
     );
     if (!recommendation)
       throw new CombinedProcessError(
@@ -497,6 +502,141 @@ export async function withdrawCombinedProcessSelection(
     );
     await client.query('COMMIT');
     return { id: selectionId, status: 'WITHDRAWN' };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function materializeCombinedProcessSelection(
+  projectId: string,
+  baselineId: string,
+  selectionId: string,
+  input: { expectedBaselineChecksum: string; requestKey: string },
+  actor: CombinedProcessActor
+) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+      `combined-process-materialize:${baselineId}`,
+    ]);
+    const selected = await client.query(
+      `SELECT s.*,p.process_code,p.name process_name,d.name lead_department_name
+       FROM combined_manufacturing_process_selections s
+       JOIN combined_manufacturing_processes p ON p.id=s.process_id AND p.status='APPROVED'
+       JOIN inventory_departments d ON d.id=p.lead_department_id
+       WHERE s.id=$1 AND s.project_id=$2 AND s.frozen_demand_baseline_id=$3
+         AND s.status='SELECTED' FOR UPDATE OF s`,
+      [selectionId, projectId, baselineId]
+    );
+    if (selected.rows.length !== 1)
+      throw new CombinedProcessError(
+        'ACTIVE_SELECTION_REQUIRED',
+        'An active combined-process selection is required.'
+      );
+    const selection = selected.rows[0];
+    if (selection.baseline_checksum !== input.expectedBaselineChecksum)
+      throw new CombinedProcessError(
+        'FROZEN_DEMAND_AUTHORITY_STALE',
+        'The selected plan does not match the expected baseline checksum.'
+      );
+    const defaultOrders = await client.query(
+      `SELECT 1 FROM p2_manufacturing_work_order_authorities WHERE frozen_demand_baseline_id=$1 LIMIT 1`,
+      [baselineId]
+    );
+    if (defaultOrders.rows.length)
+      throw new CombinedProcessError(
+        'DEFAULT_WORK_ORDERS_EXIST',
+        'Default work orders already exist for this baseline; reconciliation is required.'
+      );
+    const replay = await client.query(
+      `SELECT id,production_work_order_id FROM combined_manufacturing_work_order_authorities WHERE request_key=$1`,
+      [input.requestKey]
+    );
+    if (replay.rows.length) {
+      await client.query('COMMIT');
+      return {
+        replayed: true,
+        authorityId: replay.rows[0].id,
+        workOrderId: replay.rows[0].production_work_order_id,
+      };
+    }
+    const snapshot = selection.recommendation_snapshot;
+    const workOrderId = randomUUID();
+    const authorityId = randomUUID();
+    const workOrderNumber = `P2-CWO-${String(selection.process_code).toUpperCase()}-${authorityId.slice(0, 8).toUpperCase()}`;
+    await client.query(
+      `INSERT INTO production_work_orders
+       (id,work_order_number,project_id,part_number,description,quantity,status,wad_status,assigned_department,queue_type,wizard_data)
+       VALUES($1,$2,$3,$4,$5,$6,'PLANNED','DRAFT',$7,'P2_COMBINED_MANUFACTURING',$8::jsonb)`,
+      [
+        workOrderId,
+        workOrderNumber,
+        projectId,
+        selection.process_code,
+        selection.process_name,
+        selection.recommended_runs,
+        selection.lead_department_name,
+        JSON.stringify({
+          source: 'COMBINED_MANUFACTURING_PROCESS',
+          selectionId,
+          baselineId,
+          outputs: snapshot.outputs,
+        }),
+      ]
+    );
+    const authoritySnapshot = {
+      selectionId,
+      baselineId,
+      baselineChecksum: selection.baseline_checksum,
+      recommendation: snapshot,
+    };
+    await client.query(
+      `INSERT INTO combined_manufacturing_work_order_authorities
+       (id,selection_id,production_work_order_id,project_id,frozen_demand_baseline_id,process_id,planned_runs,authority_snapshot,authority_checksum,request_key,materialized_by_user_id,materialized_by_display_name)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12)`,
+      [
+        authorityId,
+        selectionId,
+        workOrderId,
+        projectId,
+        baselineId,
+        selection.process_id,
+        selection.recommended_runs,
+        JSON.stringify(authoritySnapshot),
+        checksum(authoritySnapshot),
+        input.requestKey,
+        actor.userId,
+        actor.displayName,
+      ]
+    );
+    for (const output of snapshot.outputs) {
+      const demandNodes = await client.query(
+        `SELECT id FROM p2_frozen_production_demand_nodes WHERE baseline_id=$1 AND inventory_item_id=$2 AND make_buy_disposition='MAKE' ORDER BY assembly_path_identity`,
+        [baselineId, output.inventoryItemId]
+      );
+      await client.query(
+        `INSERT INTO combined_manufacturing_work_order_outputs
+         (combined_authority_id,inventory_item_id,part_number_snapshot,is_primary,quantity_per_run,required_quantity,planned_quantity,excess_quantity,demand_node_ids)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+        [
+          authorityId,
+          output.inventoryItemId,
+          output.partNumber,
+          output.isPrimary,
+          output.quantityPerRun,
+          output.requiredQuantity,
+          output.plannedQuantity,
+          output.excessQuantity,
+          JSON.stringify(demandNodes.rows.map((row) => row.id)),
+        ]
+      );
+    }
+    await client.query('COMMIT');
+    return { replayed: false, authorityId, workOrderId, workOrderNumber };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

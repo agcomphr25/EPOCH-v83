@@ -6,6 +6,7 @@ import { requirePermission } from '../../middleware/requirePermission';
 import { resolveUserSnapshot } from '../../utils/userSnapshot';
 import {
   areCombinedManufacturingProcessReadsEnabled,
+  areCombinedManufacturingProcessMaterializationWritesEnabled,
   areCombinedManufacturingProcessPlanningWritesEnabled,
   areCombinedManufacturingProcessWritesEnabled,
 } from '../lib/featureFlags';
@@ -15,6 +16,7 @@ import {
   createCombinedManufacturingProcess,
   listCombinedManufacturingProcesses,
   listCombinedProcessSelections,
+  materializeCombinedProcessSelection,
   recommendCombinedManufacturingProcesses,
   selectCombinedProcessRecommendation,
   withdrawCombinedProcessSelection,
@@ -54,6 +56,10 @@ const selectionSchema = z.object({
 });
 const withdrawalSchema = z.object({
   reason: z.string().trim().min(1).max(1000),
+});
+const materializationSchema = z.object({
+  expectedBaselineChecksum: z.string().trim().min(1),
+  requestKey: z.string().trim().min(1).max(255),
 });
 
 const enabled = (value: boolean) => {
@@ -166,6 +172,31 @@ router.post(
           await actor(req)
         )
       );
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.post(
+  '/projects/:projectId/frozen-production-demand/:baselineId/combined-process-selections/:selectionId/materialize',
+  authenticateToken,
+  requirePermission('manufacturing.combined_processes.materialize'),
+  async (req, res) => {
+    try {
+      enabled(areCombinedManufacturingProcessMaterializationWritesEnabled());
+      const body = materializationSchema.parse(req.body);
+      res
+        .status(201)
+        .json(
+          await materializeCombinedProcessSelection(
+            req.params.projectId,
+            req.params.baselineId,
+            req.params.selectionId,
+            body,
+            await actor(req)
+          )
+        );
     } catch (error) {
       fail(res, error);
     }

@@ -71,6 +71,12 @@ describe('prospective P2 V2 definition v3', () => {
     expect(service).not.toContain('INSERT INTO travelers');
   });
 
+  it('reads the authoritative project identifier without a legacy project_number column', () => {
+    const service = read('server/src/services/projectP2HandoffService.ts');
+    expect(service).toContain('SELECT id,project_code,workflow_version,po_id');
+    expect(service).not.toContain('SELECT id,project_number,workflow_version');
+  });
+
   it('derives execution and closing readiness from authoritative P2 quantities and holds', () => {
     const service = read('server/src/services/projectP2HandoffService.ts');
     for (const table of [

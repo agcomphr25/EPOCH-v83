@@ -86,7 +86,41 @@ export default function P2V2PreproductionReadiness({
       const body = await response.json().catch(() => null);
       if (!response.ok)
         throw new Error(body?.message || 'Unable to load readiness');
-      return body;
+      return {
+        ...body,
+        history: Array.isArray(body?.history) ? body.history : [],
+        approvals: Array.isArray(body?.approvals) ? body.approvals : [],
+        requiredApprovals: Array.isArray(body?.requiredApprovals)
+          ? body.requiredApprovals
+          : [],
+        recommendedChecklist: Array.isArray(body?.recommendedChecklist)
+          ? body.recommendedChecklist
+          : [],
+        readiness: {
+          ...(body?.readiness ?? {}),
+          blockers: Array.isArray(body?.readiness?.blockers)
+            ? body.readiness.blockers
+            : [],
+        },
+        review: body?.review
+          ? {
+              ...body.review,
+              checklist_snapshot: Array.isArray(
+                body.review.checklist_snapshot
+              )
+                ? body.review.checklist_snapshot
+                : [],
+              exceptions: Array.isArray(body.review.exceptions)
+                ? body.review.exceptions
+                : [],
+              risks_and_controls: Array.isArray(
+                body.review.risks_and_controls
+              )
+                ? body.review.risks_and_controls
+                : [],
+            }
+          : null,
+      };
     },
   });
   const refresh = () =>

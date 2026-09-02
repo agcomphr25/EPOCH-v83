@@ -120,6 +120,24 @@ describe('P2V2PreproductionReadiness', () => {
     expect(screen.getByTestId('launch-production')).toBeDisabled();
   });
 
+  it('renders a new readiness stage when the API omits empty collections', async () => {
+    renderReadiness({
+      review: null,
+      history: undefined,
+      approvals: undefined,
+      requiredApprovals: undefined,
+      recommendedChecklist: undefined,
+      readiness: { state: 'NOT_READY', stale: false },
+    });
+
+    expect(
+      await screen.findByText('Start Preproduction Readiness')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Create Readiness Draft' })
+    ).toBeDisabled();
+  });
+
   it('disables Production Launch from server readiness while preserving Production Release', async () => {
     renderReadiness({
       productionLaunchEnabled: false,

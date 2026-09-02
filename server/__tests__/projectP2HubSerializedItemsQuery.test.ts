@@ -22,5 +22,10 @@ describe('Project P2 Hub serialized-items query', () => {
     );
     expect(query).toContain('active_traveler.status AS active_traveler_status');
     expect(query).toContain('WHERE si.po_id = ANY($1::int[])');
+    expect(query).toContain(
+      'LOWER(TRIM(t.serial_number)) = LOWER(TRIM(si.serial_number))'
+    );
+    expect(query).not.toContain('p2_serialized_items.serial_number');
+    expect(query).not.toContain('p2_serialized_items.barcode');
   });
 });

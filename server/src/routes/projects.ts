@@ -3773,10 +3773,10 @@ router.get('/:id/p2-hub', async (req, res) => {
                  LIMIT 1
                ) active_step ON true
                WHERE (
-                   LOWER(TRIM(t.serial_number)) = LOWER(TRIM(p2_serialized_items.serial_number))
-                   OR LOWER(TRIM(t.serial_number)) = LOWER(TRIM(p2_serialized_items.barcode))
-                   OR LOWER(TRIM(t.lot_number)) = LOWER(TRIM(p2_serialized_items.serial_number))
-                   OR LOWER(TRIM(t.lot_number)) = LOWER(TRIM(p2_serialized_items.barcode))
+                   LOWER(TRIM(t.serial_number)) = LOWER(TRIM(si.serial_number))
+                   OR LOWER(TRIM(t.serial_number)) = LOWER(TRIM(si.barcode))
+                   OR LOWER(TRIM(t.lot_number)) = LOWER(TRIM(si.serial_number))
+                   OR LOWER(TRIM(t.lot_number)) = LOWER(TRIM(si.barcode))
                  )
                  AND UPPER(t.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED', 'COMPLETED')
                ORDER BY

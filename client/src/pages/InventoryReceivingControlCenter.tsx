@@ -129,6 +129,12 @@ interface VendorPO {
   pendingReceiptCount?: number;
 }
 
+interface VendorOption {
+  id: number;
+  name: string;
+  isActive?: boolean | null;
+}
+
 interface VendorPOItem {
   id: number;
   vendorPoId: number;
@@ -604,11 +610,13 @@ function LeftPanel({
   onSelectReceipt,
   activeReceiptId,
 }: {
-  onStartReceipt: (po: VendorPO | null) => void;
+  onStartReceipt: (po: VendorPO | null, vendor?: VendorOption) => void;
   onSelectReceipt: (receipt: Receipt) => void;
   activeReceiptId: number | null;
 }) {
   const [search, setSearch] = useState('');
+  const [manualReceiptOpen, setManualReceiptOpen] = useState(false);
+  const [manualVendorId, setManualVendorId] = useState('');
   const queryClient = useQueryClient();
 
   const { data: currentUser } = useQuery<{
@@ -650,6 +658,24 @@ function LeftPanel({
     queryFn: () => apiRequest('/api/receipts?status=complete'),
     refetchInterval: 60000,
   });
+
+  const { data: inProgressReceipts = [] } = useQuery<Receipt[]>({
+    queryKey: ['/api/receipts', 'in_progress'],
+    queryFn: () => apiRequest('/api/receipts?status=in_progress'),
+    refetchInterval: 30000,
+  });
+
+  const { data: vendorsResponse } = useQuery<{
+    data: VendorOption[];
+  }>({
+    queryKey: ['/api/vendors?pageSize=1000'],
+  });
+  const activeVendors = (vendorsResponse?.data ?? [])
+    .filter((vendor) => vendor.isActive !== false)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const inProgressManualReceipts = inProgressReceipts.filter(
+    (receipt) => !receipt.vendorPoId
+  );
 
   const reopenReceiptMutation = useMutation({
     mutationFn: async (receipt: Receipt) => {
@@ -710,7 +736,7 @@ function LeftPanel({
     return acc;
   }, {});
 
-  const pendingCount = filteredPOs.length;
+  const pendingCount = filteredPOs.length + inProgressManualReceipts.length;
   const sortedCompletedReceipts = [...completedReceipts].sort((a, b) => {
     const aTime = new Date(a.receivedAt ?? a.receiptDate ?? 0).getTime();
     const bTime = new Date(b.receivedAt ?? b.receiptDate ?? 0).getTime();
@@ -790,7 +816,7 @@ function LeftPanel({
         >
           {/* Manual Receipt Option */}
           <button
-            onClick={() => onStartReceipt(null)}
+            onClick={() => setManualReceiptOpen(true)}
             className="w-full text-left p-2 border border-dashed border-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
             data-testid="button-manual-receipt"
           >
@@ -799,6 +825,41 @@ function LeftPanel({
               Manual Receipt (no PO)
             </div>
           </button>
+
+          {inProgressManualReceipts.length > 0 && (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="px-2 py-1.5 bg-amber-50 dark:bg-amber-950/30 text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                In-Progress Manual Receipts
+              </div>
+              {inProgressManualReceipts.map((receipt) => (
+                <div
+                  key={receipt.id}
+                  className={`p-2 border-t text-xs hover:bg-gray-50 dark:hover:bg-gray-800/50 ${activeReceiptId === receipt.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                  data-testid={`row-pending-manual-receipt-${receipt.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">
+                        {receipt.receiptNumber}
+                      </div>
+                      <div className="text-gray-500 truncate">
+                        {receipt.vendorName ?? 'Vendor not recorded'}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-6 text-xs px-2 bg-amber-500 hover:bg-amber-600"
+                      onClick={() => onSelectReceipt(receipt)}
+                      data-testid={`button-resume-manual-receipt-${receipt.id}`}
+                    >
+                      Resume
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {isLoadingPOs && (
             <div className="flex items-center justify-center py-4">
@@ -929,6 +990,63 @@ function LeftPanel({
           )}
         </TabsContent>
       </Tabs>
+      <Dialog
+        open={manualReceiptOpen}
+        onOpenChange={(open) => {
+          setManualReceiptOpen(open);
+          if (!open) setManualVendorId('');
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start Manual Receipt</DialogTitle>
+            <DialogDescription>
+              Select the vendor that shipped the material. This receipt will not
+              be linked to a PO.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="manual-receipt-vendor">Vendor *</Label>
+            <Select value={manualVendorId} onValueChange={setManualVendorId}>
+              <SelectTrigger
+                id="manual-receipt-vendor"
+                data-testid="select-manual-receipt-vendor"
+              >
+                <SelectValue placeholder="Select a vendor" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeVendors.map((vendor) => (
+                  <SelectItem key={vendor.id} value={String(vendor.id)}>
+                    {vendor.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setManualReceiptOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!manualVendorId}
+              onClick={() => {
+                const vendor = activeVendors.find(
+                  (candidate) => String(candidate.id) === manualVendorId
+                );
+                if (!vendor) return;
+                onStartReceipt(null, vendor);
+                setManualReceiptOpen(false);
+              }}
+              data-testid="button-confirm-manual-receipt"
+            >
+              Start Receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {isAdminOrOwner && <DepartmentDefaultsManager />}
     </div>
   );
@@ -5864,7 +5982,7 @@ export default function InventoryReceivingControlCenter() {
     onError: () => toast.error('Failed to create receipt'),
   });
 
-  const handleStartReceipt = (po: VendorPO | null) => {
+  const handleStartReceipt = (po: VendorPO | null, vendor?: VendorOption) => {
     const data: Record<string, any> = po
       ? {
           vendorId: po.vendorId,
@@ -5872,7 +5990,10 @@ export default function InventoryReceivingControlCenter() {
           vendorPoId: po.id,
           vendorPoNumber: po.poNumber,
         }
-      : {};
+      : {
+          vendorId: vendor?.id,
+          vendorName: vendor?.name,
+        };
     createReceiptMutation.mutate(data);
     // On mobile, after starting a receipt, switch to workflow tab
     setMobileTab('workflow');
@@ -5886,7 +6007,7 @@ export default function InventoryReceivingControlCenter() {
         `/api/receipts/${receipt.id}`
       )) as Receipt;
       setActiveReceipt(fullReceipt);
-      setMobileTab('sidebar');
+      setMobileTab(fullReceipt.status === 'complete' ? 'sidebar' : 'workflow');
     } catch (err: any) {
       toast.error(err?.message ?? 'Failed to open receipt documents');
     }

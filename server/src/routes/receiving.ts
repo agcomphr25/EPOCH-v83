@@ -28,6 +28,7 @@ import {
   mediaFolders,
   vendorPOs,
   vendorPOItems,
+  vendors,
   inventoryItems,
   cuttingFabricInventory,
   cuttingFabricInventoryTransactions,
@@ -1037,8 +1038,32 @@ router.post(
         }
       }
 
-      const receiptNumber = await generateReceiptNumber();
       const rawBody = { ...req.body };
+      if (!vendorPoId) {
+        const vendorId = Number(rawBody.vendorId);
+        if (!Number.isInteger(vendorId) || vendorId <= 0) {
+          return res.status(400).json({
+            error: 'Vendor is required for a manual receipt',
+          });
+        }
+        const [selectedVendor] = await db
+          .select({
+            id: vendors.id,
+            name: vendors.name,
+            isActive: vendors.isActive,
+          })
+          .from(vendors)
+          .where(eq(vendors.id, vendorId));
+        if (!selectedVendor || selectedVendor.isActive === false) {
+          return res.status(400).json({
+            error: 'Select an active vendor for the manual receipt',
+          });
+        }
+        rawBody.vendorId = selectedVendor.id;
+        rawBody.vendorName = selectedVendor.name;
+      }
+
+      const receiptNumber = await generateReceiptNumber();
       if (rawBody.receivedAt && typeof rawBody.receivedAt === 'string') {
         rawBody.receivedAt = new Date(rawBody.receivedAt);
       }

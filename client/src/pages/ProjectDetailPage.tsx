@@ -511,6 +511,9 @@ const STATUS_COLORS: Record<string, string> = {
   lost: 'bg-orange-100 text-orange-800',
 };
 
+const displayProjectStatus = (status: Project['status']) =>
+  status === 'won' ? 'active' : status;
+
 const STAGE_LABELS: Record<string, string> = {
   rfq_received: 'RFQ Received',
   quote_preparing: 'Quote Preparing',
@@ -2011,8 +2014,8 @@ export default function ProjectDetailPage() {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold" data-testid="project-code">{project.projectCode}</h1>
-            <Badge className={STATUS_COLORS[project.status]}>
-              {project.status.replace('_', ' ')}
+            <Badge className={STATUS_COLORS[displayProjectStatus(project.status)]}>
+              {displayProjectStatus(project.status).replace('_', ' ')}
             </Badge>
             {project.currentStage && (
               <Badge variant="outline" className="text-xs">
@@ -2051,7 +2054,7 @@ export default function ProjectDetailPage() {
             targetShipDate: project.targetShipDate || '',
             projectManagerId: project.projectManagerId,
             reminderDays: project.reminderDays,
-            status: project.status,
+            status: displayProjectStatus(project.status),
           });
           setIsEditDialogOpen(true);
         }} data-testid="button-edit-project">
@@ -7105,10 +7108,8 @@ export default function ProjectDetailPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="won">Won</SelectItem>
                   <SelectItem value="on_hold">On Hold</SelectItem>
                   <SelectItem value="inactive">Inactive</SelectItem>
-                  <SelectItem value="lost">Lost</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>

@@ -288,6 +288,32 @@ describe('PATCH /api/projects/:id — closing gate', () => {
     expect(res.body.status).toBe('completed');
   });
 
+  it('allows a user to mark a project inactive', async () => {
+    vi.mocked(storage.updateProject).mockResolvedValue(
+      makeProject({ status: 'inactive' })
+    );
+
+    const res = await request(app)
+      .patch(`/api/projects/${PROJECT_ID}`)
+      .send({ status: 'inactive' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('inactive');
+    expect(storage.updateProject).toHaveBeenCalledWith(
+      PROJECT_ID,
+      expect.objectContaining({ status: 'inactive' })
+    );
+  });
+
+  it.each(['won', 'lost'])('rejects the legacy %s status', async status => {
+    const res = await request(app)
+      .patch(`/api/projects/${PROJECT_ID}`)
+      .send({ status });
+
+    expect(res.status).toBe(400);
+    expect(storage.updateProject).not.toHaveBeenCalled();
+  });
+
   it('returns 403 when a non-admin user attempts to use force=true', async () => {
     const nonAdminApp = buildApp('MANAGER');
     await attachProjectsRouter(nonAdminApp);
@@ -505,6 +531,10 @@ describe('legacy P2 release gate outcomes', () => {
         stage: 'production',
         poStatus: 'in_production',
       })
+    );
+    expect(storage.updateProject).toHaveBeenCalledWith(
+      PROJECT_ID,
+      expect.objectContaining({ status: 'active' })
     );
   });
   it('rejects repeated production release', async () => {

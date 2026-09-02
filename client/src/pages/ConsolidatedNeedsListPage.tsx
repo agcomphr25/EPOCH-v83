@@ -177,17 +177,11 @@ const getRequestAgeDays = (value?: string | null): number | null => {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / DAY_MS));
 };
 
-const formatAgeShort = (days: number | null) => {
-  if (days === null) return 'no date';
-  if (days === 0) return 'today';
-  if (days < 60) return `${days}d`;
-  return `${Math.floor(days / 30)}mo`;
-};
-
-const formatAgeTitle = (value?: string | null) => {
-  const days = getRequestAgeDays(value);
-  if (days === null) return 'Request date not recorded';
-  return `Requested ${new Date(value!).toLocaleDateString()} - ${days} day${days === 1 ? '' : 's'} ago`;
+const formatRequestedOn = (value?: string | null) => {
+  if (!value) return 'date not recorded';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'date not recorded';
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 /** Green = fresh, grey = normal, amber = aging, red = stale. */
@@ -199,7 +193,7 @@ const ageToneClasses = (days: number | null) => {
   return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
 };
 
-const RequestAgeBadge = ({
+const RequestDateBadge = ({
   requestDate,
   label,
   className = '',
@@ -211,12 +205,12 @@ const RequestAgeBadge = ({
   const days = getRequestAgeDays(requestDate);
   return (
     <span
-      title={formatAgeTitle(requestDate)}
+      title={`Requested ${formatRequestedOn(requestDate)}`}
       className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${ageToneClasses(days)} ${className}`}
-      data-testid="request-age-badge"
+      data-testid="request-date-badge"
     >
       <Clock className="h-3 w-3" />
-      {label ? `${label} ${formatAgeShort(days)}` : formatAgeShort(days)}
+      {label ? `${label} ${formatRequestedOn(requestDate)}` : `Requested ${formatRequestedOn(requestDate)}`}
     </span>
   );
 };
@@ -236,8 +230,13 @@ const getOldestRequestIso = (requests: PartsRequest[]): string | null => {
   return timestamps.length ? new Date(Math.min(...timestamps)).toISOString() : null;
 };
 
+const requestTimestamp = (value?: string | null) => {
+  const timestamp = value ? new Date(value).getTime() : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+};
+
 const byOldestFirst = (a: PartsRequest, b: PartsRequest) =>
-  new Date(a.requestDate).getTime() - new Date(b.requestDate).getTime();
+  requestTimestamp(a.requestDate) - requestTimestamp(b.requestDate);
 
 export default function ConsolidatedNeedsListPage() {
   const { toast } = useToast();
@@ -381,6 +380,42 @@ export default function ConsolidatedNeedsListPage() {
         title: 'Error',
         description: 'Failed to update request. Please try again.',
         variant: 'destructive',
+      });
+    },
+  });
+
+  // Preserve the governed approval workflow without reopening the old confirmation modal.
+  const approveRequestsMutation = useMutation({
+    mutationFn: async (requests: PartsRequest[]) => {
+      const actor = user ? `${user.firstName} ${user.lastName}` : '';
+      const results = await Promise.allSettled(requests.map((request) =>
+        apiRequest(`/api/inventory/parts-requests/${request.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ status: 'APPROVED', approvedBy: actor }),
+        })
+      ));
+      const successful = results
+        .filter((result): result is PromiseFulfilledResult<PartsRequest> => result.status === 'fulfilled')
+        .map((result) => result.value);
+      const failed = results.filter((result) => result.status === 'rejected');
+      return {
+        approvedCount: successful.filter((request) => request.status === 'APPROVED').length,
+        ownerReviewCount: successful.filter((request) => request.status === 'PENDING_OWNER_APPROVAL').length,
+        failedCount: failed.length,
+        firstError: failed[0]?.status === 'rejected' && failed[0].reason instanceof Error ? failed[0].reason.message : null,
+      };
+    },
+    onSuccess: ({ approvedCount, ownerReviewCount, failedCount, firstError }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      setSelectedApprovals(new Set());
+      toast({
+        title: failedCount ? 'Approval partially completed' : 'Approval complete',
+        description: [
+          approvedCount ? `${approvedCount} approved` : '',
+          ownerReviewCount ? `${ownerReviewCount} sent for owner approval` : '',
+          failedCount ? `${failedCount} failed${firstError ? `: ${firstError}` : ''}` : '',
+        ].filter(Boolean).join('. '),
+        variant: failedCount && approvedCount + ownerReviewCount === 0 ? 'destructive' : 'default',
       });
     },
   });
@@ -1187,14 +1222,7 @@ export default function ConsolidatedNeedsListPage() {
       });
       return;
     }
-    bulkUpdateMutation.mutate({
-      requestIds: ids,
-      updates: {
-        status: 'APPROVED',
-        approvedBy: `${user.firstName} ${user.lastName}`,
-        approvedDate: new Date().toISOString(),
-      },
-    });
+    approveRequestsMutation.mutate(requests.filter((request) => ids.includes(request.id)));
   };
 
   const handleAction = (request: PartsRequest, action: typeof actionType) => {
@@ -2077,9 +2105,9 @@ export default function ConsolidatedNeedsListPage() {
             <div className="text-sm text-muted-foreground">Sitting too long</div>
           </div>
           <div className="rounded-lg border bg-white p-4 dark:bg-gray-950">
-            <div className="text-2xl font-semibold">{formatAgeShort(getRequestAgeDays(oldestIso))}</div>
+            <div className="text-2xl font-semibold">{formatRequestedOn(oldestIso)}</div>
             <div className="font-medium">Oldest request</div>
-            <div className="text-sm text-muted-foreground">{formatAgeTitle(oldestIso)}</div>
+            <div className="text-sm text-muted-foreground">Exact requested date</div>
           </div>
           <div className="rounded-lg border bg-white p-4 dark:bg-gray-950">
             <div className="text-2xl font-semibold text-blue-600">
@@ -2120,11 +2148,11 @@ export default function ConsolidatedNeedsListPage() {
               <Button
                 size="sm"
                 onClick={() => approveRequests(selectedPending.length > 0 ? selectedPending : pending)}
-                disabled={bulkUpdateMutation.isPending}
+                disabled={approveRequestsMutation.isPending}
                 data-testid="button-approvals-bulk-approve"
               >
                 <CheckCircle className="mr-1 h-4 w-4" />
-                {bulkUpdateMutation.isPending
+                {approveRequestsMutation.isPending
                   ? 'Approving...'
                   : selectedPending.length > 0
                     ? `Approve selected (${selectedPending.length})`
@@ -2163,13 +2191,13 @@ export default function ConsolidatedNeedsListPage() {
                   <div className="truncate text-sm text-muted-foreground">
                     {vendor?.name || request.supplier || 'Unassigned'}
                   </div>
-                  <div><RequestAgeBadge requestDate={request.requestDate} /></div>
+                  <div><RequestDateBadge requestDate={request.requestDate} /></div>
                   <div className="flex justify-end gap-2">
                     <Button size="sm" variant="outline" onClick={() => handleAction(request, 'reject')}>Reject</Button>
                     <Button
                       size="sm"
                       onClick={() => approveRequests([request])}
-                      disabled={bulkUpdateMutation.isPending}
+                      disabled={approveRequestsMutation.isPending}
                       data-testid={`button-approve-queue-${request.id}`}
                     >
                       Approve
@@ -2353,7 +2381,7 @@ export default function ConsolidatedNeedsListPage() {
                       <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         {orderMethodBadge(group)}
                         <span>{group.totalQuantity} units</span>
-                        <RequestAgeBadge requestDate={getOldestRequestIso(group.requests)} label="oldest" />
+                        <RequestDateBadge requestDate={getOldestRequestIso(group.requests)} label="First requested" />
                       </span>
                     </span>
                     <span className="grid grid-cols-2 gap-x-3 text-right text-xs">
@@ -2378,7 +2406,7 @@ export default function ConsolidatedNeedsListPage() {
                   <span>
                     {focusedGroup.requests.length} open · {readyRequests.length} ready · {blockedRequests.length} need approval · ${focusedGroup.totalEstimatedCost.toFixed(2)} estimated ·
                   </span>
-                  <RequestAgeBadge requestDate={focusedOldestIso} label="oldest" />
+                  <RequestDateBadge requestDate={focusedOldestIso} label="First requested" />
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2426,7 +2454,7 @@ export default function ConsolidatedNeedsListPage() {
                         <div className="text-sm">{getRemainingRequestQuantity(request)}</div>
                         <div className="text-sm"><span className="block text-xs text-muted-foreground">Department</span>{request.department}</div>
                         <div className="text-sm font-medium">{request.estimatedCost ? `$${request.estimatedCost.toFixed(2)}` : <span className="text-amber-700">Cost missing</span>}</div>
-                        <div><RequestAgeBadge requestDate={request.requestDate} /></div>
+                        <div><RequestDateBadge requestDate={request.requestDate} /></div>
                         <Button size="sm" variant="ghost" onClick={() => setDetailRequest(request)}><Eye className="mr-1 h-4 w-4" />View</Button>
                       </div>
                     ))}
@@ -2446,7 +2474,7 @@ export default function ConsolidatedNeedsListPage() {
                       <Button
                         size="sm"
                         onClick={() => approveRequests(blockedRequests)}
-                        disabled={bulkUpdateMutation.isPending}
+                        disabled={approveRequestsMutation.isPending}
                         data-testid="button-approve-all-vendor"
                       >
                         <CheckCircle className="mr-1 h-4 w-4" />
@@ -2474,13 +2502,13 @@ export default function ConsolidatedNeedsListPage() {
                         </div>
                         <div className="text-sm">{request.quantity} units</div>
                         <div className="text-sm">{request.department}</div>
-                        <div><RequestAgeBadge requestDate={request.requestDate} /></div>
+                        <div><RequestDateBadge requestDate={request.requestDate} /></div>
                         <div className="flex justify-end gap-2">
                           <Button size="sm" variant="outline" onClick={() => handleAction(request, 'reject')}>Reject</Button>
                           <Button
                             size="sm"
                             onClick={() => approveRequests([request])}
-                            disabled={bulkUpdateMutation.isPending}
+                            disabled={approveRequestsMutation.isPending}
                             data-testid={`button-approve-inline-${request.id}`}
                           >
                             Approve

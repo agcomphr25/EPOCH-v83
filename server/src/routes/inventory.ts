@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
 import path from 'path';
@@ -1826,7 +1826,8 @@ router.post('/parts-requests/:id/approve', async (req: Request, res: Response) =
   }
 });
 
-router.put('/parts-requests/:id', async (req: Request, res: Response) => {
+router.put('/parts-requests/:id', async (req: Request, res: Response, next: NextFunction) => {
+  if (req.params.id === 'bulk') return next();
   try {
     const requestId = parseInt(req.params.id);
     const updates = insertPartsRequestSchema.partial().parse(req.body) as any;

@@ -19,6 +19,12 @@ export interface SendCommunicationOptions {
   customerId?: string;
   emailContext?: string;
   replyTo?: string;
+  preparedContent?: {
+    subject: string;
+    html: string;
+    text: string;
+    templateVersion: number;
+  };
 }
 
 function wrapWithSystemNotice(html: string): string {
@@ -109,7 +115,7 @@ export async function sendCommunication(
     return { success: false, error, templateKey: opts.templateKey, templateVersion: 0 };
   }
 
-  const rendered = renderFromObject(template, opts.context);
+  const rendered = opts.preparedContent ?? renderFromObject(template, opts.context);
 
   let attachments: EmailAttachment[] = opts.attachments ?? [];
   let attachmentsMeta: AttachmentMeta[] = [];
@@ -159,15 +165,17 @@ export async function sendCommunication(
 
   let finalHtml = rendered.html;
   let finalText = rendered.text;
-  ({ html: finalHtml, text: finalText } = stripRetiredVendorPoConfirmationContent(
-    opts.templateKey,
-    finalHtml,
-    finalText,
-  ));
+  if (!opts.preparedContent) {
+    ({ html: finalHtml, text: finalText } = stripRetiredVendorPoConfirmationContent(
+      opts.templateKey,
+      finalHtml,
+      finalText,
+    ));
 
-  if (includeNotice) {
-    finalHtml = wrapWithSystemNotice(finalHtml);
-    finalText = prependSystemNoticeToText(finalText);
+    if (includeNotice) {
+      finalHtml = wrapWithSystemNotice(finalHtml);
+      finalText = prependSystemNoticeToText(finalText);
+    }
   }
 
   const toList = normalizeList(opts.to);

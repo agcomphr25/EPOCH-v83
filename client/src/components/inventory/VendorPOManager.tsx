@@ -130,6 +130,18 @@ type VendorPoEmailAttachment = {
   mimeType: string;
 };
 
+type VendorPoEmailPreview = {
+  subject: string;
+  to: string;
+  cc: string[];
+  replyTo: string;
+  html: string;
+  text: string;
+  attachments: Array<{ filename: string; type?: string; sizeBytes?: number }>;
+  fingerprint: string;
+  officialPoNumberPending: boolean;
+};
+
 const DEFAULT_ISSUE_EMAIL_MESSAGE =
   'AG Composites has issued a new Purchase Order to your company. Please see the attached purchase order PDF for details.';
 
@@ -179,6 +191,50 @@ function EmailAttachmentPicker({
           </a>
         </label>
       ))}
+    </div>
+  );
+}
+
+function VendorPoEmailPreviewPanel({
+  preview,
+  isFetching,
+  isCurrent,
+  error,
+}: {
+  preview?: VendorPoEmailPreview;
+  isFetching: boolean;
+  isCurrent: boolean;
+  error?: Error | null;
+}) {
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-3">
+        <Label className="text-sm font-semibold">Email Preview</Label>
+        {(isFetching || !isCurrent) && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Updating</span>}
+      </div>
+      {error ? (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">Preview unavailable: {error.message}</div>
+      ) : !preview || !isCurrent ? (
+        <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Generating the exact vendor email…</div>
+      ) : (
+        <div className="space-y-3 text-sm">
+          <div className="grid gap-2 md:grid-cols-[70px_1fr]">
+            <span className="font-medium text-muted-foreground">Subject</span><span>{preview.subject}</span>
+            <span className="font-medium text-muted-foreground">To</span><span>{preview.to}</span>
+            <span className="font-medium text-muted-foreground">CC</span><span>{preview.cc.length ? preview.cc.join(', ') : 'None'}</span>
+          </div>
+          <div>
+            <p className="mb-1 font-medium text-muted-foreground">HTML Body</p>
+            <div className="max-h-72 overflow-auto rounded-md border bg-white p-3 text-black" dangerouslySetInnerHTML={{ __html: preview.html }} />
+          </div>
+          <div>
+            <p className="mb-1 font-medium text-muted-foreground">Attachments</p>
+            <ul className="space-y-1">
+              {preview.attachments.map((attachment) => <li key={attachment.filename} className="flex items-center gap-2"><Paperclip className="h-3.5 w-3.5" /> {attachment.filename}</li>)}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2655,6 +2711,7 @@ export default function VendorPOManager({
   const [selectedAttachmentIds, setSelectedAttachmentIds] = useState<number[]>([]);
   const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
   const [emailMessage, setEmailMessage] = useState(DEFAULT_ISSUE_EMAIL_MESSAGE);
+  const [debouncedVendorPoPreviewPayload, setDebouncedVendorPoPreviewPayload] = useState('');
 
   // RFQ confirmation dialog state
   const [showRFQDialog, setShowRFQDialog] = useState(false);
@@ -2677,6 +2734,49 @@ export default function VendorPOManager({
   const [compliancePoOptionalIds, setCompliancePoOptionalIds] = useState<number[]>([]);
 
   const queryClient = useQueryClient();
+
+  const vendorPoEmailPreviewPurpose = showResendDialog
+    ? 'resend'
+    : showStatusChangeDialog && pendingStatus === 'Sent' && !noEmailMode ? 'issue' : null;
+  const currentVendorPoPreviewPayload = vendorPoEmailPreviewPurpose && selectedVendorPO ? JSON.stringify({
+    purpose: vendorPoEmailPreviewPurpose,
+    recipients: selectedRecipients,
+    message: emailMessage.trim(),
+    attachmentIds: selectedAttachmentIds,
+    ...(vendorPoEmailPreviewPurpose === 'issue' ? {
+      complianceConfirmation: {
+        dpasRated: issueDpasDecision === 'yes',
+        dpasRating: issueDpasDecision === 'yes' ? issueDpasRating.trim() : null,
+        flowdownsRequired: issueFlowdownDecision === 'yes',
+      },
+    } : {}),
+  }) : '';
+
+  useEffect(() => {
+    if (!currentVendorPoPreviewPayload) {
+      setDebouncedVendorPoPreviewPayload('');
+      return;
+    }
+    const timer = window.setTimeout(() => setDebouncedVendorPoPreviewPayload(currentVendorPoPreviewPayload), 350);
+    return () => window.clearTimeout(timer);
+  }, [currentVendorPoPreviewPayload]);
+
+  const vendorPoEmailPreview = useQuery<VendorPoEmailPreview>({
+    queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'email-preview', debouncedVendorPoPreviewPayload],
+    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/email-preview`, {
+      method: 'POST',
+      body: JSON.parse(debouncedVendorPoPreviewPayload),
+    }),
+    enabled: Boolean(vendorPoEmailPreviewPurpose && selectedVendorPO?.id && debouncedVendorPoPreviewPayload && selectedRecipients.length > 0 && !isLoadingRecipients && !isLoadingAttachments),
+    staleTime: 0,
+  });
+  const isVendorPoEmailPreviewCurrent = Boolean(
+    currentVendorPoPreviewPayload &&
+    currentVendorPoPreviewPayload === debouncedVendorPoPreviewPayload &&
+    vendorPoEmailPreview.data &&
+    !vendorPoEmailPreview.isFetching &&
+    !vendorPoEmailPreview.isError
+  );
 
   const invalidateVendorPOTransactions = (vendorPoId?: number | null) => {
     if (vendorPoId != null) {
@@ -2922,10 +3022,10 @@ export default function VendorPOManager({
 
   // Issue PO mutation - sends PO email to vendor
   const issuePOMutation = useMutation({
-    mutationFn: ({ id, skipEmail = false, reason, recipients, message, attachmentIds, complianceConfirmation }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[]; message?: string; attachmentIds?: number[]; complianceConfirmation: { dpasRated: boolean; dpasRating: string | null; flowdownsRequired: boolean } }) =>
+    mutationFn: ({ id, skipEmail = false, reason, recipients, message, attachmentIds, complianceConfirmation, previewFingerprint }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[]; message?: string; attachmentIds?: number[]; complianceConfirmation: { dpasRated: boolean; dpasRating: string | null; flowdownsRequired: boolean }; previewFingerprint?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/issue`, {
         method: 'POST',
-        body: JSON.stringify({ skipEmail, reason, recipients, message, attachmentIds, complianceConfirmation }),
+        body: JSON.stringify({ skipEmail, reason, recipients, message, attachmentIds, complianceConfirmation, previewFingerprint }),
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
@@ -2989,10 +3089,10 @@ export default function VendorPOManager({
   });
 
   const resendPOMutation = useMutation({
-    mutationFn: ({ id, recipients, message, attachmentIds }: { id: number; recipients: string[]; message?: string; attachmentIds?: number[] }) =>
+    mutationFn: ({ id, recipients, message, attachmentIds, previewFingerprint }: { id: number; recipients: string[]; message?: string; attachmentIds?: number[]; previewFingerprint: string }) =>
       apiRequest(`/api/vendor-pos/${id}/resend`, {
         method: 'POST',
-        body: JSON.stringify({ recipients, message, attachmentIds }),
+        body: JSON.stringify({ recipients, message, attachmentIds, previewFingerprint }),
       }),
     onSuccess: (data: any, variables) => {
       queryClient.invalidateQueries({ queryKey: getResendConfirmationKey(variables.id) });
@@ -3284,6 +3384,7 @@ export default function VendorPOManager({
           recipients: skipEmail ? undefined : selectedRecipients,
           message: skipEmail ? undefined : (emailMessage.trim() || DEFAULT_ISSUE_EMAIL_MESSAGE),
           attachmentIds: skipEmail ? undefined : selectedAttachmentIds,
+          previewFingerprint: skipEmail ? undefined : vendorPoEmailPreview.data?.fingerprint,
           complianceConfirmation: {
             dpasRated: issueDpasDecision === 'yes',
             dpasRating: issueDpasDecision === 'yes' ? issueDpasRating.trim() : null,
@@ -3907,6 +4008,12 @@ export default function VendorPOManager({
                         isLoading={isLoadingAttachments}
                       />
                     </div>
+                    <VendorPoEmailPreviewPanel
+                      preview={vendorPoEmailPreview.data}
+                      isFetching={vendorPoEmailPreview.isFetching}
+                      isCurrent={isVendorPoEmailPreviewCurrent}
+                      error={vendorPoEmailPreview.isError ? vendorPoEmailPreview.error as Error : null}
+                    />
                   </div>
                 )}
 
@@ -3988,7 +4095,8 @@ export default function VendorPOManager({
                           selectedRecipients.length === 0 ||
                           !issueDpasDecision ||
                           !issueFlowdownDecision ||
-                          (issueDpasDecision === 'yes' && !issueDpasRating.trim())
+                          (issueDpasDecision === 'yes' && !issueDpasRating.trim()) ||
+                          !isVendorPoEmailPreviewCurrent
                         }
                         data-testid="button-confirm-status-change"
                         className="whitespace-nowrap"
@@ -4092,7 +4200,7 @@ export default function VendorPOManager({
 
         {/* Resend PO Confirmation Dialog */}
         <AlertDialog open={showResendDialog} onOpenChange={setShowResendDialog}>
-          <AlertDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <AlertDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
             <AlertDialogHeader>
               <AlertDialogTitle>Resend Purchase Order</AlertDialogTitle>
               <AlertDialogDescription>
@@ -4127,6 +4235,12 @@ export default function VendorPOManager({
                 isLoading={isLoadingAttachments}
               />
             </div>
+            <VendorPoEmailPreviewPanel
+              preview={vendorPoEmailPreview.data}
+              isFetching={vendorPoEmailPreview.isFetching}
+              isCurrent={isVendorPoEmailPreviewCurrent}
+              error={vendorPoEmailPreview.isError ? vendorPoEmailPreview.error as Error : null}
+            />
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <Button
@@ -4137,10 +4251,11 @@ export default function VendorPOManager({
                       recipients: selectedRecipients,
                       message: emailMessage.trim() || DEFAULT_RESEND_EMAIL_MESSAGE,
                       attachmentIds: selectedAttachmentIds,
+                      previewFingerprint: vendorPoEmailPreview.data!.fingerprint,
                     });
                   }
                 }}
-                disabled={resendPOMutation.isPending || selectedRecipients.length === 0}
+                disabled={resendPOMutation.isPending || selectedRecipients.length === 0 || !isVendorPoEmailPreviewCurrent}
                 data-testid="button-confirm-resend-po"
               >
                 {resendPOMutation.isPending ? (

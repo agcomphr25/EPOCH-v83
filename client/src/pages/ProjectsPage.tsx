@@ -31,7 +31,14 @@ interface Project {
   projectName: string;
   customerId: string;
   description: string | null;
-  status: 'active' | 'on_hold' | 'completed' | 'cancelled';
+  status:
+    | 'active'
+    | 'on_hold'
+    | 'completed'
+    | 'cancelled'
+    | 'inactive'
+    | 'won'
+    | 'lost';
   currentStepType: string;
   targetShipDate: string | null;
   projectManagerId: number | null;
@@ -89,6 +96,9 @@ const STATUS_COLORS: Record<string, string> = {
   won: 'bg-emerald-100 text-emerald-800',
   lost: 'bg-orange-100 text-orange-800',
 };
+
+const displayProjectStatus = (status: Project['status']) =>
+  status === 'won' ? 'active' : status;
 
 const STAGE_LABELS: Record<string, string> = {
   rfq_received: 'RFQ Received',
@@ -239,6 +249,7 @@ export default function ProjectsPage() {
     const matchesStatus = statusFilter === 'all'
       || (statusFilter === 'active_only' && project.status !== 'cancelled')
       || project.status === statusFilter
+      || (statusFilter === 'active' && project.status === 'won')
       || project.currentStage === statusFilter;
     const matchesClosing = closingFilter === 'all' || (project.currentStage === 'completed' && (project.closingStatus ?? 'MISSING') === closingFilter);
     
@@ -384,10 +395,8 @@ export default function ProjectsPage() {
             <SelectItem value="active_only">All (Excl. Cancelled)</SelectItem>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="won">Won</SelectItem>
             <SelectItem value="on_hold">On Hold</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="lost">Lost</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
@@ -454,8 +463,8 @@ export default function ProjectsPage() {
                     </CardDescription>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <Badge className={STATUS_COLORS[project.status]}>
-                      {project.status.replace('_', ' ')}
+                    <Badge className={STATUS_COLORS[displayProjectStatus(project.status)]}>
+                      {displayProjectStatus(project.status).replace('_', ' ')}
                     </Badge>
                     {project.currentStage && (
                       <Badge variant="outline" className="text-xs">

@@ -763,8 +763,6 @@ const updateProjectRequestSchema = z.object({
       'completed',
       'cancelled',
       'inactive',
-      'won',
-      'lost',
     ])
     .optional(),
   currentStage: z.enum(VALID_PIPELINE_STAGES).optional().nullable(),
@@ -2785,7 +2783,7 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
           projectUpdate.stageUpdatedAt = new Date();
         }
         if (step.stepType === 'p2_order') {
-          projectUpdate.status = 'won';
+          projectUpdate.status = 'active';
           if (updateData.linkedP2OrderId) {
             projectUpdate.poId = updateData.linkedP2OrderId;
           }
@@ -2801,9 +2799,9 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       } else {
         const isFinalP2Order = step.stepType === 'p2_order';
         if (isFinalP2Order) {
-          // p2_order links the PO and marks project won, but does NOT advance the stage.
+          // p2_order links the PO and keeps the project active, but does NOT advance the stage.
           // Advancing to production requires the explicit P2 Release Gate (POST /release-to-p2).
-          const poLinkUpdate: LegacyProjectValue = { status: 'won' };
+          const poLinkUpdate: LegacyProjectValue = { status: 'active' };
           if (updateData.linkedP2OrderId) {
             poLinkUpdate.poId = updateData.linkedP2OrderId;
           }
@@ -3091,7 +3089,7 @@ router.post('/:id/release-to-p2', async (req, res) => {
       await storage.updateProject(id, {
         currentStage: 'production',
         stageUpdatedAt: new Date(),
-        status: 'won',
+        status: 'active',
       });
 
       await pool.query(

@@ -15025,6 +15025,8 @@ export const projectStatusEnum = pgEnum('project_status', [
   'completed',
   'cancelled',
   'inactive',
+  // Retained for historical rows only. New lifecycle transitions use active,
+  // completed, cancelled, or an explicit user-selected inactive/on-hold state.
   'won',
   'lost',
 ]);

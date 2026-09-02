@@ -36,7 +36,7 @@ export class ProjectP2HandoffError extends Error {
 async function context(projectId: string, tx: AuditLedgerTx, lock = false) {
   const project = rows(
     await tx.execute(
-      sql`SELECT id,project_number,workflow_version,po_id,current_stage,status FROM projects WHERE id=${projectId} ${lock ? sql`FOR UPDATE` : sql``}`
+      sql`SELECT id,project_code,workflow_version,po_id,current_stage,status FROM projects WHERE id=${projectId} ${lock ? sql`FOR UPDATE` : sql``}`
     )
   )[0];
   if (!project)

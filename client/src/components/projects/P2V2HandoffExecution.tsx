@@ -61,7 +61,14 @@ export default function P2V2HandoffExecution({
       const body = await response.json().catch(() => null);
       if (!response.ok)
         throw new Error(body?.message || 'Unable to load P2 handoff evidence');
-      return body;
+      return {
+        ...body,
+        blockers: Array.isArray(body?.blockers) ? body.blockers : [],
+        links:
+          body?.links && typeof body.links === 'object'
+            ? body.links
+            : { controlCenter: '/p2-control-center' },
+      };
     },
   });
   const approve = useMutation({

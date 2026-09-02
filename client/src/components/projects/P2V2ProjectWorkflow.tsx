@@ -194,7 +194,31 @@ export default function P2V2ProjectWorkflow({
           (await response.json().catch(() => null))?.message ||
             'Unable to load V2 workflow'
         );
-      return response.json();
+      const payload = (await response.json()) as WorkflowResponse;
+      return {
+        ...payload,
+        integrityErrors: Array.isArray(payload.integrityErrors)
+          ? payload.integrityErrors
+          : [],
+        stages: Array.isArray(payload.stages)
+          ? payload.stages.map((stage) => ({
+              ...stage,
+              activeLinks: Array.isArray(stage.activeLinks)
+                ? stage.activeLinks
+                : [],
+              supersededLinks: Array.isArray(stage.supersededLinks)
+                ? stage.supersededLinks
+                : [],
+              approvals: Array.isArray(stage.approvals)
+                ? stage.approvals
+                : [],
+              evidenceCount:
+                typeof stage.evidenceCount === 'number'
+                  ? stage.evidenceCount
+                  : 0,
+            }))
+          : [],
+      };
     },
   });
   if (isLoading)

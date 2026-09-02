@@ -67,6 +67,20 @@ function buildFetchMock(resendPayload: { emailSent: boolean; emailRecipient?: st
     if (method === 'POST' && u.includes('/resend')) {
       return makeJsonResponse(resendPayload);
     }
+    // Email preview (must match before the broader /vendor-pos checks)
+    if (method === 'POST' && u.includes('/email-preview')) {
+      return makeJsonResponse({
+        subject: 'Purchase Order PO-TEST-001',
+        to: 'contact@acme.com',
+        cc: [],
+        replyTo: 'purchasing@agcomposites.com',
+        html: '<p>PO resend preview</p>',
+        text: 'PO resend preview',
+        attachments: [],
+        fingerprint: 'test-preview-fingerprint',
+        officialPoNumberPending: false,
+      });
+    }
     // Email recipients (must match before broader /vendor-pos checks)
     if (u.includes('/email-recipients')) {
       return makeJsonResponse([

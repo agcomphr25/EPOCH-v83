@@ -188,6 +188,23 @@ describe('P2V2ProjectWorkflow', () => {
     expect(screen.getByTestId('v2-approval')).toHaveTextContent('REJECTED');
   });
 
+  it('treats omitted empty workflow collections as empty arrays', async () => {
+    renderWorkflow({
+      ...initialized,
+      integrityErrors: undefined,
+      stages: stages.map(
+        ({ activeLinks, supersededLinks, approvals, evidenceCount, ...stage }) =>
+          stage
+      ),
+    });
+
+    expect(
+      await screen.findByText('P2 Project Workflow V2')
+    ).toBeInTheDocument();
+    expect(screen.getAllByTestId(/^v2-stage-\d+$/)).toHaveLength(10);
+    expect(screen.getAllByText('0 / 0 / 0')).toHaveLength(10);
+  });
+
   it('makes only the first six stages writable from the ten-stage summary', async () => {
     renderWorkflow(initialized);
     expect(

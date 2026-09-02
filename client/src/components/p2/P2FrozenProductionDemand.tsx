@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Factory,
   Lock,
 } from 'lucide-react';
 
@@ -19,6 +20,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type Baseline = {
   id: string;
@@ -61,6 +63,26 @@ type Blocker = {
   message: string;
   correctiveAction: string;
 };
+type CombinedProcessRecommendation = {
+  processId: string;
+  processCode: string;
+  processName: string;
+  revision: number;
+  leadDepartmentName: string;
+  recommendedRuns: number;
+  estimatedMinutes: number;
+  recommendationOnly: true;
+  outputs: Array<{
+    id: string;
+    partNumber: string;
+    partName: string;
+    quantityPerRun: number | string;
+    isPrimary: boolean;
+    requiredQuantity: number;
+    plannedQuantity: number;
+    excessQuantity: number;
+  }>;
+};
 
 export default function P2FrozenProductionDemand({
   projectId,
@@ -68,6 +90,7 @@ export default function P2FrozenProductionDemand({
   projectId?: string;
 }) {
   const { toast } = useToast();
+  const { can } = usePermissions();
   const [open, setOpen] = useState(new Set<string>());
   const reads =
     import.meta.env.VITE_P2_FROZEN_PRODUCTION_DEMAND_READS_ENABLED === 'true';
@@ -76,6 +99,10 @@ export default function P2FrozenProductionDemand({
   const releases =
     import.meta.env.VITE_P2_FROZEN_PRODUCTION_DEMAND_RELEASES_ENABLED ===
     'true';
+  const combinedProcessReads =
+    import.meta.env.VITE_COMBINED_MANUFACTURING_PROCESS_READS_ENABLED ===
+    'true';
+  const canViewCombinedProcesses = can('manufacturing.combined_processes.view');
   const list = useQuery<{
     baselines: Baseline[];
     authority: { canManage: boolean; canRelease: boolean };
@@ -96,6 +123,24 @@ export default function P2FrozenProductionDemand({
     enabled: reads && !!projectId,
   });
   const current = list.data?.baselines?.[0];
+  const combinedRecommendations = useQuery<{
+    recommendations: CombinedProcessRecommendation[];
+    materializesWorkOrders: false;
+  }>({
+    queryKey: [
+      `/api/projects/${projectId}/frozen-production-demand/${current?.id}/combined-process-recommendations`,
+    ],
+    queryFn: () =>
+      apiRequest(
+        `/api/projects/${projectId}/frozen-production-demand/${current?.id}/combined-process-recommendations`
+      ),
+    enabled:
+      reads &&
+      combinedProcessReads &&
+      canViewCombinedProcesses &&
+      !!projectId &&
+      current?.status === 'RELEASED',
+  });
   const detail = useQuery<{
     baseline: Baseline;
     nodes: Node[];
@@ -342,6 +387,101 @@ export default function P2FrozenProductionDemand({
           </CardContent>
         </Card>
       )}
+      {combinedProcessReads &&
+        canViewCombinedProcesses &&
+        current?.status === 'RELEASED' && (
+          <Card data-testid="combined-process-recommendations">
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Factory className="h-5 w-5" />
+                    Combined Process Recommendations
+                  </CardTitle>
+                  <CardDescription>
+                    Compare approved multi-output processes with the released
+                    BOM demand before creating the production schedule.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline">Recommendation only</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {combinedRecommendations.isLoading ? (
+                <p className="text-sm text-muted-foreground">
+                  Evaluating approved combined processes…
+                </p>
+              ) : (combinedRecommendations.data?.recommendations ?? [])
+                  .length === 0 ? (
+                <div className="rounded border border-dashed p-4 text-sm text-muted-foreground">
+                  No approved combined process matches two or more manufactured
+                  parts in this released demand baseline. The default remains
+                  one work order per manufactured part and assigned department.
+                </div>
+              ) : (
+                combinedRecommendations.data?.recommendations.map(
+                  (recommendation) => (
+                    <div
+                      key={recommendation.processId}
+                      className="rounded border p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="font-medium">
+                            {recommendation.processCode} · Rev{' '}
+                            {recommendation.revision}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {recommendation.processName} ·{' '}
+                            {recommendation.leadDepartmentName}
+                          </div>
+                        </div>
+                        <div className="text-right text-sm">
+                          <div className="font-medium">
+                            {recommendation.recommendedRuns} recommended runs
+                          </div>
+                          <div className="text-muted-foreground">
+                            {recommendation.estimatedMinutes} estimated minutes
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-2 md:grid-cols-2">
+                        {recommendation.outputs.map((output) => (
+                          <div
+                            key={output.id}
+                            className="rounded bg-muted/50 p-3 text-sm"
+                          >
+                            <div className="flex flex-wrap items-center gap-2 font-medium">
+                              {output.partNumber}
+                              {output.isPrimary && (
+                                <Badge variant="secondary">Primary</Badge>
+                              )}
+                            </div>
+                            <div className="mt-1 text-muted-foreground">
+                              Need {output.requiredQuantity}; plan{' '}
+                              {output.plannedQuantity} ({output.quantityPerRun}{' '}
+                              per run)
+                            </div>
+                            {output.excessQuantity > 0 && (
+                              <div className="mt-1 text-amber-700">
+                                Excess output: {output.excessQuantity}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 text-xs text-muted-foreground">
+                        This recommendation does not create, combine, or replace
+                        work orders. Production Planning retains the final
+                        scheduling decision.
+                      </div>
+                    </div>
+                  )
+                )
+              )}
+            </CardContent>
+          </Card>
+        )}
       {(detail.data?.events?.length ?? 0) > 0 && (
         <Card>
           <CardHeader>

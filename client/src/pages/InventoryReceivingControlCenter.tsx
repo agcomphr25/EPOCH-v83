@@ -45,6 +45,7 @@ import { compareReceiptLines } from '@/lib/receiptLineSort';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -85,6 +86,7 @@ import {
 } from '@/components/ui/command';
 import { getTraceabilityFields } from '@/lib/traceabilityFields';
 import { getRccCompleteInvalidationKeys } from '@/lib/rccInvalidation';
+import { getAveryLabelPlacements } from '@/lib/averyLabelPlacement';
 
 // Canonical list of per-field traceability config fields (matches received_units columns)
 const TRACE_CONFIG_FIELDS = [
@@ -5345,6 +5347,11 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
     'Browser PDF / selected printer'
   );
   const [reprintReason, setReprintReason] = useState('');
+  const [printRequest, setPrintRequest] = useState<
+    { kind: 'unit'; unitId: number } | { kind: 'batch' } | null
+  >(null);
+  const [usePartialSheet, setUsePartialSheet] = useState(false);
+  const [usedLabelCells, setUsedLabelCells] = useState<Set<number>>(new Set());
   const getLabelCount = (unitId: number) => labelCounts[unitId] ?? 1;
   const getEachPartCount = (unit: ReceivedUnit) =>
     Math.max(1, Math.ceil(Number(unit.quantity) || 1));
@@ -5394,7 +5401,10 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
     }
   }, [receipt.id, units.length]);
 
-  const printLabel = async (unitId: number) => {
+  const printLabel = async (
+    unitId: number,
+    skippedFirstPageCells: number[] = []
+  ) => {
     try {
       const copies = getLabelCount(unitId);
       const labelData = await apiRequest(
@@ -5403,7 +5413,8 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
       await printLabelPDF(
         Array.from({ length: copies }, () => labelData),
         `Label ${labelData.barcode}`,
-        labelSize
+        labelSize,
+        skippedFirstPageCells
       );
       if (controlledReceivingBarcodes)
         await recordControlledPrint(unitId, copies);
@@ -5412,7 +5423,7 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
     }
   };
 
-  const printBatch = async () => {
+  const printBatch = async (skippedFirstPageCells: number[] = []) => {
     try {
       const labels = controlledReceivingBarcodes
         ? await Promise.all(
@@ -5429,7 +5440,8 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
       await printLabelPDF(
         printableLabels,
         `Batch Labels - ${receipt.receiptNumber}`,
-        labelSize
+        labelSize,
+        skippedFirstPageCells
       );
       if (controlledReceivingBarcodes)
         await Promise.all(
@@ -5443,6 +5455,42 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
       toast.error('Failed to fetch batch labels');
     }
   };
+
+  const requestPrint = (
+    request: { kind: 'unit'; unitId: number } | { kind: 'batch' }
+  ) => {
+    if (labelSize === 'receiving-4x6') {
+      if (request.kind === 'unit') void printLabel(request.unitId);
+      else void printBatch();
+      return;
+    }
+    setUsedLabelCells(new Set());
+    setUsePartialSheet(false);
+    setPrintRequest(request);
+  };
+
+  const toggleUsedLabelCell = (index: number) => {
+    setUsedLabelCells((previous) => {
+      const next = new Set(previous);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
+  const confirmPrint = () => {
+    if (!printRequest) return;
+    const skippedCells = usePartialSheet
+      ? Array.from(usedLabelCells).sort((a, b) => a - b)
+      : [];
+    const request = printRequest;
+    setPrintRequest(null);
+    if (request.kind === 'unit') void printLabel(request.unitId, skippedCells);
+    else void printBatch(skippedCells);
+  };
+
+  const selectedLayout = RECEIVING_LABEL_LAYOUTS[labelSize];
+  const selectedLabelsPerPage = selectedLayout.columns * selectedLayout.rows;
 
   return (
     <div className="space-y-3">
@@ -5502,7 +5550,7 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
         <Button
           size="sm"
           className="w-full text-xs"
-          onClick={printBatch}
+          onClick={() => requestPrint({ kind: 'batch' })}
           disabled={totalLabelCount === 0}
         >
           <Printer className="w-3 h-3 mr-1" /> Batch Print All (
@@ -5594,7 +5642,7 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
               size="sm"
               variant="outline"
               className="w-full h-6 text-xs mt-2"
-              onClick={() => printLabel(unit.id)}
+              onClick={() => requestPrint({ kind: 'unit', unitId: unit.id })}
               disabled={getLabelCount(unit.id) === 0}
             >
               <Printer className="w-3 h-3 mr-1" /> Print{' '}
@@ -5604,6 +5652,78 @@ function BarcodesTab({ receipt }: { receipt: Receipt }) {
           </div>
         ))}
       </div>
+
+      <Dialog
+        open={printRequest !== null}
+        onOpenChange={(open) => !open && setPrintRequest(null)}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Select Avery label cells</DialogTitle>
+            <DialogDescription>
+              Printing starts in the first available cell and then continues in
+              sheet order.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="receiving-partial-sheet"
+                checked={usePartialSheet}
+                onCheckedChange={(checked) =>
+                  setUsePartialSheet(checked === true)
+                }
+              />
+              <Label htmlFor="receiving-partial-sheet">
+                Use a partially printed sheet
+              </Label>
+            </div>
+            {usePartialSheet && (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Select every cell that has already been used. Cell 1 is the
+                  upper-left label.
+                </p>
+                <div
+                  className="grid gap-2"
+                  style={{
+                    gridTemplateColumns: `repeat(${selectedLayout.columns}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {Array.from({ length: selectedLabelsPerPage }, (_, index) => {
+                    const used = usedLabelCells.has(index);
+                    return (
+                      <Button
+                        key={index}
+                        type="button"
+                        variant={used ? 'default' : 'outline'}
+                        className="h-10"
+                        aria-pressed={used}
+                        onClick={() => toggleUsedLabelCell(index)}
+                      >
+                        {index + 1}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrintRequest(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmPrint}
+              disabled={
+                usePartialSheet && usedLabelCells.size >= selectedLabelsPerPage
+              }
+            >
+              Generate PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -5746,7 +5866,8 @@ const RECEIVING_LABEL_LAYOUTS: Record<
 async function printLabelPDF(
   labels: ReceivingLabel[],
   title: string,
-  labelSize: ReceivingLabelSize
+  labelSize: ReceivingLabelSize,
+  skippedFirstPageCells: number[] = []
 ) {
   if (!labels || labels.length === 0) {
     toast.error('No labels to print');
@@ -5762,12 +5883,19 @@ async function printLabelPDF(
     format: [layout.pageWidth, layout.pageHeight],
   });
 
+  const placements = getAveryLabelPlacements(
+    labels.length,
+    labelsPerPage,
+    labelSize === 'receiving-4x6' ? [] : skippedFirstPageCells
+  );
+
   for (let idx = 0; idx < labels.length; idx++) {
     const label = labels[idx];
-    const pageIndex = idx % labelsPerPage;
-    if (idx > 0 && pageIndex === 0) {
+    const placement = placements[idx];
+    if (idx > 0 && placement.pageNumber !== placements[idx - 1].pageNumber) {
       pdf.addPage([layout.pageWidth, layout.pageHeight], 'portrait');
     }
+    const pageIndex = placement.cellIndex;
     const column = pageIndex % layout.columns;
     const rowIndex = Math.floor(pageIndex / layout.columns);
     const labelX =

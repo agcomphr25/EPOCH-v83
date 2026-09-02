@@ -209,9 +209,7 @@ export default function P2V2ProjectWorkflow({
               supersededLinks: Array.isArray(stage.supersededLinks)
                 ? stage.supersededLinks
                 : [],
-              approvals: Array.isArray(stage.approvals)
-                ? stage.approvals
-                : [],
+              approvals: Array.isArray(stage.approvals) ? stage.approvals : [],
               evidenceCount:
                 typeof stage.evidenceCount === 'number'
                   ? stage.evidenceCount
@@ -438,9 +436,7 @@ export default function P2V2ProjectWorkflow({
                   ] as const
                 ).includes(
                   stage.stepType as
-                    | 'rfq_risk_assessment'
-                    | 'estimate_quote'
-                    | 'contract_review'
+                    'rfq_risk_assessment' | 'estimate_quote' | 'contract_review'
                 ) && (
                   <div className="mt-3">
                     <P2V2CommercialReview

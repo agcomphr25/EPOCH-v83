@@ -193,8 +193,13 @@ describe('P2V2ProjectWorkflow', () => {
       ...initialized,
       integrityErrors: undefined,
       stages: stages.map(
-        ({ activeLinks, supersededLinks, approvals, evidenceCount, ...stage }) =>
-          stage
+        ({
+          activeLinks: _activeLinks,
+          supersededLinks: _supersededLinks,
+          approvals: _approvals,
+          evidenceCount: _evidenceCount,
+          ...stage
+        }) => stage
       ),
     });
 
@@ -202,7 +207,7 @@ describe('P2V2ProjectWorkflow', () => {
       await screen.findByText('P2 Project Workflow V2')
     ).toBeInTheDocument();
     expect(screen.getAllByTestId(/^v2-stage-\d+$/)).toHaveLength(10);
-    expect(screen.getAllByText('0 / 0 / 0')).toHaveLength(10);
+    expect(screen.getAllByText(/0 \/ 0 \/ 0/)).toHaveLength(10);
   });
 
   it('makes only the first six stages writable from the ten-stage summary', async () => {

@@ -453,25 +453,23 @@ async function getProjectManufacturingDocumentRefs(
         has_file: !!doc.file_url,
       })
     ),
-    ...specSheetRows.map(
-      (doc: LegacyProjectValue): ProjectDocumentRef => ({
-        id: `spec:${doc.id}`,
-        project_id: projectId,
-        label: doc.title,
-        original_file_name: doc.file_name || `${doc.title}.pdf`,
-        file_name: doc.file_name,
-        mime_type: doc.file_type || 'application/pdf',
-        file_size: doc.file_size ?? null,
-        media_library_id: null,
-        uploaded_by: doc.created_by ?? null,
-        created_at: doc.created_at,
-        source: 'spec_sheet',
-        document_type: 'spec_sheet',
-        part_number: doc.part_number,
-        department_name: null,
-        has_file: !!doc.file_url,
-      })
-    ),
+    ...specSheetRows.map((doc: LegacyProjectValue): ProjectDocumentRef => ({
+      id: `spec:${doc.id}`,
+      project_id: projectId,
+      label: doc.title,
+      original_file_name: doc.file_name || `${doc.title}.pdf`,
+      file_name: doc.file_name,
+      mime_type: doc.file_type || 'application/pdf',
+      file_size: doc.file_size ?? null,
+      media_library_id: null,
+      uploaded_by: doc.created_by ?? null,
+      created_at: doc.created_at,
+      source: 'spec_sheet',
+      document_type: 'spec_sheet',
+      part_number: doc.part_number,
+      department_name: null,
+      has_file: !!doc.file_url,
+    })),
   ];
 }
 
@@ -3710,7 +3708,7 @@ router.get('/:id/p2-hub', async (req, res) => {
     const assemblySourceItems = selectProjectAssemblySourceItems(
       activePoItemsForAssembly,
       project.p2PoItemId,
-      poInventoryItemById,
+      poInventoryItemById
     );
     const assemblyRootPartNumbers = Array.from(
       new Set(
@@ -4065,25 +4063,29 @@ router.get('/:id/p2-hub', async (req, res) => {
       assemblyTree,
       orderedQuantityByRootPart
     );
-    const bomInventoryPartNumbers = Array.from(new Set([
-      ...grossPurchasedBomParts.map((part) => part.part_number),
-      ...manufacturedBomParts.map((part) => part.part_number),
-    ]));
-    const inventoryBalanceRows = bomInventoryPartNumbers.length > 0
-      ? await optionalHubQuery<LegacyProjectValue>(
-          'project BOM inventory balances',
-          `SELECT ag_part_number, location_id, quantity_on_hand, quantity_allocated,
+    const bomInventoryPartNumbers = Array.from(
+      new Set([
+        ...grossPurchasedBomParts.map((part) => part.part_number),
+        ...manufacturedBomParts.map((part) => part.part_number),
+      ])
+    );
+    const inventoryBalanceRows =
+      bomInventoryPartNumbers.length > 0
+        ? await optionalHubQuery<LegacyProjectValue>(
+            'project BOM inventory balances',
+            `SELECT ag_part_number, location_id, quantity_on_hand, quantity_allocated,
                   quantity_available, last_counted_at
            FROM inventory_balances
            WHERE ag_part_number = ANY($1::text[])
            ORDER BY ag_part_number, location_id`,
-          [bomInventoryPartNumbers]
-        )
-      : [];
-    const vendorPoMaterialRows = bomInventoryPartNumbers.length > 0
-      ? await optionalHubQuery<LegacyProjectValue>(
-          'project BOM vendor PO material status',
-          `SELECT vpi.ag_part_number, vpi.quantity, vpi.received_quantity,
+            [bomInventoryPartNumbers]
+          )
+        : [];
+    const vendorPoMaterialRows =
+      bomInventoryPartNumbers.length > 0
+        ? await optionalHubQuery<LegacyProjectValue>(
+            'project BOM vendor PO material status',
+            `SELECT vpi.ag_part_number, vpi.quantity, vpi.received_quantity,
                   vp.id AS vendor_po_id,
                   COALESCE(vp.po_number, vp.external_po_number) AS po_number,
                   vp.status AS po_status
@@ -4094,13 +4096,14 @@ router.get('/:id/p2-hub', async (req, res) => {
              AND LOWER(COALESCE(vp.status, '')) NOT IN ('cancelled', 'voided')
              AND vpi.project_id = $2
            ORDER BY vp.id, vpi.line_number`,
-          [bomInventoryPartNumbers, id]
-        )
-      : [];
-    const projectMaterialCustodyRows = bomInventoryPartNumbers.length > 0
-      ? await optionalHubQuery<LegacyProjectValue>(
-          'project BOM received material custody',
-          `SELECT COALESCE(rl.ag_part_number, vpi.ag_part_number) AS ag_part_number,
+            [bomInventoryPartNumbers, id]
+          )
+        : [];
+    const projectMaterialCustodyRows =
+      bomInventoryPartNumbers.length > 0
+        ? await optionalHubQuery<LegacyProjectValue>(
+            'project BOM received material custody',
+            `SELECT COALESCE(rl.ag_part_number, vpi.ag_part_number) AS ag_part_number,
                   prm.quantity, prm.status, ru.disposition,
                   LEAST(prm.quantity, COALESCE(ml.remaining_qty, prm.quantity)) AS quantity_available
            FROM project_received_materials prm
@@ -4113,28 +4116,32 @@ router.get('/:id/p2-hub', async (req, res) => {
              AND (vpi.project_id = $2 OR prm.status = 'accepted_transferred')
              AND COALESCE(rl.ag_part_number, vpi.ag_part_number) = ANY($1::text[])
            ORDER BY prm.created_at`,
-          [bomInventoryPartNumbers, id]
-        )
-      : [];
+            [bomInventoryPartNumbers, id]
+          )
+        : [];
     const inventoryBalancesByPart = new Map<string, LegacyProjectValue[]>();
     inventoryBalanceRows.forEach((balance) => {
-      const key = String(balance.ag_part_number ?? '').trim().toLowerCase();
+      const key = String(balance.ag_part_number ?? '')
+        .trim()
+        .toLowerCase();
       if (!key) return;
       const rows = inventoryBalancesByPart.get(key) ?? [];
       rows.push(balance);
       inventoryBalancesByPart.set(key, rows);
     });
     const availableInventoryByPart = new Map(
-      Array.from(inventoryBalancesByPart.entries()).map(([partNumber, balances]) => [
-        partNumber,
-        Math.max(
-          0,
-          balances.reduce(
-            (sum, balance) => sum + Number(balance.quantity_available ?? 0),
-            0
-          )
-        ),
-      ])
+      Array.from(inventoryBalancesByPart.entries()).map(
+        ([partNumber, balances]) => [
+          partNumber,
+          Math.max(
+            0,
+            balances.reduce(
+              (sum, balance) => sum + Number(balance.quantity_available ?? 0),
+              0
+            )
+          ),
+        ]
+      )
     );
     const availableManufacturedInventoryByPart = new Map(
       manufacturedBomParts.map((part) => {
@@ -4147,14 +4154,30 @@ router.get('/:id/p2-hub', async (req, res) => {
       orderedQuantityByRootPart,
       new Map(availableManufacturedInventoryByPart)
     );
-    const addInventoryBalances = <T extends { part_number: string }>(part: T) => {
-      const inventoryBalances = inventoryBalancesByPart.get(part.part_number.trim().toLowerCase()) ?? [];
+    const addInventoryBalances = <T extends { part_number: string }>(
+      part: T
+    ) => {
+      const inventoryBalances =
+        inventoryBalancesByPart.get(part.part_number.trim().toLowerCase()) ??
+        [];
       return {
         ...part,
-        company_quantity_on_hand: inventoryBalances.reduce((sum, row) => sum + Number(row.quantity_on_hand ?? 0), 0),
-        company_quantity_available: inventoryBalances.reduce((sum, row) => sum + Number(row.quantity_available ?? 0), 0),
-        quantity_on_hand: inventoryBalances.reduce((sum, row) => sum + Number(row.quantity_on_hand ?? 0), 0),
-        quantity_available: inventoryBalances.reduce((sum, row) => sum + Number(row.quantity_available ?? 0), 0),
+        company_quantity_on_hand: inventoryBalances.reduce(
+          (sum, row) => sum + Number(row.quantity_on_hand ?? 0),
+          0
+        ),
+        company_quantity_available: inventoryBalances.reduce(
+          (sum, row) => sum + Number(row.quantity_available ?? 0),
+          0
+        ),
+        quantity_on_hand: inventoryBalances.reduce(
+          (sum, row) => sum + Number(row.quantity_on_hand ?? 0),
+          0
+        ),
+        quantity_available: inventoryBalances.reduce(
+          (sum, row) => sum + Number(row.quantity_available ?? 0),
+          0
+        ),
         inventory_balances: inventoryBalances,
       };
     };
@@ -4279,11 +4302,10 @@ router.get('/:id/p2-hub', async (req, res) => {
             assemblyRoot?.revisionCode ??
             matchingBomRecords[0]?.latest_rev_code ??
             null,
-          lifecycleStatus:
-            assemblyRoot?.revisionId
-              ? 'RELEASED'
-              : matchingBomRecords[0]?.latest_revision_lifecycle_status ??
-                (matchingBomRecords.length > 0 ? 'DRAFT' : 'MISSING'),
+          lifecycleStatus: assemblyRoot?.revisionId
+            ? 'RELEASED'
+            : (matchingBomRecords[0]?.latest_revision_lifecycle_status ??
+              (matchingBomRecords.length > 0 ? 'DRAFT' : 'MISSING')),
           message: assemblyRoot?.revisionId
             ? 'Released Robust BOM is linked through the inventory item identity.'
             : matchingBomRecords.length > 0
@@ -4394,32 +4416,62 @@ router.get('/:id/p2-hub', async (req, res) => {
       workOrdersByPart.set(partKey, rows);
     });
     const manufacturedItems = manufacturedBomParts.map((part) => {
-      const relatedWorkOrders = workOrdersByPart.get(normalizeProductionKey(part.part_number)) ?? [];
-      const departments = Array.from(new Set(relatedWorkOrders
-        .map((workOrder) => workOrder.assignedDepartment ?? workOrder.assigned_department ?? workOrder.departmentName ?? workOrder.department_name ?? workOrder.department)
-        .filter(Boolean)));
-      const statuses = relatedWorkOrders.map((workOrder) => String(workOrder.status ?? '').trim()).filter(Boolean);
+      const relatedWorkOrders =
+        workOrdersByPart.get(normalizeProductionKey(part.part_number)) ?? [];
+      const departments = Array.from(
+        new Set(
+          relatedWorkOrders
+            .map(
+              (workOrder) =>
+                workOrder.assignedDepartment ??
+                workOrder.assigned_department ??
+                workOrder.departmentName ??
+                workOrder.department_name ??
+                workOrder.department
+            )
+            .filter(Boolean)
+        )
+      );
+      const statuses = relatedWorkOrders
+        .map((workOrder) => String(workOrder.status ?? '').trim())
+        .filter(Boolean);
       const partKey = normalizeProductionKey(part.part_number);
       const isAssemblyRoot = assemblyTree.some(
         (root) => normalizeProductionKey(root.partNumber) === partKey
       );
       const availableQuantity = isAssemblyRoot
         ? 0
-        : availableManufacturedInventoryByPart.get(partKey) ?? 0;
-      const inventoryFulfilledQuantity = Math.min(part.quantity, availableQuantity);
+        : (availableManufacturedInventoryByPart.get(partKey) ?? 0);
+      const inventoryFulfilledQuantity = Math.min(
+        part.quantity,
+        availableQuantity
+      );
       const productionRequiredQuantity = Math.max(
         part.quantity - inventoryFulfilledQuantity,
         0
       );
-      const progress = productionRequiredQuantity === 0 && part.quantity > 0
-        ? 'Stock Fulfilled'
-        : statuses.some((status) => ['COMPLETED', 'COMPLETE', 'CLOSED'].includes(status.toUpperCase()))
-        ? 'Completed'
-        : statuses.some((status) => ['IN_PROGRESS', 'ACTIVE', 'STARTED'].includes(status.toUpperCase()))
-          ? 'In Production'
-          : statuses.some((status) => ['RELEASED', 'SCHEDULED'].includes(status.toUpperCase()))
-            ? 'Scheduled'
-            : relatedWorkOrders.length > 0 ? 'Pending' : 'Work Order Required';
+      const progress =
+        productionRequiredQuantity === 0 && part.quantity > 0
+          ? 'Stock Fulfilled'
+          : statuses.some((status) =>
+                ['COMPLETED', 'COMPLETE', 'CLOSED'].includes(
+                  status.toUpperCase()
+                )
+              )
+            ? 'Completed'
+            : statuses.some((status) =>
+                  ['IN_PROGRESS', 'ACTIVE', 'STARTED'].includes(
+                    status.toUpperCase()
+                  )
+                )
+              ? 'In Production'
+              : statuses.some((status) =>
+                    ['RELEASED', 'SCHEDULED'].includes(status.toUpperCase())
+                  )
+                ? 'Scheduled'
+                : relatedWorkOrders.length > 0
+                  ? 'Pending'
+                  : 'Work Order Required';
       return addInventoryBalances({
         ...part,
         gross_required_quantity: part.quantity,

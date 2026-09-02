@@ -249,6 +249,15 @@ export function isP2ControlledActivationReadinessEnabled(): boolean {
   return envBool('P2_CONTROLLED_ACTIVATION_READINESS_ENABLED', false);
 }
 
+/** Combined manufacturing process administration and recommendation preview. */
+export function areCombinedManufacturingProcessReadsEnabled(): boolean {
+  return envBool('COMBINED_MANUFACTURING_PROCESS_READS_ENABLED', false);
+}
+
+export function areCombinedManufacturingProcessWritesEnabled(): boolean {
+  return envBool('COMBINED_MANUFACTURING_PROCESS_WRITES_ENABLED', false);
+}
+
 /**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read

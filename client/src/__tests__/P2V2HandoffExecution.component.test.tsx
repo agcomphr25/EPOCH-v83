@@ -52,4 +52,30 @@ describe('P2V2HandoffExecution', () => {
       screen.getByRole('link', { name: 'Open P2 Control Center' })
     ).toHaveAttribute('href', '/p2-control-center');
   });
+
+  it('renders safely when shared cache contains a raw handoff error payload', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(
+      ['/api/projects', 'project-1', 'workflow-v2', 'p2-handoff'],
+      {
+        error: 'P2_HANDOFF_FAILED',
+        message: 'The P2 handoff action failed.',
+      }
+    );
+
+    render(
+      <QueryClientProvider client={client}>
+        <P2V2HandoffExecution projectId="project-1" mode="execution" />
+      </QueryClientProvider>
+    );
+
+    expect(
+      await screen.findByText('P2 Execution — authoritative summary')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Open P2 Control Center' })
+    ).toHaveAttribute('href', '/p2-control-center');
+  });
 });

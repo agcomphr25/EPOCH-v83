@@ -19,13 +19,26 @@ export default function P2V2ProjectClosingSummary({
     closingUnlocked: boolean;
     nextAction?: string;
   }>({
-    queryKey: ['/api/projects', projectId, 'workflow-v2', 'p2-handoff'],
+    queryKey: [
+      '/api/projects',
+      projectId,
+      'workflow-v2',
+      'p2-handoff',
+      'closing-summary',
+    ],
     queryFn: async () => {
       const response = await fetch(
         `/api/projects/${projectId}/workflow-v2/p2-handoff`,
         { credentials: 'include' }
       );
-      return response.json();
+      const body = await response.json().catch(() => null);
+      if (!response.ok)
+        throw new Error(body?.message || 'Unable to load P2 closing evidence');
+      return {
+        closingUnlocked: Boolean(body?.closingUnlocked),
+        nextAction:
+          typeof body?.nextAction === 'string' ? body.nextAction : undefined,
+      };
     },
   });
   const unlocked = Boolean(data?.closingUnlocked);

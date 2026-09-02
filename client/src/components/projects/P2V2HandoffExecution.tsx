@@ -140,6 +140,11 @@ export default function P2V2HandoffExecution({
         {error instanceof Error ? error.message : 'P2 status unavailable.'}
       </p>
     );
+  const blockers = Array.isArray(data.blockers) ? data.blockers : [];
+  const controlCenterLink =
+    data.links && typeof data.links.controlCenter === 'string'
+      ? data.links.controlCenter
+      : '/p2-control-center';
   if (mode === 'handoff')
     return (
       <Card data-testid="p2-v2-handoff-actions">
@@ -246,18 +251,18 @@ export default function P2V2HandoffExecution({
               : 'Not recorded'}
           </p>
         </div>
-        {data.blockers.length > 0 && (
+        {blockers.length > 0 && (
           <div className="rounded bg-amber-50 p-3 text-sm text-amber-900">
             <strong>Blockers</strong>
             <ul className="list-disc pl-5">
-              {data.blockers.map((blocker) => (
+              {blockers.map((blocker) => (
                 <li key={blocker}>{blocker}</li>
               ))}
             </ul>
           </div>
         )}
         <Button asChild>
-          <a href={data.links.controlCenter}>
+          <a href={controlCenterLink}>
             <ExternalLink className="mr-2 h-4 w-4" />
             Open P2 Control Center
           </a>

@@ -370,6 +370,7 @@ export const safeMigrationFiles = [
   '0318_backfill_active_bom_revision_release.sql',
   '0319_reconcile_machined_part_routing_type.sql',
   '0320_combined_manufacturing_process_foundation.sql',
+  '0321_combined_manufacturing_process_selection.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -489,6 +490,7 @@ export const criticalMigrationFiles = new Set([
   '0318_backfill_active_bom_revision_release.sql',
   '0319_reconcile_machined_part_routing_type.sql',
   '0320_combined_manufacturing_process_foundation.sql',
+  '0321_combined_manufacturing_process_selection.sql',
 ]);
 
 export async function runSafeBootMigrations() {

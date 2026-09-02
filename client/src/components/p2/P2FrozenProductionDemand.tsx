@@ -83,6 +83,17 @@ type CombinedProcessRecommendation = {
     excessQuantity: number;
   }>;
 };
+type CombinedProcessSelection = {
+  id: string;
+  processId: string;
+  processCode: string;
+  processName: string;
+  status: 'SELECTED' | 'WITHDRAWN';
+  recommendedRuns: number;
+  selectionReason: string;
+  selectedByDisplayName: string;
+  selectedAt: string;
+};
 
 export default function P2FrozenProductionDemand({
   projectId,
@@ -102,7 +113,11 @@ export default function P2FrozenProductionDemand({
   const combinedProcessReads =
     import.meta.env.VITE_COMBINED_MANUFACTURING_PROCESS_READS_ENABLED ===
     'true';
+  const combinedProcessPlanningWrites =
+    import.meta.env
+      .VITE_COMBINED_MANUFACTURING_PROCESS_PLANNING_WRITES_ENABLED === 'true';
   const canViewCombinedProcesses = can('manufacturing.combined_processes.view');
+  const canPlanCombinedProcesses = can('manufacturing.combined_processes.plan');
   const list = useQuery<{
     baselines: Baseline[];
     authority: { canManage: boolean; canRelease: boolean };
@@ -140,6 +155,81 @@ export default function P2FrozenProductionDemand({
       canViewCombinedProcesses &&
       !!projectId &&
       current?.status === 'RELEASED',
+  });
+  const combinedSelections = useQuery<{
+    selections: CombinedProcessSelection[];
+  }>({
+    queryKey: [
+      `/api/projects/${projectId}/frozen-production-demand/${current?.id}/combined-process-selections`,
+    ],
+    enabled:
+      reads &&
+      combinedProcessReads &&
+      canViewCombinedProcesses &&
+      !!projectId &&
+      current?.status === 'RELEASED',
+  });
+  const activeCombinedSelection = combinedSelections.data?.selections.find(
+    (selection) => selection.status === 'SELECTED'
+  );
+  const selectCombinedProcess = useMutation({
+    mutationFn: (recommendation: CombinedProcessRecommendation) => {
+      const reason = window.prompt(
+        'Explain why this combined process is the best scheduling plan.'
+      );
+      if (!reason?.trim()) throw new Error('A selection reason is required.');
+      return apiRequest(
+        `/api/projects/${projectId}/frozen-production-demand/${current?.id}/combined-process-selections`,
+        {
+          method: 'POST',
+          body: {
+            processId: recommendation.processId,
+            expectedBaselineChecksum: current?.baseline_checksum,
+            reason: reason.trim(),
+          },
+        }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [
+          `/api/projects/${projectId}/frozen-production-demand/${current?.id}/combined-process-selections`,
+        ],
+      });
+      toast({ title: 'Combined process selected for planning' });
+    },
+    onError: (error: Error) =>
+      toast({
+        title: 'Combined process was not selected',
+        description: error.message,
+        variant: 'destructive',
+      }),
+  });
+  const withdrawCombinedSelection = useMutation({
+    mutationFn: (selectionId: string) => {
+      const reason = window.prompt(
+        'Explain why this planning selection is being withdrawn.'
+      );
+      if (!reason?.trim()) throw new Error('A withdrawal reason is required.');
+      return apiRequest(
+        `/api/projects/${projectId}/frozen-production-demand/${current?.id}/combined-process-selections/${selectionId}/withdraw`,
+        { method: 'POST', body: { reason: reason.trim() } }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [
+          `/api/projects/${projectId}/frozen-production-demand/${current?.id}/combined-process-selections`,
+        ],
+      });
+      toast({ title: 'Combined process selection withdrawn' });
+    },
+    onError: (error: Error) =>
+      toast({
+        title: 'Selection was not withdrawn',
+        description: error.message,
+        variant: 'destructive',
+      }),
   });
   const detail = useQuery<{
     baseline: Baseline;
@@ -407,6 +497,43 @@ export default function P2FrozenProductionDemand({
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
+              {activeCombinedSelection && (
+                <div className="rounded border border-green-300 bg-green-50 p-4 text-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-green-900">
+                        Selected plan: {activeCombinedSelection.processCode} ·{' '}
+                        {activeCombinedSelection.recommendedRuns} runs
+                      </div>
+                      <div className="mt-1 text-green-800">
+                        {activeCombinedSelection.selectionReason}
+                      </div>
+                      <div className="mt-1 text-xs text-green-700">
+                        Selected by{' '}
+                        {activeCombinedSelection.selectedByDisplayName} on{' '}
+                        {new Date(
+                          activeCombinedSelection.selectedAt
+                        ).toLocaleString()}
+                      </div>
+                    </div>
+                    {combinedProcessPlanningWrites &&
+                      canPlanCombinedProcesses && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={withdrawCombinedSelection.isPending}
+                          onClick={() =>
+                            withdrawCombinedSelection.mutate(
+                              activeCombinedSelection.id
+                            )
+                          }
+                        >
+                          Withdraw selection
+                        </Button>
+                      )}
+                  </div>
+                </div>
+              )}
               {combinedRecommendations.isLoading ? (
                 <p className="text-sm text-muted-foreground">
                   Evaluating approved combined processes…
@@ -475,6 +602,20 @@ export default function P2FrozenProductionDemand({
                         work orders. Production Planning retains the final
                         scheduling decision.
                       </div>
+                      {combinedProcessPlanningWrites &&
+                        canPlanCombinedProcesses &&
+                        !activeCombinedSelection && (
+                          <Button
+                            className="mt-3"
+                            size="sm"
+                            disabled={selectCombinedProcess.isPending}
+                            onClick={() =>
+                              selectCombinedProcess.mutate(recommendation)
+                            }
+                          >
+                            Select for planning
+                          </Button>
+                        )}
                     </div>
                   )
                 )

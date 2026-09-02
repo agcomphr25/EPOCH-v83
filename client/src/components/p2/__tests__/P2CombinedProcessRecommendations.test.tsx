@@ -36,4 +36,14 @@ describe('P2 combined-process planning recommendations', () => {
     );
     expect(source).toMatch(/one work order per manufactured part/);
   });
+
+  it('controls planner selection separately from work-order materialization', () => {
+    expect(source).toContain(
+      'VITE_COMBINED_MANUFACTURING_PROCESS_PLANNING_WRITES_ENABLED'
+    );
+    expect(source).toContain("can('manufacturing.combined_processes.plan')");
+    expect(source).toContain('expectedBaselineChecksum');
+    expect(source).toContain('Select for planning');
+    expect(source).toContain('Withdraw selection');
+  });
 });

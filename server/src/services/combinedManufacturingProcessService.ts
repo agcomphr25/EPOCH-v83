@@ -333,3 +333,174 @@ export async function recommendCombinedManufacturingProcesses(
     })
     .filter(Boolean);
 }
+
+export async function listCombinedProcessSelections(
+  projectId: string,
+  baselineId: string
+) {
+  const result = await pool.query(
+    `SELECT s.*,p.process_code,p.name process_name,p.revision,d.name lead_department_name
+     FROM combined_manufacturing_process_selections s
+     JOIN combined_manufacturing_processes p ON p.id=s.process_id
+     JOIN inventory_departments d ON d.id=p.lead_department_id
+     WHERE s.project_id=$1 AND s.frozen_demand_baseline_id=$2
+     ORDER BY s.selected_at DESC`,
+    [projectId, baselineId]
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    processId: row.process_id,
+    processCode: row.process_code,
+    processName: row.process_name,
+    revision: row.revision,
+    leadDepartmentName: row.lead_department_name,
+    status: row.status,
+    recommendedRuns: row.recommended_runs,
+    recommendationSnapshot: row.recommendation_snapshot,
+    selectionReason: row.selection_reason,
+    selectedByDisplayName: row.selected_by_display_name,
+    selectedAt: row.selected_at,
+    withdrawnReason: row.withdrawn_reason,
+    withdrawnByDisplayName: row.withdrawn_by_display_name,
+    withdrawnAt: row.withdrawn_at,
+  }));
+}
+
+export async function selectCombinedProcessRecommendation(
+  projectId: string,
+  baselineId: string,
+  processId: string,
+  input: { expectedBaselineChecksum: string; reason: string },
+  actor: CombinedProcessActor
+) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, [
+      `combined-process-selection:${baselineId}`,
+    ]);
+    const baseline = await client.query(
+      `SELECT baseline_checksum,status FROM p2_frozen_production_demand_baselines
+       WHERE id=$1 AND project_id=$2 FOR UPDATE`,
+      [baselineId, projectId]
+    );
+    if (
+      baseline.rows.length !== 1 ||
+      baseline.rows[0].status !== 'RELEASED' ||
+      baseline.rows[0].baseline_checksum !== input.expectedBaselineChecksum
+    )
+      throw new CombinedProcessError(
+        'FROZEN_DEMAND_AUTHORITY_STALE',
+        'Selection requires the exact released Frozen Production Demand checksum.'
+      );
+    const recommendations = await recommendCombinedManufacturingProcesses(
+      projectId,
+      baselineId
+    );
+    const recommendation = recommendations.find(
+      (candidate: any) => candidate.processId === processId
+    );
+    if (!recommendation)
+      throw new CombinedProcessError(
+        'COMBINED_PROCESS_RECOMMENDATION_STALE',
+        'The selected process no longer qualifies for this demand baseline.'
+      );
+    const existing = await client.query(
+      `SELECT id FROM combined_manufacturing_process_selections
+       WHERE frozen_demand_baseline_id=$1 AND status='SELECTED'`,
+      [baselineId]
+    );
+    if (existing.rows.length)
+      throw new CombinedProcessError(
+        'COMBINED_PROCESS_SELECTION_EXISTS',
+        'Withdraw the current combined-process selection before choosing another.'
+      );
+    const created = await client.query(
+      `INSERT INTO combined_manufacturing_process_selections
+       (project_id,frozen_demand_baseline_id,process_id,baseline_checksum,
+        recommended_runs,recommendation_snapshot,selection_reason,
+        selected_by_user_id,selected_by_display_name)
+       VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9) RETURNING *`,
+      [
+        projectId,
+        baselineId,
+        processId,
+        input.expectedBaselineChecksum,
+        recommendation.recommendedRuns,
+        JSON.stringify(recommendation),
+        input.reason,
+        actor.userId,
+        actor.displayName,
+      ]
+    );
+    await client.query(
+      `INSERT INTO combined_manufacturing_process_selection_events
+       (selection_id,event_type,actor_user_id,actor_display_name,reason,evidence)
+       VALUES($1,'SELECTED',$2,$3,$4,$5::jsonb)`,
+      [
+        created.rows[0].id,
+        actor.userId,
+        actor.displayName,
+        input.reason,
+        JSON.stringify({
+          baselineChecksum: input.expectedBaselineChecksum,
+          processId,
+        }),
+      ]
+    );
+    await client.query('COMMIT');
+    return { id: created.rows[0].id, status: 'SELECTED' };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function withdrawCombinedProcessSelection(
+  projectId: string,
+  baselineId: string,
+  selectionId: string,
+  reason: string,
+  actor: CombinedProcessActor
+) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const updated = await client.query(
+      `UPDATE combined_manufacturing_process_selections
+       SET status='WITHDRAWN',withdrawn_by_user_id=$4,withdrawn_by_display_name=$5,
+           withdrawn_reason=$6,withdrawn_at=now()
+       WHERE id=$1 AND project_id=$2 AND frozen_demand_baseline_id=$3 AND status='SELECTED'
+       RETURNING id`,
+      [
+        selectionId,
+        projectId,
+        baselineId,
+        actor.userId,
+        actor.displayName,
+        reason,
+      ]
+    );
+    if (updated.rows.length !== 1)
+      throw new CombinedProcessError(
+        'ACTIVE_COMBINED_PROCESS_SELECTION_NOT_FOUND',
+        'The active combined-process selection was not found.',
+        404
+      );
+    await client.query(
+      `INSERT INTO combined_manufacturing_process_selection_events
+       (selection_id,event_type,actor_user_id,actor_display_name,reason)
+       VALUES($1,'WITHDRAWN',$2,$3,$4)`,
+      [selectionId, actor.userId, actor.displayName, reason]
+    );
+    await client.query('COMMIT');
+    return { id: selectionId, status: 'WITHDRAWN' };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}

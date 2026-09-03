@@ -1790,19 +1790,56 @@ export default function Navigation() {
     staleTime: 5 * 60 * 1000,
   });
   const p2WorkOrderQueueItems = useMemo(
-    () =>
-      p2QueueDepartments
+    () => {
+      const queuePresentation = (department: {
+        name: string;
+        departmentCode?: string | null;
+      }) => {
+        const identity = `${department.departmentCode ?? ''} ${department.name}`
+          .trim()
+          .toUpperCase()
+          .replace(/[^A-Z0-9]+/g, '_');
+
+        if (identity.includes('CNC') || identity.includes('MACHIN'))
+          return { label: 'CNC / Machined Parts', order: 3 };
+        if (identity.includes('KIT')) return { label: 'Kits', order: 2 };
+        if (identity.includes('LAYUP')) return { label: 'Layup', order: 4 };
+        if (identity.includes('CORE')) return { label: 'Core', order: 5 };
+        if (identity.includes('SUB_ASSEMB'))
+          return { label: 'Subassembly', order: 6 };
+        if (identity.includes('ASSEMB'))
+          return { label: 'Assembly', order: 7 };
+        if (
+          identity.includes('MANUFACTUR') ||
+          identity.includes('PRODUCTION_QUEUE') ||
+          identity.includes('CUTTING_TABLE')
+        )
+          return { label: 'Manufacturing', order: 1 };
+
+        return { label: department.name, order: 100 };
+      };
+
+      return p2QueueDepartments
         .filter(
           (department) =>
             department.isActive !== false &&
             department.productionEnabled !== false
         )
-        .map((department) => ({
-          path: `/p2-work-orders/queues/${department.id}`,
-          label: department.name,
-          icon: Factory,
-          description: `${department.name} P2 manufacturing work-order queue`,
-        })),
+        .map((department) => {
+          const presentation = queuePresentation(department);
+          return {
+            path: `/p2-work-orders/queues/${department.id}`,
+            label: presentation.label,
+            icon: Factory,
+            description: `${presentation.label} P2 manufacturing work-order queue`,
+            order: presentation.order,
+          };
+        })
+        .sort(
+          (left, right) =>
+            left.order - right.order || left.label.localeCompare(right.label)
+        );
+    },
     [p2QueueDepartments]
   );
 
@@ -2941,7 +2978,7 @@ export default function Navigation() {
                     }
                   >
                     <Factory className="h-4 w-4" />
-                    P2 W/O Queues
+                    P2 Work Order Queues
                     {p2WorkOrderQueueExpanded ? (
                       <ChevronDown className="h-4 w-4" />
                     ) : (

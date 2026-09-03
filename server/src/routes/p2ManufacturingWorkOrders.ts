@@ -77,6 +77,9 @@ const materializeBody = z.object({
   priority: z.enum(['LOW', 'URGENT', 'CRITICAL']).optional().default('LOW'),
   dueDate: z.string().date().optional(),
 });
+const queueQuery = z.object({
+  projectId: z.string().uuid().optional(),
+});
 const managementUpdateBody = z.object({
   expectedConcurrencyVersion: z.number().int().positive(),
   priority: z.enum(['LOW', 'URGENT', 'CRITICAL']),
@@ -252,9 +255,14 @@ router.get(
   async (req, res) => {
     try {
       enabled(areP2ManufacturingWorkOrderQueueReadsEnabled());
+      const query = queueQuery.parse(req.query);
       res.json({
         departmentId: req.params.departmentId,
-        workOrders: await listP2WorkOrderQueue(req.params.departmentId),
+        projectId: query.projectId ?? null,
+        workOrders: await listP2WorkOrderQueue(
+          req.params.departmentId,
+          query.projectId
+        ),
       });
     } catch (error) {
       fail(res, error);

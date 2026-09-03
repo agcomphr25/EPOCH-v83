@@ -19,10 +19,17 @@ describe('Daily Tag Up client contract', () => {
     for (const label of ['Project', 'Customer', 'Customer PO', 'Department', 'Source', 'Needs attention', 'Status']) expect(page).toContain(`label="${label}"`);
     expect(page).toContain('>Search</span>');
     expect(page).toContain('data-testid={`department-${department.label}`}');
-    expect(page).toContain('/p2-work-orders/queues/${wo.departmentId}');
+    expect(page).toContain('/p2-work-orders/queues/${wo.departmentId}?projectId=${encodeURIComponent(project.id)}');
     expect(page).toContain('wo.readiness.state');
     expect(page).toContain('<TreeNode');
     expect(page).toContain('Show Only Problems');
+  });
+
+  it('hydrates project and customer PO context and returns to the project Production tab', () => {
+    expect(page).toContain('new URLSearchParams(window.location.search)');
+    expect(page).toContain("params.get('projectId')?.trim()");
+    expect(page).toContain("params.get('customerPo')?.trim()");
+    expect(page).toContain('/projects/${encodeURIComponent(project.id)}?tab=production');
   });
 
   it('moves TV Display to the first Verified Modules card and removes the old top-level placement', () => {

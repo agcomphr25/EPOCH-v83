@@ -165,6 +165,26 @@ export const MANUFACTURING_ROUTE_DEFINITIONS: Record<ManufacturedCategory, Manuf
   },
 };
 
+const MANUFACTURING_DEPARTMENT_IDENTITY_GROUPS: readonly (readonly string[])[] = [
+  ['kitting', 'kit', 'kits'],
+  ['core', 'cores'],
+  ['subassembly', 'subassemblies', 'subassy'],
+];
+
+export function normalizeManufacturingDepartmentIdentity(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+export function getManufacturingDepartmentIdentities(
+  department: string,
+): string[] {
+  const normalized = normalizeManufacturingDepartmentIdentity(department);
+  const aliases = MANUFACTURING_DEPARTMENT_IDENTITY_GROUPS.find((group) =>
+    group.includes(normalized),
+  );
+  return aliases ? [...aliases] : [normalized];
+}
+
 export function getManufacturingRouteDefinition(
   category: ManufacturedCategory | null | undefined,
 ): ManufacturingRouteDefinition | null {
@@ -181,7 +201,12 @@ export function getManufacturingCategoriesForDashboard(
 }
 
 export function getManufacturingCategoriesForDepartment(department: string): ManufacturedCategory[] {
+  const identities = new Set(getManufacturingDepartmentIdentities(department));
   return Object.values(MANUFACTURING_ROUTE_DEFINITIONS)
-    .filter((route) => route.department === department)
+    .filter(
+      (route) =>
+        route.department !== null &&
+        identities.has(normalizeManufacturingDepartmentIdentity(route.department)),
+    )
     .map((route) => route.category);
 }

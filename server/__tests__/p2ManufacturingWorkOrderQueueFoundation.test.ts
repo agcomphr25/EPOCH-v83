@@ -45,6 +45,10 @@ describe('Phase 6 P2 manufacturing work-order queue foundation', () => {
       'clean(baseline.baseline_checksum) !== input.expectedBaselineChecksum'
     );
     expect(service).toContain("node.make_buy_disposition === 'MAKE'");
+    expect(service).toContain("pl.status='COMPLETE'");
+    expect(service).toContain("release.status='APPROVED'");
+    expect(service).toContain("wad.status='RELEASED'");
+    expect(service).toContain("pwo.wad_status='APPROVED'");
     expect(service).not.toContain('shortage_quantity');
     expect(service).not.toContain('NETTING_SNAPSHOT');
     expect(service).toContain("source: 'P2_FROZEN_PRODUCTION_DEMAND'");
@@ -63,7 +67,16 @@ describe('Phase 6 P2 manufacturing work-order queue foundation', () => {
     expect(service).toContain('pg_advisory_xact_lock');
   });
 
-  it('can materialize one manufactured child without repeating parent gates', () => {
+  it('fails closed when the legacy launch path already provisioned child work orders', () => {
+    expect(service).toContain(
+      "launch_event.event_type='P2_WORK_ORDERS_PROVISIONED'"
+    );
+    expect(service).toContain(
+      'LEGACY_WORK_ORDER_PROVISIONING_RECONCILIATION_REQUIRED'
+    );
+  });
+
+  it('keeps individual materialization child-only and requires its parent authority', () => {
     expect(routes).toContain(
       'frozenDemandNodeId: z.string().uuid().optional()'
     );
@@ -74,7 +87,23 @@ describe('Phase 6 P2 manufacturing work-order queue foundation', () => {
     expect(frozenDemand).toContain('materialized_authority_id');
     expect(client).toContain('Create this work order');
     expect(client).toContain(
-      'Parent PO item authority — child work orders inherit this'
+      'Released parent WAD registered as the root P2 manufacturing authority.'
+    );
+  });
+
+  it('registers one depth-zero root against the exact released WAD work order', () => {
+    expect(service).toContain('Number(node.depth) === 0');
+    expect(service).toContain('releaseAuthority.wad_work_order_id');
+    expect(service).toContain('WAD_ROOT_WORK_ORDER_MISMATCH');
+    expect(service).toContain(
+      'Number(releaseAuthority.wad_work_order_quantity) !== quantity'
+    );
+    expect(service).toContain(
+      'normalizedPartNumber(releaseAuthority.wad_work_order_part_number)'
+    );
+    expect(service).toContain('WAD_ROOT_AUTHORITY_CONFLICT');
+    expect(client).toContain(
+      'Includes the released parent WAD as the root P2 authority'
     );
   });
 
@@ -107,6 +136,12 @@ describe('Phase 6 P2 manufacturing work-order queue foundation', () => {
     expect(service).not.toContain(
       'INSERT INTO production_work_orders\n+         SELECT'
     );
+  });
+
+  it('supports an optional project scope without weakening department scope', () => {
+    expect(routes).toContain('projectId: z.string().uuid().optional()');
+    expect(routes).toContain('query.projectId');
+    expect(service).toContain('AND ($3::uuid IS NULL OR project_id=$3)');
   });
 
   it('separates execution, completion, and Quality acceptance authority', () => {

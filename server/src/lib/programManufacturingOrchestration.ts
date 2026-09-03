@@ -5,6 +5,9 @@ export type ProgramQueueLink = {
   productionWorkOrderId: string | null;
   travelerId: string | null;
   p2SerializedItemId: string | null;
+  p2WorkOrderAuthorityId?: string | null;
+  departmentId?: number | null;
+  projectId?: string | null;
   label: string;
   department: string | null;
   status: string | null;
@@ -93,6 +96,43 @@ export type ProgramBuildStatus = {
   }[];
 };
 
+export type P2ProductionMapNodeInput = {
+  id: string;
+  nodeIdentity: string;
+  parentNodeIdentity: string | null;
+  assemblyPathIdentity: string;
+  depth: number | string;
+  inventoryItemSnapshot: Record<string, unknown> | null;
+  itemClassification: string;
+  makeBuyDisposition: string;
+  requiredGrossQuantity: number | string;
+  unitOfMeasure: string;
+  authorityId: string | null;
+  productionWorkOrderId: string | null;
+  workOrderNumber: string | null;
+  authorityStatus: string | null;
+  departmentId: number | string | null;
+  departmentName: string | null;
+  completedQuantity: number | string | null;
+  authorityRequiredQuantity: number | string | null;
+  travelerId: string | null;
+  travelerNumber: string | null;
+  materialRequirementId?: string | null;
+  materialRequirementStatus?: string | null;
+  materialRequiredQuantity?: number | string | null;
+  materialAcceptedQuantity?: number | string | null;
+  materialIssuedQuantity?: number | string | null;
+};
+
+export type P2ProductionMapDependencyInput = {
+  predecessorNodeId: string;
+  successorNodeId: string;
+  dependencyType: string;
+  requiredQuantity: number | string;
+  satisfiedQuantity: number | string;
+  status: string;
+};
+
 const COMPLETE_STATUSES = new Set(['COMPLETE', 'COMPLETED', 'CLOSED', 'SHIPPED', 'DONE']);
 const ACTIVE_STATUSES = new Set(['IN_PROGRESS', 'RELEASED', 'ACTIVE', 'READY', 'SCHEDULED']);
 
@@ -107,6 +147,23 @@ function toNumber(value: unknown, fallback = 0) {
 
 function isCompleteStatus(status: unknown) {
   return COMPLETE_STATUSES.has(normalizeStatus(status));
+}
+
+function optionalString(value: unknown) {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
+}
+
+function optionalNumber(value: unknown) {
+  if (value == null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function computeDirectCompletion(assembly: ProgramAssemblyRollupInput) {
@@ -243,6 +300,229 @@ function buildSwimlanes(flatAssemblies: ProgramAssemblyRollup[]) {
   }));
 }
 
+function buildProgramStatus(
+  build: ProgramBuildStatus['build'],
+  assemblyInputs: ProgramAssemblyRollupInput[],
+  dependencies: ProgramAssemblyDependencyInput[]
+): ProgramBuildStatus {
+  const assemblies = computeProgramAssemblyRollups(
+    assemblyInputs,
+    dependencies
+  );
+  const flatAssemblies = flattenAssemblies(assemblies);
+  const blockers = flatAssemblies.filter(
+    (assembly) => assembly.computedStatus === 'BLOCKED'
+  );
+  const criticalPath = [...flatAssemblies]
+    .filter((assembly) => assembly.computedStatus !== 'COMPLETE')
+    .sort(
+      (a, b) =>
+        b.blockedBy.length - a.blockedBy.length ||
+        a.completionPercent - b.completionPercent ||
+        a.sequence - b.sequence
+    )
+    .slice(0, 6);
+
+  const totalQueueItems = flatAssemblies.reduce(
+    (sum, assembly) => sum + assembly.links.length,
+    0
+  );
+  const completedQueueItems = flatAssemblies.reduce(
+    (sum, assembly) =>
+      sum +
+      assembly.links.filter((link) => isCompleteStatus(link.status)).length,
+    0
+  );
+  const completionPercent =
+    flatAssemblies.length > 0
+      ? Math.round(
+          flatAssemblies.reduce(
+            (sum, assembly) => sum + assembly.completionPercent,
+            0
+          ) / flatAssemblies.length
+        )
+      : 0;
+
+  return {
+    build,
+    summary: {
+      totalAssemblies: flatAssemblies.length,
+      completeAssemblies: flatAssemblies.filter(
+        (assembly) => assembly.computedStatus === 'COMPLETE'
+      ).length,
+      blockedAssemblies: blockers.length,
+      inProgressAssemblies: flatAssemblies.filter(
+        (assembly) => assembly.computedStatus === 'IN_PROGRESS'
+      ).length,
+      totalQueueItems,
+      completedQueueItems,
+      completionPercent,
+      shipReady:
+        flatAssemblies.length > 0 &&
+        blockers.length === 0 &&
+        flatAssemblies.every(
+          (assembly) => assembly.computedStatus === 'COMPLETE'
+        ),
+      criticalPath,
+    },
+    assemblies,
+    flatAssemblies,
+    blockers,
+    swimlanes: buildSwimlanes(flatAssemblies),
+  };
+}
+
+export function buildP2ProductionMapProjection(
+  build: ProgramBuildStatus['build'],
+  baselineId: string,
+  nodes: P2ProductionMapNodeInput[],
+  dependencyRows: P2ProductionMapDependencyInput[]
+): ProgramBuildStatus {
+  const nodeIdByIdentity = new Map(
+    nodes.map((node) => [node.nodeIdentity, node.id])
+  );
+  const assemblyInputs: ProgramAssemblyRollupInput[] = nodes.map(
+    (node, sequence) => {
+      const item = record(node.inventoryItemSnapshot);
+      const partNumber = optionalString(item.partNumber);
+      const assemblyName =
+        optionalString(item.name) ?? partNumber ?? node.assemblyPathIdentity;
+      const authorityStatus = optionalString(node.authorityStatus);
+      const normalizedAuthorityStatus = normalizeStatus(authorityStatus);
+      const assemblyStatus = ['BLOCKED', 'HOLD', 'CANCELLED'].includes(
+        normalizedAuthorityStatus
+      )
+        ? 'BLOCKED'
+        : (authorityStatus ?? 'PLANNED');
+      const departmentId = optionalNumber(node.departmentId);
+      const departmentName = optionalString(node.departmentName);
+      const requiredQuantity = toNumber(
+        node.authorityRequiredQuantity ?? node.requiredGrossQuantity,
+        1
+      );
+      const materialRequiredQuantity = toNumber(
+        node.materialRequiredQuantity ?? node.requiredGrossQuantity,
+        requiredQuantity
+      );
+      const materialSatisfiedQuantity = Math.min(
+        toNumber(node.materialAcceptedQuantity),
+        toNumber(node.materialIssuedQuantity)
+      );
+      const materialStatus = normalizeStatus(node.materialRequirementStatus);
+      const materialComplete =
+        materialStatus === 'SATISFIED' ||
+        materialSatisfiedQuantity >= materialRequiredQuantity;
+      const materialBlocked = materialStatus === 'CANCELLED';
+      const links: ProgramQueueLink[] = node.authorityId
+        ? [
+            {
+              id: node.authorityId,
+              linkType: 'p2_work_order_authority',
+              manufacturingQueueId: null,
+              productionWorkOrderId: node.productionWorkOrderId,
+              travelerId: node.travelerId,
+              p2SerializedItemId: null,
+              p2WorkOrderAuthorityId: node.authorityId,
+              departmentId,
+              projectId: build.projectId,
+              label:
+                node.workOrderNumber ??
+                node.travelerNumber ??
+                `P2 work order - ${partNumber ?? assemblyName}`,
+              department: departmentName,
+              status: authorityStatus,
+              completedQuantity: toNumber(node.completedQuantity),
+              requiredQuantity,
+            },
+          ]
+        : node.materialRequirementId
+          ? [
+              {
+                id: node.materialRequirementId,
+                linkType: 'material_requirement',
+                manufacturingQueueId: null,
+                productionWorkOrderId: null,
+                travelerId: null,
+                p2SerializedItemId: null,
+                projectId: build.projectId,
+                label: `Material - ${partNumber ?? assemblyName}`,
+                department: 'Purchasing',
+                status: materialComplete
+                  ? 'COMPLETE'
+                  : materialBlocked
+                    ? 'BLOCKED'
+                    : materialStatus || 'OPEN',
+                completedQuantity: materialSatisfiedQuantity,
+                requiredQuantity: materialRequiredQuantity,
+              },
+            ]
+          : [];
+      const projectedStatus = node.authorityId
+        ? assemblyStatus
+        : node.materialRequirementId
+          ? materialComplete
+            ? 'COMPLETE'
+            : materialBlocked
+              ? 'BLOCKED'
+              : materialSatisfiedQuantity > 0
+                ? 'IN_PROGRESS'
+                : 'PLANNED'
+          : assemblyStatus;
+
+      return {
+        id: node.id,
+        parentAssemblyId: node.parentNodeIdentity
+          ? (nodeIdByIdentity.get(node.parentNodeIdentity) ?? null)
+          : null,
+        assemblyCode: partNumber ?? node.assemblyPathIdentity,
+        assemblyName,
+        level: toNumber(node.depth),
+        sequence,
+        assemblyType:
+          node.itemClassification || node.makeBuyDisposition || 'assembly',
+        partNumber,
+        status: projectedStatus,
+        requiredQuantity: node.materialRequirementId
+          ? materialRequiredQuantity
+          : requiredQuantity,
+        targetShipDate: build.targetShipDate,
+        metadata: {
+          source: 'p2_frozen_production_demand',
+          baselineId,
+          assemblyPathIdentity: node.assemblyPathIdentity,
+          makeBuyDisposition: node.makeBuyDisposition,
+          unitOfMeasure: node.unitOfMeasure,
+          swimlane:
+            departmentName ??
+            (normalizeStatus(node.makeBuyDisposition) === 'BUY'
+              ? 'Purchasing'
+              : 'Awaiting Materialization'),
+        },
+        links,
+      };
+    }
+  );
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const dependencies: ProgramAssemblyDependencyInput[] = dependencyRows
+    .filter(
+      (dependency) =>
+        nodeIds.has(dependency.successorNodeId) &&
+        nodeIds.has(dependency.predecessorNodeId)
+    )
+    .map((dependency) => ({
+      assemblyId: dependency.successorNodeId,
+      dependsOnAssemblyId: dependency.predecessorNodeId,
+      dependencyType: dependency.dependencyType,
+      isBlocking:
+        normalizeStatus(dependency.status) === 'OPEN' &&
+        toNumber(dependency.satisfiedQuantity) <
+          toNumber(dependency.requiredQuantity),
+      notes: `${toNumber(dependency.satisfiedQuantity)} of ${toNumber(dependency.requiredQuantity)} required units satisfied`,
+    }));
+
+  return buildProgramStatus(build, assemblyInputs, dependencies);
+}
+
 async function tableExists(tableName: string) {
   const { pool } = await import('../../db');
   const result = await pool.query(
@@ -262,6 +542,18 @@ export async function programManufacturingTablesReady() {
     'program_assemblies',
     'program_assembly_links',
     'program_assembly_dependencies',
+  ];
+  const states = await Promise.all(requiredTables.map(tableExists));
+  return states.every(Boolean);
+}
+
+async function p2ProductionMapTablesReady() {
+  const requiredTables = [
+    'p2_frozen_production_demand_baselines',
+    'p2_frozen_production_demand_nodes',
+    'p2_manufacturing_work_order_authorities',
+    'p2_manufacturing_work_order_dependencies',
+    'p2_manufacturing_work_order_material_requirements',
   ];
   const states = await Promise.all(requiredTables.map(tableExists));
   return states.every(Boolean);
@@ -306,10 +598,160 @@ export async function getProgramBuilds(filters: { projectId?: string | null } = 
   return ((result as any).rows ?? result) as ProgramBuildStatus['build'][];
 }
 
+async function getP2ProductionMapStatus(
+  projectId: string
+): Promise<ProgramBuildStatus | null> {
+  if (!(await p2ProductionMapTablesReady())) return null;
+  const { pool } = await import('../../db');
+  const baselineResult = await pool.query(
+    `SELECT
+       b.id AS "baselineId",
+       b.revision_number AS "baselineRevision",
+       p.id AS "projectId",
+       p.project_code AS "projectCode",
+       p.project_name AS "projectName",
+       p.target_ship_date AS "targetShipDate",
+       p.customer_name_snapshot AS "projectCustomerName",
+       p.po_id AS "p2PurchaseOrderId",
+       po.po_number AS "poNumber",
+       po.customer_name AS "poCustomerName",
+       po.expected_delivery AS "poExpectedDelivery"
+     FROM p2_frozen_production_demand_baselines b
+     JOIN projects p ON p.id = b.project_id
+     LEFT JOIN p2_purchase_orders po ON po.id = p.po_id
+     WHERE b.project_id = $1 AND b.status = 'RELEASED'
+     ORDER BY b.revision_number DESC, b.released_at DESC
+     LIMIT 1`,
+    [projectId]
+  );
+  const baseline = (
+    ((baselineResult as any).rows ?? baselineResult) as any[]
+  )[0];
+  if (!baseline) return null;
+
+  const [nodeResult, dependencyResult] = await Promise.all([
+    pool.query(
+      `SELECT
+         n.id,
+         n.node_identity AS "nodeIdentity",
+         n.parent_node_identity AS "parentNodeIdentity",
+         n.assembly_path_identity AS "assemblyPathIdentity",
+         n.depth,
+         n.inventory_item_snapshot AS "inventoryItemSnapshot",
+         n.item_classification AS "itemClassification",
+         n.make_buy_disposition AS "makeBuyDisposition",
+         n.required_gross_quantity AS "requiredGrossQuantity",
+         n.unit_of_measure AS "unitOfMeasure",
+         a.id AS "authorityId",
+         a.production_work_order_id AS "productionWorkOrderId",
+         a.status AS "authorityStatus",
+         a.current_department_id AS "departmentId",
+         a.current_department_name_snapshot AS "departmentName",
+         a.completed_quantity AS "completedQuantity",
+         a.required_quantity AS "authorityRequiredQuantity",
+         a.traveler_id AS "travelerId",
+         pwo.work_order_number AS "workOrderNumber",
+         t.traveler_number AS "travelerNumber",
+         material.id AS "materialRequirementId",
+         material.status AS "materialRequirementStatus",
+         material.required_quantity AS "materialRequiredQuantity",
+         material.accepted_quantity AS "materialAcceptedQuantity",
+         material.issued_quantity AS "materialIssuedQuantity"
+       FROM p2_frozen_production_demand_nodes n
+       LEFT JOIN p2_manufacturing_work_order_authorities a
+         ON a.frozen_demand_node_id = n.id
+        AND a.frozen_demand_baseline_id = n.baseline_id
+        AND a.project_id = $2
+       LEFT JOIN production_work_orders pwo ON pwo.id = a.production_work_order_id
+       LEFT JOIN travelers t ON t.id = a.traveler_id
+       LEFT JOIN LATERAL (
+         SELECT requirement.id,requirement.status,requirement.required_quantity,
+           requirement.accepted_quantity,requirement.issued_quantity
+         FROM p2_manufacturing_work_order_material_requirements requirement
+         WHERE requirement.frozen_demand_node_id = n.id
+           AND requirement.project_id = $2
+         ORDER BY requirement.created_at DESC,requirement.id
+         LIMIT 1
+       ) material ON true
+       WHERE n.baseline_id = $1
+       ORDER BY n.depth ASC, n.assembly_path_identity ASC`,
+      [baseline.baselineId, projectId]
+    ),
+    pool.query(
+      `SELECT
+         predecessor.frozen_demand_node_id AS "predecessorNodeId",
+         successor.frozen_demand_node_id AS "successorNodeId",
+         dependency.dependency_type AS "dependencyType",
+         dependency.required_quantity AS "requiredQuantity",
+         dependency.satisfied_quantity AS "satisfiedQuantity",
+         dependency.status
+       FROM p2_manufacturing_work_order_dependencies dependency
+       JOIN p2_manufacturing_work_order_authorities predecessor
+         ON predecessor.id = dependency.predecessor_authority_id
+        AND predecessor.frozen_demand_baseline_id = $1
+       JOIN p2_manufacturing_work_order_authorities successor
+         ON successor.id = dependency.successor_authority_id
+        AND successor.frozen_demand_baseline_id = $1
+       WHERE dependency.project_id = $2
+       UNION ALL
+       SELECT
+         material.frozen_demand_node_id AS "predecessorNodeId",
+         successor.frozen_demand_node_id AS "successorNodeId",
+         'MATERIAL' AS "dependencyType",
+         material.required_quantity AS "requiredQuantity",
+         LEAST(material.accepted_quantity,material.issued_quantity) AS "satisfiedQuantity",
+         material.status
+       FROM p2_manufacturing_work_order_material_requirements material
+       JOIN p2_manufacturing_work_order_authorities successor
+         ON successor.id = material.successor_authority_id
+        AND successor.frozen_demand_baseline_id = $1
+       WHERE material.project_id = $2`,
+      [baseline.baselineId, projectId]
+    ),
+  ]);
+
+  const projectCode = optionalString(baseline.projectCode) ?? projectId;
+  const projectName = optionalString(baseline.projectName) ?? projectCode;
+  const poNumber = optionalString(baseline.poNumber);
+  const build: ProgramBuildStatus['build'] = {
+    id: `p2-frozen-demand:${baseline.baselineId}`,
+    projectId,
+    projectCode,
+    projectName,
+    p2PurchaseOrderId: optionalNumber(baseline.p2PurchaseOrderId),
+    poNumber,
+    programCode: projectCode,
+    programName: projectName,
+    buildName: poNumber ? `${projectName} - ${poNumber}` : projectName,
+    buildType: 'p2_frozen_demand',
+    status: 'RELEASED',
+    priority: 50,
+    targetShipDate: optionalString(
+      baseline.targetShipDate ?? baseline.poExpectedDelivery
+    ),
+    customerName: optionalString(
+      baseline.poCustomerName ?? baseline.projectCustomerName
+    ),
+    notes: `Read-through projection of released Frozen Production Demand revision ${toNumber(baseline.baselineRevision)}.`,
+  };
+
+  return buildP2ProductionMapProjection(
+    build,
+    String(baseline.baselineId),
+    ((nodeResult as any).rows ?? nodeResult) as P2ProductionMapNodeInput[],
+    ((dependencyResult as any).rows ??
+      dependencyResult) as P2ProductionMapDependencyInput[]
+  );
+}
+
 export async function getProgramBuildStatus(buildId?: string | null, filters: { projectId?: string | null } = {}): Promise<ProgramBuildStatus | null> {
   const builds = await getProgramBuilds(filters);
   const build = buildId ? builds.find((candidate) => candidate.id === buildId) : builds[0];
-  if (!build) return null;
+  if (!build) {
+    return !buildId && filters.projectId
+      ? getP2ProductionMapStatus(filters.projectId)
+      : null;
+  }
   const { pool } = await import('../../db');
 
   const [assemblyResult, dependencyResult] = await Promise.all([
@@ -420,39 +862,5 @@ export async function getProgramBuildStatus(buildId?: string | null, filters: { 
     notes: row.notes,
   }));
 
-  const assemblies = computeProgramAssemblyRollups([...assembliesById.values()], dependencies);
-  const flatAssemblies = flattenAssemblies(assemblies);
-  const blockers = flatAssemblies.filter((assembly) => assembly.computedStatus === 'BLOCKED');
-  const criticalPath = [...flatAssemblies]
-    .filter((assembly) => assembly.computedStatus !== 'COMPLETE')
-    .sort((a, b) => b.blockedBy.length - a.blockedBy.length || a.completionPercent - b.completionPercent || a.sequence - b.sequence)
-    .slice(0, 6);
-
-  const totalQueueItems = flatAssemblies.reduce((sum, assembly) => sum + assembly.links.length, 0);
-  const completedQueueItems = flatAssemblies.reduce(
-    (sum, assembly) => sum + assembly.links.filter((link) => isCompleteStatus(link.status)).length,
-    0,
-  );
-  const completionPercent = flatAssemblies.length > 0
-    ? Math.round(flatAssemblies.reduce((sum, assembly) => sum + assembly.completionPercent, 0) / flatAssemblies.length)
-    : 0;
-
-  return {
-    build,
-    summary: {
-      totalAssemblies: flatAssemblies.length,
-      completeAssemblies: flatAssemblies.filter((assembly) => assembly.computedStatus === 'COMPLETE').length,
-      blockedAssemblies: blockers.length,
-      inProgressAssemblies: flatAssemblies.filter((assembly) => assembly.computedStatus === 'IN_PROGRESS').length,
-      totalQueueItems,
-      completedQueueItems,
-      completionPercent,
-      shipReady: flatAssemblies.length > 0 && blockers.length === 0 && flatAssemblies.every((assembly) => assembly.computedStatus === 'COMPLETE'),
-      criticalPath,
-    },
-    assemblies,
-    flatAssemblies,
-    blockers,
-    swimlanes: buildSwimlanes(flatAssemblies),
-  };
+  return buildProgramStatus(build, [...assembliesById.values()], dependencies);
 }

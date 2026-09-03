@@ -26,10 +26,11 @@ describe('P2 BOM-generated work-order management', () => {
     );
   });
 
-  it('materializes only manufactured BOM children and supports all remaining nodes', () => {
-    expect(service).toContain(
-      "node.make_buy_disposition === 'MAKE' && Number(node.depth) > 0"
-    );
+  it('registers the manufactured root for full batches while individual creation remains child-only', () => {
+    expect(service).toContain("(node) => node.make_buy_disposition === 'MAKE'");
+    expect(service).toContain('const isRoot = Number(node.depth) === 0');
+    expect(service).toContain('releaseAuthority.wad_work_order_id');
+    expect(service).toContain('Number(node.depth) > 0');
     expect(service).toContain(
       'allManufactured.filter((node) => !existingNodeIds.has(clean(node.id)))'
     );

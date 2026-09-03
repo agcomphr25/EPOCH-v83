@@ -39,9 +39,23 @@ describe('simple manufacturing work-order action', () => {
       'areP2ManufacturingWorkOrderMaterializationEnabled()'
     );
     expect(hub).toContain("status = 'RELEASED'");
-    expect(hub).toContain('wad_authorization_id = pl.wad_authorization_id');
+    expect(hub).toContain("release.status = 'APPROVED'");
+    expect(hub).toContain('wad.id = release.wad_authorization_id');
+    expect(hub).toContain('wad.id = pl.wad_authorization_id');
+    expect(hub).toContain("wad_work_order.wad_status = 'APPROVED'");
     expect(hub).toContain('p2_manufacturing_work_order_authorities');
     expect(hub).toContain('expectedBaselineChecksum');
+  });
+
+  it('reports completion only when every frozen MAKE node has an authority', () => {
+    expect(hub).toContain('COUNT(*)::int AS expected_count');
+    expect(hub).toContain('COUNT(authority.id)::int AS materialized_count');
+    expect(hub).toContain(
+      'materialization.expected_count = materialization.materialized_count'
+    );
+    expect(hub).toContain("node.make_buy_disposition = 'MAKE'");
+    expect(hub).toContain('expectedWorkOrderCount');
+    expect(hub).toContain('materializedWorkOrderCount');
   });
 
   it('shows one plain-language button only while work orders are missing and disables it until launch is eligible', () => {
@@ -50,15 +64,21 @@ describe('simple manufacturing work-order action', () => {
     expect(ui).toContain(
       'Complete Production Launch and release Frozen Production Demand before creating manufacturing work orders.'
     );
-    expect(ui).toContain('!hubProduction.manufacturingWorkOrderAction?.launchId');
-    expect(ui).toContain('!hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest');
+    expect(ui).toContain(
+      '!hubProduction.manufacturingWorkOrderAction?.launchId'
+    );
+    expect(ui).toContain(
+      '!hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest'
+    );
     expect(ui).toContain(
       '!hubProduction.manufacturingWorkOrderAction?.baselineId'
     );
     expect(ui).toContain(
       '!hubProduction.manufacturingWorkOrderAction?.expectedBaselineChecksum'
     );
-    expect(ui).toContain('!hubProduction.manufacturingWorkOrderAction?.enabled');
+    expect(ui).toContain(
+      '!hubProduction.manufacturingWorkOrderAction?.enabled'
+    );
     expect(ui).toContain('manufacturing-work-orders-launch-required');
     expect(ui).not.toContain('Authorize Execution</Button>');
     expect(ui).not.toContain('Provision P2 Orders</Button>');

@@ -296,6 +296,8 @@ router.post('/launch', async (req, res) => {
     const body = z
       .object({
         idempotencyKey: z.string().min(8).max(200),
+        expectedPreviewDigest: z.string().regex(/^[0-9a-f]{64}$/),
+        signatureMeaning: z.string().min(1),
         pilotConfirmation: z.string().min(1),
       })
       .parse(req.body);
@@ -308,7 +310,12 @@ router.post('/launch', async (req, res) => {
         confirmation: body.pilotConfirmation,
       }
     );
-    res.json(await launchProduction(projectId(req), body.idempotencyKey, user));
+    res.json(
+      await launchProduction(projectId(req), body.idempotencyKey, user, {
+        expectedPreviewDigest: body.expectedPreviewDigest,
+        signatureMeaning: body.signatureMeaning,
+      })
+    );
   } catch (error) {
     fail(res, error);
   }

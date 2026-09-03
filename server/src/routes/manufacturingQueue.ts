@@ -8,8 +8,9 @@ import {
   getManufacturingCategoriesForDepartment,
 } from '../../schema';
 import type { SupplySourceDashboard } from '../../schema';
-import { eq, and, or, desc, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, inArray, sql } from 'drizzle-orm';
 import { insertManufacturingQueueSchema } from '../../schema';
+import { getManufacturingDepartmentIdentities } from '../../../shared/utils/manufacturingRouting';
 import { evaluateQueueReadiness } from '../services/queueReadinessService';
 import { generateRequirementsFromRouting } from '../services/requirementGeneratorService';
 
@@ -171,13 +172,18 @@ router.get('/', async (req, res) => {
       // Legacy dept param — also match by category for this dept via getDashboardCategories
       // Reverse-lookup from legacy dept name to dashboard, then get categories
       const categories = getManufacturingCategoriesForDepartment(department);
+      const departmentIdentities = getManufacturingDepartmentIdentities(department);
+      const departmentMatch = inArray(
+        sql<string>`regexp_replace(lower(btrim(${manufacturingQueue.department})), '[^a-z0-9]+', '', 'g')`,
+        departmentIdentities
+      );
       routingSignal =
         categories.length > 0
           ? or(
-              eq(manufacturingQueue.department, department),
+              departmentMatch,
               inArray(inventoryItems.manufacturedCategory, categories)
             )
-          : eq(manufacturingQueue.department, department);
+          : departmentMatch;
     }
 
     const statusFilter =

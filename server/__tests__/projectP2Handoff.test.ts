@@ -93,4 +93,18 @@ describe('prospective P2 V2 definition v3', () => {
     expect(service).toContain('executionComplete');
     expect(service).toContain('closingUnlocked: executionComplete');
   });
+
+  it('returns contextual links for every post-release operating surface', () => {
+    const service = read('server/src/services/projectP2HandoffService.ts');
+    expect(service).toContain("p2ControlCenterLink('status')");
+    expect(service).toContain("p2ControlCenterLink('production')");
+    expect(service).toContain("p2ControlCenterLink('production-map')");
+    expect(service).toContain('projectProduction:');
+    expect(service).toContain('pmControlCenter:');
+    expect(service).toContain('dailyTagUp:');
+    expect(service).toContain('p2WorkOrderQueues:');
+    expect(service).toContain("params.set('poId', String(po.id))");
+    expect(service).toContain("params.set('po', String(po.po_number))");
+    expect(service).not.toContain("controlCenter: '/p2-control-center'");
+  });
 });

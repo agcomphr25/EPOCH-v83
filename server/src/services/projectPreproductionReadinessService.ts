@@ -2,7 +2,11 @@ import { sql } from 'drizzle-orm';
 
 import { db } from '../../db';
 import { storage } from '../../storage';
-import { isP2V2ProductionLaunchEnabled } from '../lib/featureFlags';
+import {
+  isP2V2ProductionLaunchEnabled,
+  isP2V2ProductionLaunchPersistenceEnabled,
+  isP2V2ProductionLaunchPreviewEnabled,
+} from '../lib/featureFlags';
 import {
   jsonValuesEqual,
   recordAuditEvent,
@@ -10,7 +14,14 @@ import {
   type JsonValue,
 } from './auditLedgerService';
 import { evaluateCommercialBaseline } from './projectCommercialReviewService';
-import { getCurrentProductionPlan } from './projectProductionPlanningService';
+import {
+  getCurrentProductionPlan,
+  ProjectProductionPlanningError,
+} from './projectProductionPlanningService';
+import {
+  persistCurrentProductionLaunchInTransaction,
+  persistProductionLaunchInTransaction,
+} from './productionLaunchPersistenceService';
 import { evaluateTechnicalConfigurationBaseline } from './projectTechnicalConfigurationReviewService';
 import { resolveProjectWorkflowVersion } from './projectWorkflowVersionService';
 import { validateWorkflowInstanceIntegrity } from './projectWorkflowInstanceIntegrity';
@@ -50,6 +61,11 @@ export type ProductionLaunchCertificationFault =
 
 type ProductionLaunchDependencies = {
   fault?: (point: ProductionLaunchCertificationFault) => void | Promise<void>;
+};
+
+export type ProductionLaunchAuthorityInput = {
+  expectedPreviewDigest: string;
+  signatureMeaning: string;
 };
 
 export class ProjectPreproductionError extends Error {
@@ -450,7 +466,9 @@ async function readModel(projectId: string, tx: Executor = db) {
   const launch =
     resultRows(
       await tx.execute(sql`
-      SELECT * FROM project_production_launches WHERE project_id=${projectId}
+      SELECT *,
+        (production_evidence ? 'createdSerializedItemIds') AS execution_completed
+      FROM project_production_launches WHERE project_id=${projectId}
       ORDER BY launched_at DESC LIMIT 1`)
     )[0] ?? null;
   return {
@@ -466,7 +484,10 @@ async function readModel(projectId: string, tx: Executor = db) {
       : recommendedChecklist(await sourceState(projectId, tx)),
     stage: ctx.step,
     projectStatus: ctx.project.current_stage,
-    productionLaunchEnabled: isP2V2ProductionLaunchEnabled(),
+    productionLaunchEnabled:
+      isP2V2ProductionLaunchEnabled() &&
+      isP2V2ProductionLaunchPreviewEnabled() &&
+      isP2V2ProductionLaunchPersistenceEnabled(),
   };
 }
 export const getPreproductionReadiness = (
@@ -1027,7 +1048,8 @@ async function launchProductionWithDependencies(
   projectId: string,
   idempotencyKey: string,
   actor: PreproductionActor,
-  dependencies: ProductionLaunchDependencies
+  dependencies: ProductionLaunchDependencies,
+  authorityInput?: ProductionLaunchAuthorityInput
 ) {
   if (!clean(idempotencyKey))
     throw new ProjectPreproductionError(
@@ -1062,22 +1084,61 @@ async function launchProductionWithDependencies(
   try {
     return await db.transaction(async (tx) => {
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${`p2-v2-launch:${projectId}`}))`
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`p2-production-launch:${projectId}`},0))`
       );
       const priorLaunch = resultRows(
         await tx.execute(sql`
-          SELECT * FROM project_production_launches
+          SELECT *,
+            (production_evidence ? 'createdSerializedItemIds') AS execution_completed
+          FROM project_production_launches
           WHERE project_id=${projectId} AND status='COMPLETE'
           ORDER BY launched_at DESC LIMIT 1 FOR UPDATE`)
       )[0];
+      let resumableCanonicalLaunch: Row | null = null;
       if (priorLaunch) {
-        if (priorLaunch.idempotency_key === idempotencyKey)
-          return readModel(projectId, tx);
-        throw new ProjectPreproductionError(
-          'PRODUCTION_ALREADY_LAUNCHED',
-          'Production has already been launched for this project.',
-          409
+        const isCanonical = Boolean(
+          priorLaunch.preview_digest && priorLaunch.wad_authorization_id
         );
+        if (
+          priorLaunch.idempotency_key === idempotencyKey &&
+          isCanonical &&
+          priorLaunch.execution_completed
+        )
+          return readModel(projectId, tx);
+        if (priorLaunch.execution_completed)
+          throw new ProjectPreproductionError(
+            'PRODUCTION_ALREADY_LAUNCHED',
+            'Production has already been launched for this project.',
+            409
+          );
+        if (!isCanonical)
+          throw new ProjectPreproductionError(
+            'LEGACY_PRODUCTION_LAUNCH_RECONCILIATION_REQUIRED',
+            'This completed launch predates the authoritative digest and WAD relay. Reconcile it before retrying production actions.',
+            409,
+            { productionLaunchId: priorLaunch.id }
+          );
+        if (!authorityInput)
+          throw new ProjectPreproductionError(
+            'CANONICAL_PRODUCTION_LAUNCH_REQUIRES_CONFIRMATION',
+            'Confirm the existing canonical Production Launch preview before continuing its execution handoff.',
+            409,
+            { productionLaunchId: priorLaunch.id }
+          );
+        if (
+          String(priorLaunch.preview_digest) !==
+          clean(authorityInput.expectedPreviewDigest)
+        )
+          throw new ProjectPreproductionError(
+            'STALE_PREVIEW',
+            'The confirmed Production Launch preview does not match the existing canonical launch.',
+            409,
+            {
+              expected: authorityInput.expectedPreviewDigest,
+              actual: priorLaunch.preview_digest,
+            }
+          );
+        resumableCanonicalLaunch = priorLaunch;
       }
       const { ctx, review, source } = await validateRelease(projectId, tx);
       if (ctx.project.current_stage !== 'READY_FOR_P2_RELEASE')
@@ -1169,6 +1230,43 @@ async function launchProductionWithDependencies(
             : 'The released routing baseline is invalid.',
           409
         );
+      }
+      let canonicalLaunch: Awaited<
+        ReturnType<typeof persistProductionLaunchInTransaction>
+      >;
+      try {
+        canonicalLaunch = resumableCanonicalLaunch
+          ? { replayed: true, launch: resumableCanonicalLaunch }
+          : authorityInput
+          ? await persistProductionLaunchInTransaction(
+              projectId,
+              {
+                idempotencyKey,
+                expectedPreviewDigest: authorityInput.expectedPreviewDigest,
+                signatureMeaning: authorityInput.signatureMeaning,
+              },
+              actor,
+              tx
+            )
+          : await persistCurrentProductionLaunchInTransaction(
+              projectId,
+              {
+                idempotencyKey,
+                signatureMeaning:
+                  'Create the authoritative recursive demand graph and launch P2 production.',
+              },
+              actor,
+              tx
+            );
+      } catch (error) {
+        if (error instanceof ProjectProductionPlanningError)
+          throw new ProjectPreproductionError(
+            error.code,
+            error.message,
+            error.status,
+            error.details
+          );
+        throw error;
       }
       const existingOrders = resultRows(
         await tx.execute(
@@ -1338,31 +1436,37 @@ async function launchProductionWithDependencies(
       await dependencies.fault?.('AFTER_PROJECT_STATUS_UPDATE');
       await tx.execute(sql`
         UPDATE p2_purchase_orders SET status='IN_PRODUCTION',updated_at=now() WHERE id=${poId}`);
+      const executionEvidence = {
+        poId,
+        productionPlanId: source.planning.plan!.id,
+        wadAuthorizationId: source.wad.authorization!.id,
+        createdSerializedItemIds: createdSerialIds,
+        createdProductionOrderIds: productionOrders.map((entry) => entry.id),
+        routedItems: routed,
+        releasedRoutingBaselines: Array.from(routeByPart.entries()).map(
+          ([partNumber, value]) => ({ partNumber, ...value })
+        ),
+        travelersCreated: 0,
+        inventoryDemandsCreated: 0,
+        reservationsCreated: 0,
+        shippingRecordsCreated: 0,
+        closingRecordsCreated: 0,
+      };
       const [launch] = resultRows(
         await tx.execute(sql`
-          INSERT INTO project_production_launches
-            (project_id,production_release_id,idempotency_key,status,production_evidence,
-             launched_by,launched_by_display_name)
-          VALUES (${projectId},${release.id},${idempotencyKey},'COMPLETE',
-            ${JSON.stringify({
-              poId,
-              productionPlanId: source.planning.plan!.id,
-              wadAuthorizationId: source.wad.authorization!.id,
-              createdSerializedItemIds: createdSerialIds,
-              createdProductionOrderIds: productionOrders.map(
-                (entry) => entry.id
-              ),
-              routedItems: routed,
-              releasedRoutingBaselines: Array.from(routeByPart.entries()).map(
-                ([partNumber, value]) => ({ partNumber, ...value })
-              ),
-              travelersCreated: 0,
-              inventoryDemandsCreated: 0,
-              reservationsCreated: 0,
-              shippingRecordsCreated: 0,
-              closingRecordsCreated: 0,
-            })}::jsonb,${actor.userId},${actor.displayName}) RETURNING *`)
+          UPDATE project_production_launches
+          SET production_evidence=production_evidence || ${JSON.stringify(
+            executionEvidence
+          )}::jsonb
+          WHERE id=${canonicalLaunch.launch.id} AND project_id=${projectId}
+          RETURNING *`)
       );
+      if (!launch)
+        throw new ProjectPreproductionError(
+          'PRODUCTION_LAUNCH_PERSISTENCE_FAILED',
+          'The authoritative Production Launch record was not retained.',
+          500
+        );
       await recordAuditEvent(
         {
           eventType: 'P2_V2_PRODUCTION_LAUNCHED',
@@ -1414,8 +1518,16 @@ async function launchProductionWithDependencies(
 export const launchProduction = (
   projectId: string,
   idempotencyKey: string,
-  actor: PreproductionActor
-) => launchProductionWithDependencies(projectId, idempotencyKey, actor, {});
+  actor: PreproductionActor,
+  authorityInput?: ProductionLaunchAuthorityInput
+) =>
+  launchProductionWithDependencies(
+    projectId,
+    idempotencyKey,
+    actor,
+    {},
+    authorityInput
+  );
 
 /**
  * Direct-call certification seam. It changes no runtime behavior and is not

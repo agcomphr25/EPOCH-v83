@@ -28,6 +28,7 @@ const jsonArray = (value: unknown): JsonRecord[] =>
     : [];
 const checksum = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const normalizedPartNumber = (value: unknown) => clean(value).toUpperCase();
 
 export class P2WorkOrderError extends Error {
   constructor(
@@ -190,22 +191,67 @@ export async function materializeP2ManufacturingWorkOrders(
         'The exact released P2 Frozen Production Demand checksum is required.'
       );
 
+    const releaseAuthorityResult = await client.query(
+      `SELECT pl.id production_launch_id,pl.preview_digest production_launch_digest,
+         release.id production_release_id,
+         wad.id wad_authorization_id,wad.wad_work_order_id,
+         pwo.project_id wad_work_order_project_id,
+         pwo.work_order_number wad_work_order_number,
+         pwo.part_number wad_work_order_part_number,
+         pwo.quantity wad_work_order_quantity,
+         pwo.status wad_work_order_status,
+         pwo.wad_status wad_work_order_wad_status,
+         EXISTS (
+           SELECT 1 FROM project_production_launch_events launch_event
+           WHERE launch_event.production_launch_id=pl.id
+             AND launch_event.event_type='P2_WORK_ORDERS_PROVISIONED'
+         ) legacy_work_orders_provisioned
+       FROM project_production_launches pl
+       JOIN project_production_releases release
+         ON release.id=pl.production_release_id
+        AND release.project_id=pl.project_id
+        AND release.status='APPROVED'
+       JOIN project_wad_authorizations wad
+         ON wad.id=release.wad_authorization_id
+        AND wad.id=pl.wad_authorization_id
+        AND wad.project_id=pl.project_id
+        AND wad.status='RELEASED'
+       JOIN production_work_orders pwo
+         ON pwo.id=wad.wad_work_order_id
+        AND pwo.project_id=pl.project_id
+        AND pwo.wad_status='APPROVED'
+       WHERE pl.project_id=$1 AND pl.status='COMPLETE'
+         AND wad.id=$2
+       ORDER BY pl.launched_at DESC
+       FOR UPDATE OF pl,release,wad,pwo`,
+      [projectId, baseline.wad_authorization_id]
+    );
+    if (releaseAuthorityResult.rows.length !== 1)
+      throw new P2WorkOrderError(
+        'PRODUCTION_EXECUTION_AUTHORITY_NOT_RELEASED',
+        'A matching completed Production Launch, approved Production Release, and released baseline WAD are required.'
+      );
+    const releaseAuthority = releaseAuthorityResult.rows[0];
+    if (releaseAuthority.legacy_work_orders_provisioned)
+      throw new P2WorkOrderError(
+        'LEGACY_WORK_ORDER_PROVISIONING_RECONCILIATION_REQUIRED',
+        'This launch already provisioned child work orders through the legacy path and must be reconciled before Frozen Production Demand queue materialization.',
+        409,
+        { productionLaunchId: releaseAuthority.production_launch_id }
+      );
+
     const replayResult = await client.query(
       `SELECT * FROM p2_manufacturing_work_order_events
        WHERE frozen_demand_baseline_id=$1 AND event_type='WORK_ORDERS_MATERIALIZED'
          AND request_key=$2`,
       [baselineId, requestKey]
     );
-    if (replayResult.rows.length) {
-      const event = replayResult.rows[0];
-      if (event.request_hash !== requestHash)
-        throw new P2WorkOrderError(
-          'WORK_ORDER_MATERIALIZATION_IDEMPOTENCY_CONFLICT',
-          'This idempotency key was already used with different authority evidence.'
-        );
-      await client.query('COMMIT');
-      return { replayed: true, event };
-    }
+    const replayEvent = replayResult.rows[0] ?? null;
+    if (replayEvent && replayEvent.request_hash !== requestHash)
+      throw new P2WorkOrderError(
+        'WORK_ORDER_MATERIALIZATION_IDEMPOTENCY_CONFLICT',
+        'This idempotency key was already used with different authority evidence.'
+      );
 
     const nodeResult = await client.query(
       `SELECT * FROM p2_frozen_production_demand_nodes
@@ -214,12 +260,22 @@ export async function materializeP2ManufacturingWorkOrders(
     );
     const nodes: Row[] = nodeResult.rows;
     const allManufactured = nodes.filter(
-      (node) => node.make_buy_disposition === 'MAKE' && Number(node.depth) > 0
+      (node) => node.make_buy_disposition === 'MAKE'
     );
     if (!allManufactured.length)
       throw new P2WorkOrderError(
         'MANUFACTURED_DEMAND_REQUIRED',
         'Released frozen demand contains no manufactured nodes.'
+      );
+    const rootNodes = allManufactured.filter(
+      (node) => Number(node.depth) === 0
+    );
+    if (rootNodes.length !== 1)
+      throw new P2WorkOrderError(
+        'ROOT_MANUFACTURED_DEMAND_AMBIGUOUS',
+        'Released frozen demand must contain exactly one manufactured root authority.',
+        409,
+        { rootNodeIds: rootNodes.map((node) => node.id) }
       );
     const nodesByIdentity = new Map(
       nodes.map((node) => [clean(node.node_identity), node])
@@ -239,12 +295,19 @@ export async function materializeP2ManufacturingWorkOrders(
             Number(node.depth) > 0
         )
       : allManufactured.filter((node) => !existingNodeIds.has(clean(node.id)));
+    const replaySatisfied = input.frozenDemandNodeId
+      ? existingNodeIds.has(input.frozenDemandNodeId)
+      : allManufactured.every((node) => existingNodeIds.has(clean(node.id)));
+    if (replayEvent && replaySatisfied) {
+      await client.query('COMMIT');
+      return { replayed: true, event: replayEvent };
+    }
     if (!manufactured.length)
       throw new P2WorkOrderError(
         'MANUFACTURED_DEMAND_NODE_NOT_FOUND',
         input.frozenDemandNodeId
           ? 'The selected frozen-demand node is not a manufactured child in this released parent-PO baseline.'
-          : 'Every manufactured child in this released parent-PO baseline already has a work order.',
+          : 'Every manufactured node in this released parent-PO baseline already has a work-order authority.',
         404
       );
     if (
@@ -282,52 +345,103 @@ export async function materializeP2ManufacturingWorkOrders(
       const parentAuthorityId = parent
         ? authorityByNode.get(clean(parent.id))
         : null;
-      if (parent && Number(parent.depth) > 0 && !parentAuthorityId)
+      if (parent && !parentAuthorityId)
         throw new P2WorkOrderError(
           'MANUFACTURED_PARENT_WORK_ORDER_REQUIRED',
-          'Release the parent manufactured work order before this child.',
+          'Register the parent manufactured work-order authority before this child.',
           409,
           {
             parentNodeId: parent.id,
             parentAssemblyPathIdentity: parent.assembly_path_identity,
           }
         );
-      const workOrderId = randomUUID();
+      const isRoot = Number(node.depth) === 0;
+      const workOrderId = isRoot
+        ? clean(releaseAuthority.wad_work_order_id)
+        : randomUUID();
       const authorityId = randomUUID();
-      const workOrderNumber = `P2-WO-${String(baseline.revision_number).padStart(3, '0')}-${clean(node.id).slice(0, 8).toUpperCase()}`;
       const partNumber = clean(
         item.ag_part_number ?? item.partNumber ?? node.inventory_item_id
       );
       const description = clean(item.name ?? item.description ?? partNumber);
       const revision = clean(item.revision ?? item.revision_code);
-      await client.query(
-        `INSERT INTO production_work_orders
-          (id,work_order_number,project_id,part_number,description,quantity,status,
-           wad_status,assigned_department,queue_type,wizard_data,priority,due_date)
-         VALUES ($1,$2,$3,$4,$5,$6,'PLANNED','DRAFT',$7,'P2_MANUFACTURING',$8::jsonb,$9,$10)`,
-        [
-          workOrderId,
-          workOrderNumber,
-          projectId,
-          partNumber,
-          description,
-          quantity,
-          operations[0].departmentName,
-          JSON.stringify({
-            source: 'P2_FROZEN_PRODUCTION_DEMAND',
-            frozenDemandBaselineId: baselineId,
-            frozenDemandNodeId: node.id,
-            assemblyPathIdentity: node.assembly_path_identity,
-            parentPoAuthorityInherited: true,
-            parentManufacturedAuthorityId: parentAuthorityId,
-          }),
-          input.priority ?? 'LOW',
-          input.dueDate ?? null,
-        ]
-      );
+      if (isRoot) {
+        const rootMismatch =
+          clean(releaseAuthority.wad_work_order_project_id) !== projectId ||
+          normalizedPartNumber(releaseAuthority.wad_work_order_part_number) !==
+            normalizedPartNumber(partNumber) ||
+          Number(releaseAuthority.wad_work_order_quantity) !== quantity ||
+          Number(baseline.project_quantity) !== quantity ||
+          clean(releaseAuthority.wad_work_order_status) !== 'RELEASED';
+        if (rootMismatch)
+          throw new P2WorkOrderError(
+            'WAD_ROOT_WORK_ORDER_MISMATCH',
+            'The released WAD work order does not exactly match the frozen root project, part, and quantity.',
+            409,
+            {
+              expected: {
+                projectId,
+                partNumber,
+                quantity,
+                status: 'RELEASED',
+              },
+              actual: {
+                projectId: releaseAuthority.wad_work_order_project_id,
+                partNumber: releaseAuthority.wad_work_order_part_number,
+                quantity: releaseAuthority.wad_work_order_quantity,
+                status: releaseAuthority.wad_work_order_status,
+              },
+            }
+          );
+        const conflictingRootAuthority = await client.query(
+          `SELECT id,frozen_demand_baseline_id,frozen_demand_node_id
+           FROM p2_manufacturing_work_order_authorities
+           WHERE production_work_order_id=$1`,
+          [workOrderId]
+        );
+        if (conflictingRootAuthority.rows.length)
+          throw new P2WorkOrderError(
+            'WAD_ROOT_AUTHORITY_CONFLICT',
+            'The released WAD work order is already registered to a different P2 frozen-demand authority.',
+            409,
+            { authority: conflictingRootAuthority.rows[0] }
+          );
+      } else {
+        const workOrderNumber = `P2-WO-${String(baseline.revision_number).padStart(3, '0')}-${clean(node.id).slice(0, 8).toUpperCase()}`;
+        await client.query(
+          `INSERT INTO production_work_orders
+            (id,work_order_number,project_id,part_number,description,quantity,status,
+             wad_status,assigned_department,queue_type,wizard_data,priority,due_date)
+           VALUES ($1,$2,$3,$4,$5,$6,'PLANNED','DRAFT',$7,'P2_MANUFACTURING',$8::jsonb,$9,$10)`,
+          [
+            workOrderId,
+            workOrderNumber,
+            projectId,
+            partNumber,
+            description,
+            quantity,
+            operations[0].departmentName,
+            JSON.stringify({
+              source: 'P2_FROZEN_PRODUCTION_DEMAND',
+              frozenDemandBaselineId: baselineId,
+              frozenDemandNodeId: node.id,
+              assemblyPathIdentity: node.assembly_path_identity,
+              parentPoAuthorityInherited: true,
+              parentManufacturedAuthorityId: parentAuthorityId,
+            }),
+            input.priority ?? 'LOW',
+            input.dueDate ?? null,
+          ]
+        );
+      }
       const authorityEvidence = {
         baselineChecksum: baseline.baseline_checksum,
         nodeChecksum: node.node_checksum,
+        productionWorkOrderId: workOrderId,
+        parentAuthorityId,
+        rootWadAuthorizationId: isRoot
+          ? releaseAuthority.wad_authorization_id
+          : null,
         routingSnapshot: node.routing_snapshot,
         wadDecisionSnapshot: node.wad_decision_snapshot,
         traceabilitySnapshot: node.traceability_snapshot,
@@ -415,8 +529,8 @@ export async function materializeP2ManufacturingWorkOrders(
         const requirements = jsonRecord(traceability.requirements);
         const requiresAcceptance = Boolean(
           requirements.outputSerializationRequired ??
-            requirements.lotScanRequired ??
-            requirements.batchScanRequired
+          requirements.lotScanRequired ??
+          requirements.batchScanRequired
         );
         await client.query(
           `INSERT INTO p2_manufacturing_work_order_dependencies
@@ -457,6 +571,9 @@ export async function materializeP2ManufacturingWorkOrders(
     }
 
     const eventId = randomUUID();
+    const eventRequestKey = replayEvent
+      ? `system:root-authority-v2:${checksum(requestKey).slice(0, 32)}`
+      : requestKey;
     await client.query(
       `INSERT INTO p2_manufacturing_work_order_events
         (id,authority_id,frozen_demand_baseline_id,event_type,request_key,request_hash,
@@ -469,7 +586,7 @@ export async function materializeP2ManufacturingWorkOrders(
           ? authorityByNode.get(clean(manufactured[0].id))
           : null,
         baselineId,
-        requestKey,
+        eventRequestKey,
         requestHash,
         actor.userId,
         employeeId,
@@ -480,6 +597,12 @@ export async function materializeP2ManufacturingWorkOrders(
           projectId,
           baselineId,
           baselineChecksum: baseline.baseline_checksum,
+          productionLaunchId: releaseAuthority.production_launch_id,
+          productionLaunchDigest: releaseAuthority.production_launch_digest,
+          productionReleaseId: releaseAuthority.production_release_id,
+          wadAuthorizationId: releaseAuthority.wad_authorization_id,
+          releasedRootWorkOrderId: releaseAuthority.wad_work_order_id,
+          recoveredFromEventId: replayEvent?.id ?? null,
           frozenDemandNodeIds: manufactured.map((node) => node.id),
           workOrderIds,
           createsTravelers: false,
@@ -595,16 +718,21 @@ export async function evaluateP2WorkOrderReadiness(
   };
 }
 
-export async function listP2WorkOrderQueue(departmentId?: string) {
+export async function listP2WorkOrderQueue(
+  departmentId?: string,
+  projectId?: string
+) {
   const allDepartments = !departmentId || departmentId === 'all';
   const rows = (
     await pool.query(
       `SELECT id FROM p2_manufacturing_work_order_authorities
-       WHERE ($1::boolean OR current_department_id=$2) AND status<>'CANCELLED'
+       WHERE ($1::boolean OR current_department_id=$2)
+         AND ($3::uuid IS NULL OR project_id=$3)
+         AND status<>'CANCELLED'
        ORDER BY current_department_name_snapshot,
          CASE priority WHEN 'CRITICAL' THEN 1 WHEN 'URGENT' THEN 2 ELSE 3 END,
          materialized_at,assembly_path_identity`,
-      [allDepartments, allDepartments ? null : departmentId]
+      [allDepartments, allDepartments ? null : departmentId, projectId ?? null]
     )
   ).rows;
   return Promise.all(

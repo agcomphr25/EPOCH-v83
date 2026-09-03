@@ -34,6 +34,15 @@ describe('P2 W/O Queues client surface', () => {
     expect(navigation).toContain('department.id');
     expect(navigation).toContain("path: '/p2-work-orders/queues/all'");
     expect(navigation).not.toContain("label: 'P2 Assembly'");
+    expect(page).toContain("apiRequest('/api/shared-departments')");
+    expect(page).not.toContain('/api/shared-departments?routingOnly=true');
+    expect(page).toContain('department.productionEnabled !== false');
+  });
+
+  it('supports project-scoped queue links and invalidates every department after movement', () => {
+    expect(page).toContain("new URLSearchParams(search).get('projectId')");
+    expect(page).toContain('?projectId=${encodeURIComponent(projectId)}');
+    expect(page).toContain("queryKey: ['/api/p2-work-orders/queues']");
   });
 
   it('keeps reads and execution disabled unless exact VITE flags are true', () => {

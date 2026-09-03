@@ -70,10 +70,19 @@ type Model = {
     stale: boolean;
   };
   release: { id: string; status: string; approved_at: string } | null;
-  launch: { id: string; status: string; launched_at: string } | null;
+  launch: {
+    id: string;
+    status: string;
+    launched_at: string;
+    execution_completed?: boolean;
+  } | null;
   projectStatus: string;
   productionLaunchEnabled: boolean;
   recommendedChecklist: ChecklistItem[];
+};
+type LaunchPreview = {
+  resultChecksum: string;
+  blockers: string[];
 };
 
 const endpoint = (projectId: string) =>
@@ -218,6 +227,35 @@ export default function P2V2PreproductionReadiness({
       )
     );
   }, [data]);
+  const launchPreview = useQuery<LaunchPreview>({
+    queryKey: [
+      '/api/projects',
+      projectId,
+      'workflow-v2',
+      'production-planning',
+      'launch-preview',
+    ],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/projects/${projectId}/workflow-v2/production-planning/launch-preview`,
+        { credentials: 'include' }
+      );
+      const body = await response.json().catch(() => null);
+      if (!response.ok)
+        throw new Error(
+          body?.message || 'Unable to load Production Launch preview'
+        );
+      return {
+        resultChecksum: String(body?.resultChecksum ?? ''),
+        blockers: Array.isArray(body?.blockers) ? body.blockers : [],
+      };
+    },
+    enabled:
+      Boolean(data?.release) &&
+      Boolean(data?.productionLaunchEnabled) &&
+      !data?.launch?.execution_completed,
+    retry: false,
+  });
   const refresh = () =>
     client.invalidateQueries({
       queryKey: ['/api/projects', projectId],
@@ -826,7 +864,15 @@ export default function P2V2PreproductionReadiness({
                       )}
                       <Button
                         onClick={() =>
-                          action.mutate({ path: '/release/approve' })
+                          action.mutate({
+                            path: '/release/approve',
+                            body: {
+                              pilotIdempotencyKey:
+                                globalThis.crypto?.randomUUID?.() ??
+                                `${projectId}-release-${Date.now()}`,
+                              pilotConfirmation: 'APPROVE PRODUCTION RELEASE',
+                            },
+                          })
                         }
                         disabled={
                           action.isPending ||
@@ -845,9 +891,12 @@ export default function P2V2PreproductionReadiness({
                         disabled={
                           action.isPending ||
                           !data.productionLaunchEnabled ||
+                          launchPreview.isLoading ||
+                          !launchPreview.data?.resultChecksum ||
+                          Boolean(launchPreview.data?.blockers.length) ||
                           data.projectStatus !== 'READY_FOR_P2_RELEASE' ||
                           data.readiness.state !== 'READY' ||
-                          Boolean(data.launch?.status === 'COMPLETE')
+                          Boolean(data.launch?.execution_completed)
                         }
                         data-testid="launch-production"
                       >
@@ -865,6 +914,22 @@ export default function P2V2PreproductionReadiness({
                           Production Release remains available, but V2
                           production records cannot be generated until
                           deployment validation is complete.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {launchPreview.error && (
+                      <Alert
+                        variant="destructive"
+                        data-testid="production-launch-preview-error"
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>
+                          Production Launch preview unavailable
+                        </AlertTitle>
+                        <AlertDescription>
+                          {launchPreview.error instanceof Error
+                            ? launchPreview.error.message
+                            : 'Refresh the released production baseline before launching.'}
                         </AlertDescription>
                       </Alert>
                     )}
@@ -893,13 +958,13 @@ export default function P2V2PreproductionReadiness({
             <DialogTitle>Launch production?</DialogTitle>
             <DialogDescription>
               This revalidates the approved release, creates the serialized
-              units required by the released plan and its exact manufactured
-              production orders through the existing P2 services, routes each
-              item to its released first department, activates Stage 8, and
-              changes the project to IN_PRODUCTION. Travelers, inventory
-              demands, reservations, shipping, and closing records are not
-              created by this action. The operation is atomic and protected
-              against duplicate retries.
+              units required by the released plan and persists its exact
+              recursive demand graph and manufactured production orders through
+              the existing P2 services, routes each item to its released first
+              department, activates Stage 8, and changes the project to
+              IN_PRODUCTION. Travelers, inventory demands, reservations,
+              shipping, and closing records are not created by this action. The
+              operation is atomic and protected against duplicate retries.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -908,16 +973,24 @@ export default function P2V2PreproductionReadiness({
             </Button>
             <Button
               variant="destructive"
-              disabled={action.isPending}
               onClick={() =>
                 action.mutate({
                   path: '/launch',
                   body: {
-                    idempotencyKey:
+                    idempotencyKey: (() =>
                       globalThis.crypto?.randomUUID?.() ??
-                      `${projectId}-${Date.now()}`,
+                      `${projectId}-${Date.now()}`)(),
+                    expectedPreviewDigest: launchPreview.data?.resultChecksum,
+                    signatureMeaning:
+                      'I authorize the exact released production preview and launch its controlled P2 execution records.',
+                    pilotConfirmation: 'LAUNCH P2 PRODUCTION',
                   },
                 })
+              }
+              disabled={
+                action.isPending ||
+                !launchPreview.data?.resultChecksum ||
+                Boolean(launchPreview.data?.blockers.length)
               }
             >
               Confirm Launch Production

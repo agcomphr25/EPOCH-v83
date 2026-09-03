@@ -7,7 +7,7 @@ import {
   Factory,
 } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useRoute } from 'wouter';
+import { Link, useRoute, useSearch } from 'wouter';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -71,11 +71,17 @@ type QueueWorkOrder = {
   readiness: string;
   blockers: Blocker[];
 };
-type QueueResponse = { departmentId: string; workOrders: QueueWorkOrder[] };
+type QueueResponse = {
+  departmentId: string;
+  projectId?: string | null;
+  workOrders: QueueWorkOrder[];
+};
 type QueueDepartment = {
   id: number;
   name: string;
   departmentCode?: string | null;
+  isActive?: boolean;
+  productionEnabled?: boolean;
 };
 
 const queueReadsEnabled =
@@ -99,6 +105,8 @@ export default function P2WorkOrderQueuePage() {
     import.meta.env.VITE_P2_MANUFACTURED_OUTPUT_WRITES_ENABLED === 'true';
   const [, params] = useRoute('/p2-work-orders/queues/:departmentId');
   const departmentId = params?.departmentId ?? '';
+  const search = useSearch();
+  const projectId = new URLSearchParams(search).get('projectId')?.trim() ?? '';
   const queryClient = useQueryClient();
   const { can } = usePermissions();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -112,18 +120,29 @@ export default function P2WorkOrderQueuePage() {
   const [editDueDate, setEditDueDate] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editReason, setEditReason] = useState('');
-  const queryKey = ['/api/p2-work-orders/queues', departmentId];
+  const queryKey = [
+    '/api/p2-work-orders/queues',
+    departmentId,
+    projectId || null,
+  ];
+  const queuePath = `/api/p2-work-orders/queues/${departmentId}${
+    projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
+  }`;
   const departments = useQuery<QueueDepartment[]>({
     queryKey: ['/api/shared-departments', 'p2-work-order-queue-page'],
-    queryFn: () => apiRequest('/api/shared-departments?routingOnly=true'),
+    queryFn: () => apiRequest('/api/shared-departments'),
     enabled: queueReadsEnabled && Boolean(departmentId),
     staleTime: 5 * 60 * 1000,
   });
   const queue = useQuery<QueueResponse>({
     queryKey,
-    queryFn: () => apiRequest(`/api/p2-work-orders/queues/${departmentId}`),
+    queryFn: () => apiRequest(queuePath),
     enabled: queueReadsEnabled && Boolean(departmentId),
   });
+  const invalidateQueues = () =>
+    queryClient.invalidateQueries({
+      queryKey: ['/api/p2-work-orders/queues'],
+    });
   const start = useMutation({
     mutationFn: (workOrder: QueueWorkOrder) =>
       apiRequest(`/api/p2-work-orders/${workOrder.authorityId}/start`, {
@@ -132,7 +151,7 @@ export default function P2WorkOrderQueuePage() {
           expectedConcurrencyVersion: Number(workOrder.concurrencyVersion),
         }),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: invalidateQueues,
   });
   const provision = useMutation({
     mutationFn: (workOrder: QueueWorkOrder) =>
@@ -146,7 +165,7 @@ export default function P2WorkOrderQueuePage() {
           }),
         }
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: invalidateQueues,
   });
   const completeOperation = useMutation({
     mutationFn: (workOrder: QueueWorkOrder) =>
@@ -159,7 +178,7 @@ export default function P2WorkOrderQueuePage() {
           }),
         }
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: invalidateQueues,
   });
   const updateManagement = useMutation({
     mutationFn: () => {
@@ -181,7 +200,7 @@ export default function P2WorkOrderQueuePage() {
     onSuccess: () => {
       setEditing(null);
       setEditReason('');
-      queryClient.invalidateQueries({ queryKey });
+      invalidateQueues();
     },
   });
 
@@ -213,17 +232,25 @@ export default function P2WorkOrderQueuePage() {
     setEditReason('');
   };
 
-  const currentDepartment = departments.data?.find(
-    (department) => String(department.id) === departmentId
-  );
+  const currentDepartment = departments.data
+    ?.filter(
+      (department) =>
+        department.isActive !== false && department.productionEnabled !== false
+    )
+    .find((department) => String(department.id) === departmentId);
+  const assignedDepartmentName =
+    queue.data?.workOrders[0]?.currentDepartmentName;
   const departmentIdentity = `${currentDepartment?.departmentCode ?? ''} ${
-    currentDepartment?.name ?? ''
+    currentDepartment?.name ?? assignedDepartmentName ?? ''
   }`.toUpperCase();
   const isMachinedPartsQueue =
     departmentIdentity.includes('CNC') || departmentIdentity.includes('MACHIN');
-  const queueTitle = isMachinedPartsQueue
-    ? 'CNC / Machined Parts Work Orders'
-    : `${currentDepartment?.name ?? 'P2'} Work Order Queue`;
+  const queueTitle =
+    departmentId === 'all'
+      ? 'All P2 Work Orders'
+      : isMachinedPartsQueue
+        ? 'CNC / Machined Parts Work Orders'
+        : `${currentDepartment?.name ?? assignedDepartmentName ?? 'P2'} Work Order Queue`;
 
   if (!queueReadsEnabled)
     return (

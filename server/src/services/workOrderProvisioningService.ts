@@ -3,7 +3,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 
 import { db } from '../../db';
-import { isP2V2WorkOrderProvisioningEnabled } from '../lib/featureFlags';
+import {
+  areP2ManufacturingWorkOrderMaterializationEnabled,
+  isP2V2WorkOrderProvisioningEnabled,
+} from '../lib/featureFlags';
 import type { PlanningActor } from './projectProductionPlanningService';
 
 type Row = Record<string, unknown>;
@@ -42,6 +45,12 @@ export async function provisionP2WorkOrders(
       'P2_V2_WORK_ORDER_PROVISIONING_DISABLED',
       'P2 work-order provisioning is disabled.',
       503
+    );
+  if (areP2ManufacturingWorkOrderMaterializationEnabled())
+    throw new WorkOrderProvisioningError(
+      'P2_WORK_ORDER_AUTHORITY_PATH_CONFLICT',
+      'Legacy launch work-order provisioning is unavailable while Frozen Production Demand queue materialization is authoritative.',
+      409
     );
   const requestHash = digest({
     projectId,

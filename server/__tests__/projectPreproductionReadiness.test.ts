@@ -266,11 +266,23 @@ describe('Phase 8C integration safety contract', () => {
       launch.indexOf("eventType: 'P2_V2_PRODUCTION_LAUNCH_FAILED'")
     );
     expect(transaction).toContain('pg_advisory_xact_lock');
+    expect(transaction).toContain('p2-production-launch:${projectId}');
     expect(transaction).toContain(
       'priorLaunch.idempotency_key === idempotencyKey'
     );
+    expect(transaction).toContain("production_evidence ? 'createdSerializedItemIds'");
+    expect(transaction).toContain('priorLaunch.execution_completed');
+    expect(transaction).toContain(
+      'CANONICAL_PRODUCTION_LAUNCH_REQUIRES_CONFIRMATION'
+    );
+    expect(transaction).toContain('resumableCanonicalLaunch = priorLaunch');
     expect(transaction).toContain("'PRODUCTION_ALREADY_LAUNCHED'");
     expect(transaction).toContain('validateRelease(projectId, tx)');
+    expect(transaction).toContain('persistProductionLaunchInTransaction');
+    expect(transaction).toContain('expectedPreviewDigest');
+    expect(transaction).toContain(
+      'persistCurrentProductionLaunchInTransaction'
+    );
     expect(transaction).toContain('PREEXISTING_PRODUCTION_RECORDS');
     expect(transaction).toContain('PREEXISTING_SERIALIZED_RECORDS');
     expect(transaction).toContain('RELEASED_ROUTING_STALE');
@@ -282,6 +294,12 @@ describe('Phase 8C integration safety contract', () => {
     );
     expect(transaction).toContain("step_type === 'production_quality'");
     expect(transaction).toContain("current_stage='IN_PRODUCTION'");
+    expect(transaction).toContain(
+      'SET production_evidence=production_evidence ||'
+    );
+    expect(transaction).not.toContain(
+      'INSERT INTO project_production_launches'
+    );
     expect(transaction).toContain('P2_V2_PRODUCTION_LAUNCHED');
     expect(launch).toMatch(
       /\}\s*catch \(error\) \{\s*try \{\s*await recordAuditEvent\(\{\s*eventType: 'P2_V2_PRODUCTION_LAUNCH_FAILED'/
@@ -301,6 +319,8 @@ describe('Phase 8C integration safety contract', () => {
     expect(route).toMatch(
       /router\.post\('\/launch'[\s\S]*launchProduction\(projectId\(req\)/
     );
+    expect(route).toContain('expectedPreviewDigest');
+    expect(route).toContain('signatureMeaning');
   });
 
   it('keeps authoritative generator reads and sequence allocation on the supplied transaction', () => {

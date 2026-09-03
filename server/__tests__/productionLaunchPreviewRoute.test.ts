@@ -59,6 +59,14 @@ vi.mock('../src/services/travelerProvisioningService', () => ({
   provisionP2DraftTravelers: vi.fn(),
   TravelerProvisioningError: class extends Error {},
 }));
+vi.mock('../src/services/workOrderProvisioningService', () => ({
+  provisionP2WorkOrders: vi.fn(),
+  WorkOrderProvisioningError: class extends Error {},
+}));
+vi.mock('../src/services/componentTravelerProvisioningService', () => ({
+  provisionP2ComponentTravelers: vi.fn(),
+  ComponentTravelerProvisioningError: class extends Error {},
+}));
 
 import projectProductionPlanningRouter from '../src/routes/projectProductionPlanning';
 
@@ -106,6 +114,28 @@ describe('Production Launch preview route boundary', () => {
       createsRecords: false,
       ready: false,
     });
+    expect(mocks.getProductionLaunchPreview).toHaveBeenCalledWith('project-1');
+  });
+
+  it('allows an authorized production launcher to confirm the exact preview', async () => {
+    mocks.getUserPermissions.mockResolvedValue({
+      permissionSet: new Set(['projects.production_launch.launch']),
+    });
+    mocks.getProductionLaunchPreview.mockResolvedValue({
+      mode: 'PREVIEW_ONLY',
+      createsRecords: false,
+      ready: true,
+      blockers: [],
+      nodes: [],
+      resultChecksum: 'a'.repeat(64),
+    });
+
+    const response = await request(app).get(
+      '/api/projects/project-1/workflow-v2/production-planning/launch-preview'
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.resultChecksum).toBe('a'.repeat(64));
     expect(mocks.getProductionLaunchPreview).toHaveBeenCalledWith('project-1');
   });
 

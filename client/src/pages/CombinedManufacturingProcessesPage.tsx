@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Factory, Plus, Trash2 } from 'lucide-react';
+import {
+  Check,
+  CheckCircle2,
+  ChevronsUpDown,
+  Factory,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +21,14 @@ import {
 } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -23,6 +38,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -42,6 +62,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { cn } from '@/lib/utils';
 
 type ProcessOutput = {
   id: string;
@@ -124,6 +145,9 @@ export default function CombinedManufacturingProcessesPage() {
   const [cycleMinutesPerRun, setCycleMinutesPerRun] = useState('0');
   const [allowExcessOutput, setAllowExcessOutput] = useState(false);
   const [outputs, setOutputs] = useState<OutputDraft[]>(initialOutputs);
+  const [openOutputPickerKey, setOpenOutputPickerKey] = useState<number | null>(
+    null
+  );
 
   const { data: processResponse, isLoading: processesLoading } = useQuery<{
     processes: CombinedProcess[];
@@ -137,9 +161,11 @@ export default function CombinedManufacturingProcessesPage() {
     queryFn: () => apiRequest('/api/enhanced/inventory/items'),
     enabled: dialogOpen,
   });
-  const { data: departments = [] } = useQuery<Department[]>({
-    queryKey: ['/api/shared-departments', 'combined-processes'],
-    queryFn: () => apiRequest('/api/shared-departments'),
+  const { data: departments = [], isLoading: departmentsLoading } = useQuery<
+    Department[]
+  >({
+    queryKey: ['/api/inventory/departments', 'combined-processes'],
+    queryFn: () => apiRequest('/api/inventory/departments'),
     enabled: dialogOpen,
   });
 
@@ -184,6 +210,7 @@ export default function CombinedManufacturingProcessesPage() {
     setCycleMinutesPerRun('0');
     setAllowExcessOutput(false);
     setOutputs(initialOutputs());
+    setOpenOutputPickerKey(null);
   };
 
   const createMutation = useMutation({
@@ -462,7 +489,13 @@ export default function CombinedManufacturingProcessesPage() {
                 onValueChange={setLeadDepartmentId}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a schedulable production department" />
+                  <SelectValue
+                    placeholder={
+                      departmentsLoading
+                        ? 'Loading departments…'
+                        : 'Select a schedulable production department'
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {schedulableDepartments.map((department) => (
@@ -476,6 +509,12 @@ export default function CombinedManufacturingProcessesPage() {
                       {department.name}
                     </SelectItem>
                   ))}
+                  {!departmentsLoading &&
+                    schedulableDepartments.length === 0 && (
+                      <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                        No active production departments found.
+                      </div>
+                    )}
                 </SelectContent>
               </Select>
             </div>
@@ -551,29 +590,87 @@ export default function CombinedManufacturingProcessesPage() {
               >
                 <div className="space-y-2">
                   <Label>Part</Label>
-                  <Select
-                    value={output.inventoryItemId}
-                    onValueChange={(value) =>
-                      setOutputs((current) =>
-                        current.map((candidate) =>
-                          candidate.key === output.key
-                            ? { ...candidate, inventoryItemId: value }
-                            : candidate
-                        )
-                      )
+                  <Popover
+                    open={openOutputPickerKey === output.key}
+                    onOpenChange={(open) =>
+                      setOpenOutputPickerKey(open ? output.key : null)
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select manufactured part" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {manufacturedItems.map((item) => (
-                        <SelectItem key={item.id} value={String(item.id)}>
-                          {item.agPartNumber} — {item.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openOutputPickerKey === output.key}
+                        className={cn(
+                          'w-full justify-between font-normal',
+                          !output.inventoryItemId && 'text-muted-foreground'
+                        )}
+                      >
+                        {output.inventoryItemId
+                          ? (() => {
+                              const selectedItem = manufacturedItems.find(
+                                (item) =>
+                                  String(item.id) === output.inventoryItemId
+                              );
+                              return selectedItem
+                                ? `${selectedItem.agPartNumber} — ${selectedItem.name}`
+                                : 'Select manufactured part';
+                            })()
+                          : 'Select manufactured part'}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                      <Command>
+                        <CommandInput placeholder="Search part number or name…" />
+                        <CommandList>
+                          <CommandEmpty>
+                            No manufactured parts found.
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {manufacturedItems.map((item) => {
+                              const itemId = String(item.id);
+                              return (
+                                <CommandItem
+                                  key={item.id}
+                                  value={`${item.agPartNumber} ${item.name}`}
+                                  onSelect={() => {
+                                    setOutputs((current) =>
+                                      current.map((candidate) =>
+                                        candidate.key === output.key
+                                          ? {
+                                              ...candidate,
+                                              inventoryItemId: itemId,
+                                            }
+                                          : candidate
+                                      )
+                                    );
+                                    setOpenOutputPickerKey(null);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      output.inventoryItemId === itemId
+                                        ? 'opacity-100'
+                                        : 'opacity-0'
+                                    )}
+                                  />
+                                  <span className="font-mono text-sm text-muted-foreground">
+                                    {item.agPartNumber}
+                                  </span>
+                                  <span className="ml-2 truncate">
+                                    {item.name}
+                                  </span>
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-2">
                   <Label>Qty per run</Label>

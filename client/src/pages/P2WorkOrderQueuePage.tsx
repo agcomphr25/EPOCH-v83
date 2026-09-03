@@ -12,6 +12,22 @@ import { Link, useRoute } from 'wouter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { usePermissions } from '@/hooks/usePermissions';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -38,6 +54,8 @@ type QueueWorkOrder = {
   requiredQuantity: string;
   completedQuantity: string;
   currentDepartmentName: string;
+  dueDate?: string | null;
+  priority: 'LOW' | 'URGENT' | 'CRITICAL';
   travelerRequirement: 'REQUIRED' | 'NOT_REQUIRED_APPROVED';
   travelerId?: string;
   travelerCoveredQuantity: number;
@@ -84,6 +102,16 @@ export default function P2WorkOrderQueuePage() {
   const queryClient = useQueryClient();
   const { can } = usePermissions();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [statusView, setStatusView] = useState<'ACTIVE' | 'ALL' | 'COMPLETE'>(
+    'ACTIVE'
+  );
+  const [sortBy, setSortBy] = useState<'DEPARTMENT' | 'PRIORITY'>('DEPARTMENT');
+  const [editing, setEditing] = useState<QueueWorkOrder | null>(null);
+  const [editPriority, setEditPriority] =
+    useState<QueueWorkOrder['priority']>('LOW');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editReason, setEditReason] = useState('');
   const queryKey = ['/api/p2-work-orders/queues', departmentId];
   const departments = useQuery<QueueDepartment[]>({
     queryKey: ['/api/shared-departments', 'p2-work-order-queue-page'],
@@ -133,6 +161,57 @@ export default function P2WorkOrderQueuePage() {
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey }),
   });
+  const updateManagement = useMutation({
+    mutationFn: () => {
+      if (!editing) throw new Error('Select a work order to edit.');
+      return apiRequest(
+        `/api/p2-work-orders/${editing.authorityId}/management`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedConcurrencyVersion: Number(editing.concurrencyVersion),
+            priority: editPriority,
+            dueDate: editDueDate || null,
+            description: editDescription,
+            reason: editReason,
+          }),
+        }
+      );
+    },
+    onSuccess: () => {
+      setEditing(null);
+      setEditReason('');
+      queryClient.invalidateQueries({ queryKey });
+    },
+  });
+
+  const priorityRank = { CRITICAL: 0, URGENT: 1, LOW: 2 } as const;
+  const visibleWorkOrders = [...(queue.data?.workOrders ?? [])]
+    .filter((workOrder) => {
+      if (statusView === 'ALL') return true;
+      if (statusView === 'COMPLETE') return workOrder.readiness === 'COMPLETE';
+      return workOrder.readiness !== 'COMPLETE';
+    })
+    .sort((left, right) => {
+      if (sortBy === 'PRIORITY') {
+        const priorityDifference =
+          priorityRank[left.priority] - priorityRank[right.priority];
+        if (priorityDifference) return priorityDifference;
+      }
+      return (
+        left.currentDepartmentName.localeCompare(right.currentDepartmentName) ||
+        priorityRank[left.priority] - priorityRank[right.priority] ||
+        String(left.dueDate ?? '').localeCompare(String(right.dueDate ?? ''))
+      );
+    });
+
+  const openEditor = (workOrder: QueueWorkOrder) => {
+    setEditing(workOrder);
+    setEditPriority(workOrder.priority);
+    setEditDueDate(workOrder.dueDate?.slice(0, 10) ?? '');
+    setEditDescription(workOrder.description);
+    setEditReason('');
+  };
 
   const currentDepartment = departments.data?.find(
     (department) => String(department.id) === departmentId
@@ -183,6 +262,39 @@ export default function P2WorkOrderQueuePage() {
             : 'Frozen released P2 work only. Blocked work remains visible and cannot be started.'}
         </p>
       </div>
+      <div className="flex flex-wrap gap-2">
+        <Select
+          value={statusView}
+          onValueChange={(value) => setStatusView(value as typeof statusView)}
+        >
+          <SelectTrigger
+            className="w-[210px]"
+            data-testid="select-work-order-status-view"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ACTIVE">Pending &amp; In Progress</SelectItem>
+            <SelectItem value="ALL">All Statuses</SelectItem>
+            <SelectItem value="COMPLETE">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={sortBy}
+          onValueChange={(value) => setSortBy(value as typeof sortBy)}
+        >
+          <SelectTrigger
+            className="w-[210px]"
+            data-testid="select-work-order-sort"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="DEPARTMENT">Sort by Department</SelectItem>
+            <SelectItem value="PRIORITY">Sort by Priority</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       {queue.isLoading && <p>Loading work orders…</p>}
       {queue.isError && (
         <Card>
@@ -198,7 +310,7 @@ export default function P2WorkOrderQueuePage() {
           </CardContent>
         </Card>
       )}
-      {queue.data?.workOrders.map((workOrder) => {
+      {visibleWorkOrders.map((workOrder) => {
         const open = expanded.has(workOrder.authorityId);
         const blocked = workOrder.readiness.startsWith('BLOCKED');
         return (
@@ -213,7 +325,8 @@ export default function P2WorkOrderQueuePage() {
                   <p className="text-sm text-muted-foreground">
                     {workOrder.projectCode} · {workOrder.currentDepartmentName}{' '}
                     · {workOrder.completedQuantity}/{workOrder.requiredQuantity}{' '}
-                    complete
+                    complete · {workOrder.priority}
+                    {workOrder.dueDate ? ` · Due ${workOrder.dueDate}` : ''}
                   </p>
                   {isMachinedPartsQueue && (
                     <div
@@ -240,6 +353,15 @@ export default function P2WorkOrderQueuePage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
+                {can('p2.work_orders.manage') &&
+                  workOrder.readiness !== 'COMPLETE' && (
+                    <Button
+                      variant="outline"
+                      onClick={() => openEditor(workOrder)}
+                    >
+                      Edit Work Order
+                    </Button>
+                  )}
                 {workOrder.travelerRequirement === 'REQUIRED' &&
                   workOrder.travelerRemainingQuantity > 0 &&
                   can('p2.travelers.provision') && (
@@ -339,6 +461,71 @@ export default function P2WorkOrderQueuePage() {
           </Card>
         );
       })}
+      <Dialog
+        open={Boolean(editing)}
+        onOpenChange={(open) => !open && setEditing(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit {editing?.workOrderNumber}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Priority</Label>
+              <Select
+                value={editPriority}
+                onValueChange={(value) =>
+                  setEditPriority(value as QueueWorkOrder['priority'])
+                }
+              >
+                <SelectTrigger data-testid="select-work-order-priority">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="URGENT">Urgent</SelectItem>
+                  <SelectItem value="CRITICAL">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="work-order-due-date">Due date</Label>
+              <Input
+                id="work-order-due-date"
+                type="date"
+                value={editDueDate}
+                onChange={(event) => setEditDueDate(event.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="work-order-description">Description</Label>
+              <Input
+                id="work-order-description"
+                value={editDescription}
+                onChange={(event) => setEditDescription(event.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="work-order-edit-reason">Reason for change</Label>
+              <Input
+                id="work-order-edit-reason"
+                value={editReason}
+                onChange={(event) => setEditReason(event.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={
+                editReason.trim().length < 10 || updateManagement.isPending
+              }
+              onClick={() => updateManagement.mutate()}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

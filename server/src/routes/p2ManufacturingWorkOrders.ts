@@ -30,6 +30,7 @@ import {
   materializeP2ManufacturingWorkOrders,
   P2WorkOrderError,
   startP2WorkOrder,
+  updateP2WorkOrderManagement,
 } from '../services/p2ManufacturingWorkOrderService';
 import { provisionP2Travelers } from '../services/p2TravelerProvisioningService';
 import {
@@ -73,6 +74,15 @@ const materializeBody = z.object({
   idempotencyKey: z.string().trim().min(1).max(200),
   signatureMeaning: z.string().trim().min(1).max(1000),
   frozenDemandNodeId: z.string().uuid().optional(),
+  priority: z.enum(['LOW', 'URGENT', 'CRITICAL']).optional().default('LOW'),
+  dueDate: z.string().date().optional(),
+});
+const managementUpdateBody = z.object({
+  expectedConcurrencyVersion: z.number().int().positive(),
+  priority: z.enum(['LOW', 'URGENT', 'CRITICAL']),
+  dueDate: z.string().date().nullable().optional(),
+  description: z.string().trim().min(1).max(500).optional(),
+  reason: z.string().trim().min(10).max(1000),
 });
 const startBody = z.object({
   expectedConcurrencyVersion: z.number().int().positive(),
@@ -260,6 +270,26 @@ router.get(
     try {
       enabled(areP2ManufacturingWorkOrderQueueReadsEnabled());
       res.json(await evaluateP2WorkOrderReadiness(req.params.authorityId));
+    } catch (error) {
+      fail(res, error);
+    }
+  }
+);
+
+router.patch(
+  '/p2-work-orders/:authorityId/management',
+  authenticateToken,
+  requirePermission('p2.work_orders.manage'),
+  async (req, res) => {
+    try {
+      enabled(areP2ManufacturingWorkOrderQueueReadsEnabled());
+      res.json(
+        await updateP2WorkOrderManagement(
+          req.params.authorityId,
+          managementUpdateBody.parse(req.body),
+          await actor(req)
+        )
+      );
     } catch (error) {
       fail(res, error);
     }

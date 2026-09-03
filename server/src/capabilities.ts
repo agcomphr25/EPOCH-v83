@@ -29,6 +29,7 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   'work_orders.override_charges',
   'p2.work_orders.view',
   'p2.work_orders.materialize',
+  'p2.work_orders.manage',
   'p2.work_orders.execute',
   'p2.work_orders.complete_operation',
   'p2.work_orders.accept',

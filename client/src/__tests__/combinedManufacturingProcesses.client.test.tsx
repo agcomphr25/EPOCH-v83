@@ -51,4 +51,17 @@ describe('combined manufacturing process administration', () => {
     );
     expect(pageSource).toContain("item.itemType === 'MANUFACTURED'");
   });
+
+  it('loads lead departments from the established inventory department source', () => {
+    expect(pageSource).toContain("apiRequest('/api/inventory/departments')");
+    expect(pageSource).not.toContain("apiRequest('/api/shared-departments')");
+  });
+
+  it('provides a searchable manufactured-output picker', () => {
+    expect(pageSource).toContain(
+      '<CommandInput placeholder="Search part number or name…" />'
+    );
+    expect(pageSource).toContain('value={`${item.agPartNumber} ${item.name}`}');
+    expect(pageSource).toContain('No manufactured parts found.');
+  });
 });

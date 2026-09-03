@@ -138,6 +138,8 @@ export async function materializeP2ManufacturingWorkOrders(
     idempotencyKey: string;
     signatureMeaning: string;
     frozenDemandNodeId?: string;
+    priority?: 'LOW' | 'URGENT' | 'CRITICAL';
+    dueDate?: string;
   },
   actor: P2WorkOrderActor
 ) {
@@ -155,6 +157,8 @@ export async function materializeP2ManufacturingWorkOrders(
     expectedBaselineChecksum: input.expectedBaselineChecksum,
     requestKey,
     frozenDemandNodeId: input.frozenDemandNodeId ?? null,
+    priority: input.priority ?? 'LOW',
+    dueDate: input.dueDate ?? null,
   });
   const client = await pool.connect();
   try {
@@ -210,7 +214,7 @@ export async function materializeP2ManufacturingWorkOrders(
     );
     const nodes: Row[] = nodeResult.rows;
     const allManufactured = nodes.filter(
-      (node) => node.make_buy_disposition === 'MAKE'
+      (node) => node.make_buy_disposition === 'MAKE' && Number(node.depth) > 0
     );
     if (!allManufactured.length)
       throw new P2WorkOrderError(
@@ -225,22 +229,22 @@ export async function materializeP2ManufacturingWorkOrders(
        WHERE frozen_demand_baseline_id=$1`,
       [baselineId]
     );
-    if (!input.frozenDemandNodeId && existing.rows.length)
-      throw new P2WorkOrderError(
-        'EXISTING_WORK_ORDERS_REQUIRE_RECONCILIATION',
-        'Work orders already exist without matching retry evidence.'
-      );
+    const existingNodeIds = new Set(
+      existing.rows.map((authority) => clean(authority.frozen_demand_node_id))
+    );
     const manufactured = input.frozenDemandNodeId
       ? allManufactured.filter(
           (node) =>
             clean(node.id) === input.frozenDemandNodeId &&
             Number(node.depth) > 0
         )
-      : allManufactured;
+      : allManufactured.filter((node) => !existingNodeIds.has(clean(node.id)));
     if (!manufactured.length)
       throw new P2WorkOrderError(
         'MANUFACTURED_DEMAND_NODE_NOT_FOUND',
-        'The selected frozen-demand node is not a manufactured child in this released parent-PO baseline.',
+        input.frozenDemandNodeId
+          ? 'The selected frozen-demand node is not a manufactured child in this released parent-PO baseline.'
+          : 'Every manufactured child in this released parent-PO baseline already has a work order.',
         404
       );
     if (
@@ -299,8 +303,8 @@ export async function materializeP2ManufacturingWorkOrders(
       await client.query(
         `INSERT INTO production_work_orders
           (id,work_order_number,project_id,part_number,description,quantity,status,
-           wad_status,assigned_department,queue_type,wizard_data)
-         VALUES ($1,$2,$3,$4,$5,$6,'PLANNED','DRAFT',$7,'P2_MANUFACTURING',$8::jsonb)`,
+           wad_status,assigned_department,queue_type,wizard_data,priority,due_date)
+         VALUES ($1,$2,$3,$4,$5,$6,'PLANNED','DRAFT',$7,'P2_MANUFACTURING',$8::jsonb,$9,$10)`,
         [
           workOrderId,
           workOrderNumber,
@@ -317,6 +321,8 @@ export async function materializeP2ManufacturingWorkOrders(
             parentPoAuthorityInherited: true,
             parentManufacturedAuthorityId: parentAuthorityId,
           }),
+          input.priority ?? 'LOW',
+          input.dueDate ?? null,
         ]
       );
       const authorityEvidence = {
@@ -335,9 +341,9 @@ export async function materializeP2ManufacturingWorkOrders(
            current_department_name_snapshot,traveler_requirement,routing_snapshot,
            wad_decision_snapshot,traceability_snapshot,authority_checksum,
            materialized_by_user_id,materialized_by_employee_id,
-           materialized_by_display_name,materialized_by_role)
+           materialized_by_display_name,materialized_by_role,priority)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF($11,''),$12,$13,$14,$15,
-           $16::jsonb,$17::jsonb,$18::jsonb,$19,$20,$21,$22,$23)`,
+           $16::jsonb,$17::jsonb,$18::jsonb,$19,$20,$21,$22,$23,$24)`,
         [
           authorityId,
           projectId,
@@ -362,6 +368,7 @@ export async function materializeP2ManufacturingWorkOrders(
           employeeId,
           actor.displayName,
           actor.role,
+          input.priority ?? 'LOW',
         ]
       );
       for (const operation of operations) {
@@ -408,8 +415,8 @@ export async function materializeP2ManufacturingWorkOrders(
         const requirements = jsonRecord(traceability.requirements);
         const requiresAcceptance = Boolean(
           requirements.outputSerializationRequired ??
-          requirements.lotScanRequired ??
-          requirements.batchScanRequired
+            requirements.lotScanRequired ??
+            requirements.batchScanRequired
         );
         await client.query(
           `INSERT INTO p2_manufacturing_work_order_dependencies
@@ -495,7 +502,8 @@ export async function evaluateP2WorkOrderReadiness(
   tx: Pick<PoolClient, 'query'> = pool as unknown as Pick<PoolClient, 'query'>
 ) {
   const result = await tx.query(
-    `SELECT a.*,pwo.work_order_number,pwo.description,p.project_code,
+    `SELECT a.*,pwo.work_order_number,pwo.description AS work_order_description,
+      pwo.due_date,pwo.priority AS work_order_priority,p.project_code,
       COALESCE((SELECT jsonb_agg(jsonb_build_object(
         'dependencyId',d.id,'dependencyType',d.dependency_type,
         'predecessorAuthorityId',d.predecessor_authority_id,
@@ -565,13 +573,15 @@ export async function evaluateP2WorkOrderReadiness(
     projectId: row.project_id,
     projectCode: row.project_code,
     partNumber: row.part_number_snapshot,
-    description: row.description_snapshot,
+    description: row.work_order_description ?? row.description_snapshot,
     revision: row.part_revision_snapshot,
     requiredQuantity: row.required_quantity,
     completedQuantity: row.completed_quantity,
     acceptedQuantity: row.accepted_quantity,
     currentDepartmentId: row.current_department_id,
     currentDepartmentName: row.current_department_name_snapshot,
+    dueDate: row.due_date,
+    priority: row.work_order_priority ?? row.priority ?? 'LOW',
     travelerRequirement: row.traveler_requirement,
     travelerId: row.traveler_id,
     travelerCoveredQuantity: row.traveler_covered_quantity,
@@ -585,18 +595,115 @@ export async function evaluateP2WorkOrderReadiness(
   };
 }
 
-export async function listP2WorkOrderQueue(departmentId: string) {
+export async function listP2WorkOrderQueue(departmentId?: string) {
+  const allDepartments = !departmentId || departmentId === 'all';
   const rows = (
     await pool.query(
       `SELECT id FROM p2_manufacturing_work_order_authorities
-       WHERE current_department_id=$1 AND status<>'CANCELLED'
-       ORDER BY materialized_at,assembly_path_identity`,
-      [departmentId]
+       WHERE ($1::boolean OR current_department_id=$2) AND status<>'CANCELLED'
+       ORDER BY current_department_name_snapshot,
+         CASE priority WHEN 'CRITICAL' THEN 1 WHEN 'URGENT' THEN 2 ELSE 3 END,
+         materialized_at,assembly_path_identity`,
+      [allDepartments, allDepartments ? null : departmentId]
     )
   ).rows;
   return Promise.all(
     rows.map((row) => evaluateP2WorkOrderReadiness(String(row.id)))
   );
+}
+
+export async function updateP2WorkOrderManagement(
+  authorityId: string,
+  input: {
+    expectedConcurrencyVersion: number;
+    priority: 'LOW' | 'URGENT' | 'CRITICAL';
+    dueDate?: string | null;
+    description?: string;
+    reason: string;
+  },
+  actor: P2WorkOrderActor
+) {
+  const employeeId = requireEmployee(actor);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const locked = await client.query(
+      `SELECT a.*,pwo.description,pwo.due_date,pwo.priority AS work_order_priority
+       FROM p2_manufacturing_work_order_authorities a
+       JOIN production_work_orders pwo ON pwo.id=a.production_work_order_id
+       WHERE a.id=$1 FOR UPDATE OF a,pwo`,
+      [authorityId]
+    );
+    if (locked.rows.length !== 1)
+      throw new P2WorkOrderError(
+        'P2_WORK_ORDER_NOT_FOUND',
+        'The P2 manufacturing work order was not found.',
+        404
+      );
+    const before = locked.rows[0];
+    if (Number(before.concurrency_version) !== input.expectedConcurrencyVersion)
+      throw new P2WorkOrderError(
+        'STALE_WORK_ORDER',
+        'The work order changed. Refresh before editing.'
+      );
+    if (['COMPLETE', 'CANCELLED'].includes(clean(before.status)))
+      throw new P2WorkOrderError(
+        'WORK_ORDER_EDIT_LOCKED',
+        'Completed and cancelled work orders cannot be edited.',
+        409
+      );
+    await client.query(
+      `UPDATE production_work_orders
+       SET priority=$2,due_date=$3,description=COALESCE($4,description),updated_at=now()
+       WHERE id=$1`,
+      [
+        before.production_work_order_id,
+        input.priority,
+        input.dueDate ?? null,
+        input.description?.trim() || null,
+      ]
+    );
+    await client.query(
+      `UPDATE p2_manufacturing_work_order_authorities
+       SET priority=$2,concurrency_version=concurrency_version+1,updated_at=now()
+       WHERE id=$1`,
+      [authorityId, input.priority]
+    );
+    await client.query(
+      `INSERT INTO p2_manufacturing_work_order_events
+        (authority_id,frozen_demand_baseline_id,event_type,actor_user_id,
+         actor_employee_id,actor_display_name,actor_role,evidence)
+       VALUES ($1,$2,'WORK_ORDER_MANAGEMENT_UPDATED',$3,$4,$5,$6,$7::jsonb)`,
+      [
+        authorityId,
+        before.frozen_demand_baseline_id,
+        actor.userId,
+        employeeId,
+        actor.displayName,
+        actor.role,
+        JSON.stringify({
+          reason: input.reason.trim(),
+          before: {
+            priority: before.work_order_priority ?? before.priority,
+            dueDate: before.due_date,
+            description: before.description,
+          },
+          after: {
+            priority: input.priority,
+            dueDate: input.dueDate ?? null,
+            description: input.description?.trim() || before.description,
+          },
+        }),
+      ]
+    );
+    await client.query('COMMIT');
+    return evaluateP2WorkOrderReadiness(authorityId);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function startP2WorkOrder(

@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { db, pool } from '../../db';
-import { manufacturingQueue, inventoryItems, supplySourceDashboardToLegacyDept, getDashboardCategories, getManufacturingCategoriesForDepartment } from '../../schema';
+import {
+  manufacturingQueue,
+  inventoryItems,
+  supplySourceDashboardToLegacyDept,
+  getDashboardCategories,
+  getManufacturingCategoriesForDepartment,
+} from '../../schema';
 import type { SupplySourceDashboard } from '../../schema';
 import { eq, and, or, desc, inArray } from 'drizzle-orm';
 import { insertManufacturingQueueSchema } from '../../schema';
@@ -9,7 +15,10 @@ import { generateRequirementsFromRouting } from '../services/requirementGenerato
 
 const router = Router();
 
-async function publicColumnsExist(tableName: string, columnNames: string[]): Promise<boolean> {
+async function publicColumnsExist(
+  tableName: string,
+  columnNames: string[]
+): Promise<boolean> {
   if (columnNames.length === 0) return true;
   const rows = await pool.query<{ column_name: string }>(
     `SELECT column_name
@@ -24,17 +33,24 @@ async function publicColumnsExist(tableName: string, columnNames: string[]): Pro
 }
 
 async function loadProjectContextByQueueItemId(ids: number[]) {
-  const projectByItemId = new Map<number, { projectId: string; projectCode: string }>();
+  const projectByItemId = new Map<
+    number,
+    { projectId: string; projectCode: string }
+  >();
   if (ids.length === 0) return projectByItemId;
 
   try {
     const canJoinProjects =
-      await publicColumnsExist('manufacturing_queue', ['p2_po_id']) &&
-      await publicColumnsExist('projects', ['po_id', 'project_code']);
+      (await publicColumnsExist('manufacturing_queue', ['p2_po_id'])) &&
+      (await publicColumnsExist('projects', ['po_id', 'project_code']));
 
     if (!canJoinProjects) return projectByItemId;
 
-    const projectRows = await pool.query<{ id: number; projectId: string; projectCode: string }>(
+    const projectRows = await pool.query<{
+      id: number;
+      projectId: string;
+      projectCode: string;
+    }>(
       `SELECT mq.id, p.id AS "projectId", p.project_code AS "projectCode"
          FROM manufacturing_queue mq
          JOIN projects p ON p.po_id = mq.p2_po_id
@@ -42,7 +58,10 @@ async function loadProjectContextByQueueItemId(ids: number[]) {
       [ids]
     );
     for (const row of projectRows) {
-      projectByItemId.set(row.id, { projectId: row.projectId, projectCode: row.projectCode });
+      projectByItemId.set(row.id, {
+        projectId: row.projectId,
+        projectCode: row.projectCode,
+      });
     }
   } catch (error) {
     console.warn('Skipping manufacturing queue project enrichment:', error);
@@ -52,17 +71,29 @@ async function loadProjectContextByQueueItemId(ids: number[]) {
 }
 
 async function loadWorkOrderContextByQueueItemId(ids: number[]) {
-  const workOrderByItemId = new Map<number, { workOrderId: string; workOrderNumber: string }>();
+  const workOrderByItemId = new Map<
+    number,
+    { workOrderId: string; workOrderNumber: string }
+  >();
   if (ids.length === 0) return workOrderByItemId;
 
   try {
     const canJoinWorkOrders =
-      await publicColumnsExist('manufacturing_queue', ['source_id', 'source_type']) &&
-      await publicColumnsExist('production_work_orders', ['work_order_number']);
+      (await publicColumnsExist('manufacturing_queue', [
+        'source_id',
+        'source_type',
+      ])) &&
+      (await publicColumnsExist('production_work_orders', [
+        'work_order_number',
+      ]));
 
     if (!canJoinWorkOrders) return workOrderByItemId;
 
-    const workOrderRows = await pool.query<{ id: number; workOrderId: string; workOrderNumber: string }>(
+    const workOrderRows = await pool.query<{
+      id: number;
+      workOrderId: string;
+      workOrderNumber: string;
+    }>(
       `SELECT mq.id, wo.id AS "workOrderId", wo.work_order_number AS "workOrderNumber"
          FROM manufacturing_queue mq
          JOIN production_work_orders wo ON wo.id::text = mq.source_id
@@ -71,7 +102,10 @@ async function loadWorkOrderContextByQueueItemId(ids: number[]) {
       [ids]
     );
     for (const row of workOrderRows) {
-      workOrderByItemId.set(row.id, { workOrderId: row.workOrderId, workOrderNumber: row.workOrderNumber });
+      workOrderByItemId.set(row.id, {
+        workOrderId: row.workOrderId,
+        workOrderNumber: row.workOrderNumber,
+      });
     }
   } catch (error) {
     console.warn('Skipping manufacturing queue work order enrichment:', error);
@@ -93,44 +127,76 @@ router.get('/', async (req, res) => {
     const { department, status, dashboard, queueType } = req.query;
 
     // Resolve routing signal — additive OR of dept and category matches
-    let routingSignal: ReturnType<typeof eq> | ReturnType<typeof or> | ReturnType<typeof inArray> | undefined;
+    let routingSignal:
+      | ReturnType<typeof eq>
+      | ReturnType<typeof or>
+      | ReturnType<typeof inArray>
+      | undefined;
 
-    const VALID_DASHBOARDS: SupplySourceDashboard[] = ['CUTTING_TABLE', 'KITTING', 'CNC', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'LAYUP'];
+    const VALID_DASHBOARDS: SupplySourceDashboard[] = [
+      'CUTTING_TABLE',
+      'KITTING',
+      'CNC',
+      'CORE',
+      'SUB_ASSEMBLY',
+      'ASSEMBLY',
+      'FINAL_ASSEMBLY',
+      'LAYUP',
+    ];
 
     if (dashboard && typeof dashboard === 'string') {
       // Strict validation — reject unknown dashboard values
       if (!VALID_DASHBOARDS.includes(dashboard as SupplySourceDashboard)) {
-        return res.status(400).json({ error: `Invalid dashboard value: ${dashboard}. Valid: ${VALID_DASHBOARDS.join(', ')}` });
+        return res
+          .status(400)
+          .json({
+            error: `Invalid dashboard value: ${dashboard}. Valid: ${VALID_DASHBOARDS.join(', ')}`,
+          });
       }
       const dash = dashboard as SupplySourceDashboard;
       const legacyDept = supplySourceDashboardToLegacyDept(dash);
       const categories = getDashboardCategories(dash);
       if (legacyDept) {
-        routingSignal = dash === 'FINAL_ASSEMBLY' && categories.length > 0
-          ? inArray(inventoryItems.manufacturedCategory, categories)
-          : categories.length > 0
-          ? or(eq(manufacturingQueue.department, legacyDept), inArray(inventoryItems.manufacturedCategory, categories))
-          : eq(manufacturingQueue.department, legacyDept);
+        routingSignal =
+          dash === 'FINAL_ASSEMBLY' && categories.length > 0
+            ? inArray(inventoryItems.manufacturedCategory, categories)
+            : categories.length > 0
+              ? or(
+                  eq(manufacturingQueue.department, legacyDept),
+                  inArray(inventoryItems.manufacturedCategory, categories)
+                )
+              : eq(manufacturingQueue.department, legacyDept);
       }
     } else if (department && typeof department === 'string') {
       // Legacy dept param — also match by category for this dept via getDashboardCategories
       // Reverse-lookup from legacy dept name to dashboard, then get categories
       const categories = getManufacturingCategoriesForDepartment(department);
-      routingSignal = categories.length > 0
-        ? or(eq(manufacturingQueue.department, department), inArray(inventoryItems.manufacturedCategory, categories))
-        : eq(manufacturingQueue.department, department);
+      routingSignal =
+        categories.length > 0
+          ? or(
+              eq(manufacturingQueue.department, department),
+              inArray(inventoryItems.manufacturedCategory, categories)
+            )
+          : eq(manufacturingQueue.department, department);
     }
 
-    const statusFilter = (status && typeof status === 'string')
-      ? eq(manufacturingQueue.status, status)
-      : undefined;
+    const statusFilter =
+      status === 'ACTIVE'
+        ? inArray(manufacturingQueue.status, ['PENDING', 'IN_PROGRESS'])
+        : status && typeof status === 'string'
+          ? eq(manufacturingQueue.status, status)
+          : undefined;
 
-    const queueTypeFilter = (queueType && typeof queueType === 'string')
-      ? eq(manufacturingQueue.queueType, queueType)
-      : undefined;
+    const queueTypeFilter =
+      queueType && typeof queueType === 'string'
+        ? eq(manufacturingQueue.queueType, queueType)
+        : undefined;
 
-    const filters = [routingSignal, statusFilter, queueTypeFilter].filter(Boolean);
-    const whereClause = filters.length > 1 ? and(...(filters as any)) : filters[0];
+    const filters = [routingSignal, statusFilter, queueTypeFilter].filter(
+      Boolean
+    );
+    const whereClause =
+      filters.length > 1 ? and(...(filters as any)) : filters[0];
 
     const baseQuery = db
       .select({
@@ -167,11 +233,19 @@ router.get('/', async (req, res) => {
         },
       })
       .from(manufacturingQueue)
-      .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id));
+      .leftJoin(
+        inventoryItems,
+        eq(manufacturingQueue.inventoryItemId, inventoryItems.id)
+      );
 
     const items = whereClause
-      ? await baseQuery.where(whereClause).orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate)
-      : await baseQuery.orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate);
+      ? await baseQuery
+          .where(whereClause)
+          .orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate)
+      : await baseQuery.orderBy(
+          manufacturingQueue.priority,
+          manufacturingQueue.dueDate
+        );
 
     if (items.length === 0) {
       res.json(items);
@@ -208,25 +282,29 @@ router.get('/by-dashboard/:dashboard', async (req, res) => {
     const dashboard = req.params.dashboard as SupplySourceDashboard;
     const legacyDept = supplySourceDashboardToLegacyDept(dashboard);
     if (!legacyDept) {
-      return res.status(400).json({ error: `Unknown supplySourceDashboard: ${dashboard}` });
+      return res
+        .status(400)
+        .json({ error: `Unknown supplySourceDashboard: ${dashboard}` });
     }
 
     const categories = getDashboardCategories(dashboard);
 
     // Additive routing signal: dept match OR category match
-    const routingSignal = dashboard === 'FINAL_ASSEMBLY' && categories.length > 0
-      ? inArray(inventoryItems.manufacturedCategory, categories)
-      : categories.length > 0
-      ? or(
-          eq(manufacturingQueue.department, legacyDept),
-          inArray(inventoryItems.manufacturedCategory, categories)
-        )
-      : eq(manufacturingQueue.department, legacyDept);
+    const routingSignal =
+      dashboard === 'FINAL_ASSEMBLY' && categories.length > 0
+        ? inArray(inventoryItems.manufacturedCategory, categories)
+        : categories.length > 0
+          ? or(
+              eq(manufacturingQueue.department, legacyDept),
+              inArray(inventoryItems.manufacturedCategory, categories)
+            )
+          : eq(manufacturingQueue.department, legacyDept);
 
     const { status } = req.query;
-    const whereClause = (status && typeof status === 'string')
-      ? and(routingSignal, eq(manufacturingQueue.status, status))
-      : routingSignal;
+    const whereClause =
+      status && typeof status === 'string'
+        ? and(routingSignal, eq(manufacturingQueue.status, status))
+        : routingSignal;
 
     const items = await db
       .select({
@@ -255,7 +333,10 @@ router.get('/by-dashboard/:dashboard', async (req, res) => {
         },
       })
       .from(manufacturingQueue)
-      .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+      .leftJoin(
+        inventoryItems,
+        eq(manufacturingQueue.inventoryItemId, inventoryItems.id)
+      )
       .where(whereClause)
       .orderBy(manufacturingQueue.priority, manufacturingQueue.dueDate);
 
@@ -269,12 +350,14 @@ router.get('/by-dashboard/:dashboard', async (req, res) => {
     const projectByItemId = await loadProjectContextByQueueItemId(ids);
     const woByItemId = await loadWorkOrderContextByQueueItemId(ids);
 
-    res.json(items.map((item: any) => ({
-      ...item,
-      supplySourceDashboard: dashboard,
-      ...(projectByItemId.get(item.id) ?? {}),
-      ...(woByItemId.get(item.id) ?? {}),
-    })));
+    res.json(
+      items.map((item: any) => ({
+        ...item,
+        supplySourceDashboard: dashboard,
+        ...(projectByItemId.get(item.id) ?? {}),
+        ...(woByItemId.get(item.id) ?? {}),
+      }))
+    );
   } catch (error) {
     console.error('Error fetching manufacturing queue by dashboard:', error);
     res.status(500).json({ error: 'Failed to fetch manufacturing queue' });
@@ -285,7 +368,7 @@ router.get('/by-dashboard/:dashboard', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    
+
     const item = await db
       .select({
         id: manufacturingQueue.id,
@@ -313,14 +396,19 @@ router.get('/:id', async (req, res) => {
         },
       })
       .from(manufacturingQueue)
-      .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+      .leftJoin(
+        inventoryItems,
+        eq(manufacturingQueue.inventoryItemId, inventoryItems.id)
+      )
       .where(eq(manufacturingQueue.id, id))
       .limit(1);
-    
+
     if (item.length === 0) {
-      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+      return res
+        .status(404)
+        .json({ error: 'Manufacturing queue item not found' });
     }
-    
+
     res.json(item[0]);
   } catch (error) {
     console.error('Error fetching manufacturing queue item:', error);
@@ -332,7 +420,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const validatedData = insertManufacturingQueueSchema.parse(req.body);
-    
+
     const [newItem] = await db
       .insert(manufacturingQueue)
       .values(validatedData)
@@ -340,14 +428,19 @@ router.post('/', async (req, res) => {
 
     // Auto-generate allocation requirements from routing (best-effort, non-blocking)
     const routingId: string | undefined = req.body.partRoutingId ?? undefined;
-    generateRequirementsFromRouting(newItem.id, routingId).catch(err =>
-      console.warn(`[manufacturingQueue] auto-generate requirements failed for queue ${newItem.id}:`, err.message)
+    generateRequirementsFromRouting(newItem.id, routingId).catch((err) =>
+      console.warn(
+        `[manufacturingQueue] auto-generate requirements failed for queue ${newItem.id}:`,
+        err.message
+      )
     );
 
     res.status(201).json(newItem);
   } catch (error) {
     console.error('Error creating manufacturing queue item:', error);
-    res.status(400).json({ error: 'Failed to create manufacturing queue item' });
+    res
+      .status(400)
+      .json({ error: 'Failed to create manufacturing queue item' });
   }
 });
 
@@ -355,22 +448,28 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const validatedData = insertManufacturingQueueSchema.partial().parse(req.body);
-    
+    const validatedData = insertManufacturingQueueSchema
+      .partial()
+      .parse(req.body);
+
     const [updatedItem] = await db
       .update(manufacturingQueue)
       .set({ ...validatedData, updatedAt: new Date() })
       .where(eq(manufacturingQueue.id, id))
       .returning();
-    
+
     if (!updatedItem) {
-      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+      return res
+        .status(404)
+        .json({ error: 'Manufacturing queue item not found' });
     }
-    
+
     res.json(updatedItem);
   } catch (error) {
     console.error('Error updating manufacturing queue item:', error);
-    res.status(400).json({ error: 'Failed to update manufacturing queue item' });
+    res
+      .status(400)
+      .json({ error: 'Failed to update manufacturing queue item' });
   }
 });
 
@@ -379,26 +478,28 @@ router.patch('/:id/status', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { status } = req.body;
-    
+
     const updateData: any = { status, updatedAt: new Date() };
-    
+
     if (status === 'IN_PROGRESS' && !req.body.startedAt) {
       updateData.startedAt = new Date();
     }
     if (status === 'COMPLETED' && !req.body.completedAt) {
       updateData.completedAt = new Date();
     }
-    
+
     const [updatedItem] = await db
       .update(manufacturingQueue)
       .set(updateData)
       .where(eq(manufacturingQueue.id, id))
       .returning();
-    
+
     if (!updatedItem) {
-      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+      return res
+        .status(404)
+        .json({ error: 'Manufacturing queue item not found' });
     }
-    
+
     res.json(updatedItem);
   } catch (error) {
     console.error('Error updating manufacturing queue item status:', error);
@@ -410,15 +511,15 @@ router.patch('/:id/status', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    
-    await db
-      .delete(manufacturingQueue)
-      .where(eq(manufacturingQueue.id, id));
-    
+
+    await db.delete(manufacturingQueue).where(eq(manufacturingQueue.id, id));
+
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting manufacturing queue item:', error);
-    res.status(500).json({ error: 'Failed to delete manufacturing queue item' });
+    res
+      .status(500)
+      .json({ error: 'Failed to delete manufacturing queue item' });
   }
 });
 
@@ -440,7 +541,9 @@ router.post('/:id/generate-requirements', async (req, res) => {
       .limit(1);
 
     if (!queueItem) {
-      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+      return res
+        .status(404)
+        .json({ error: 'Manufacturing queue item not found' });
     }
 
     const routingId: string | undefined = req.body?.routingId ?? undefined;
@@ -448,7 +551,12 @@ router.post('/:id/generate-requirements', async (req, res) => {
     res.json(result);
   } catch (error: any) {
     console.error('Error generating requirements from routing:', error);
-    res.status(500).json({ error: 'Failed to generate requirements', message: error.message });
+    res
+      .status(500)
+      .json({
+        error: 'Failed to generate requirements',
+        message: error.message,
+      });
   }
 });
 
@@ -475,28 +583,62 @@ router.post('/:id/release', async (req, res) => {
       .limit(1);
 
     if (!item) {
-      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+      return res
+        .status(404)
+        .json({ error: 'Manufacturing queue item not found' });
     }
-    if (item.queueType !== 'CUTTING_TABLE' && item.queueType !== 'KIT' && item.queueType !== 'CNC' && item.queueType !== 'LAYUP' && item.queueType !== 'CORE' && item.queueType !== 'SUB_ASSEMBLY' && item.queueType !== 'ASSEMBLY' && item.queueType !== 'FINAL_ASSEMBLY') {
-      return res.status(400).json({ error: 'Only CUTTING_TABLE, KIT, CNC, LAYUP, CORE, SUB_ASSEMBLY, ASSEMBLY, or FINAL_ASSEMBLY queue items can be released' });
+    if (
+      item.queueType !== 'CUTTING_TABLE' &&
+      item.queueType !== 'KIT' &&
+      item.queueType !== 'CNC' &&
+      item.queueType !== 'LAYUP' &&
+      item.queueType !== 'CORE' &&
+      item.queueType !== 'SUB_ASSEMBLY' &&
+      item.queueType !== 'ASSEMBLY' &&
+      item.queueType !== 'FINAL_ASSEMBLY'
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            'Only CUTTING_TABLE, KIT, CNC, LAYUP, CORE, SUB_ASSEMBLY, ASSEMBLY, or FINAL_ASSEMBLY queue items can be released',
+        });
     }
     if (item.readinessStatus !== 'READY') {
-      return res.status(400).json({ error: `${item.queueType} must be READY before it can be released` });
+      return res
+        .status(400)
+        .json({
+          error: `${item.queueType} must be READY before it can be released`,
+        });
     }
-    if (['IN_PROGRESS', 'COMPLETED', 'RELEASED', 'CANCELLED'].includes(item.status)) {
-      return res.status(400).json({ error: `Item is already ${item.status} and cannot be released` });
+    if (
+      ['IN_PROGRESS', 'COMPLETED', 'RELEASED', 'CANCELLED'].includes(
+        item.status
+      )
+    ) {
+      return res
+        .status(400)
+        .json({
+          error: `Item is already ${item.status} and cannot be released`,
+        });
     }
 
     const [updated] = await db
       .update(manufacturingQueue)
-      .set({ status: 'RELEASED', releasedAt: new Date(), updatedAt: new Date() })
+      .set({
+        status: 'RELEASED',
+        releasedAt: new Date(),
+        updatedAt: new Date(),
+      })
       .where(eq(manufacturingQueue.id, id))
       .returning();
 
     res.json(updated);
   } catch (error: any) {
     console.error('Error releasing queue item:', error);
-    res.status(500).json({ error: 'Failed to release queue item', message: error.message });
+    res
+      .status(500)
+      .json({ error: 'Failed to release queue item', message: error.message });
   }
 });
 
@@ -518,14 +660,18 @@ router.post('/:id/evaluate-readiness', async (req, res) => {
       .limit(1);
 
     if (!queueItem) {
-      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+      return res
+        .status(404)
+        .json({ error: 'Manufacturing queue item not found' });
     }
 
     const result = await evaluateQueueReadiness(id);
     res.json(result);
   } catch (error: any) {
     console.error('Error evaluating queue readiness:', error);
-    res.status(500).json({ error: 'Failed to evaluate readiness', message: error.message });
+    res
+      .status(500)
+      .json({ error: 'Failed to evaluate readiness', message: error.message });
   }
 });
 

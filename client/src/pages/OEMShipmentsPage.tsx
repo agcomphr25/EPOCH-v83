@@ -204,8 +204,9 @@ const SERVICE_NAMES: Record<string, string> = {
 export default function OEMShipmentsPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [search, setSearch] = useState('');
-  const [searchInput, setSearchInput] = useState('');
+  const initialSearch = new URLSearchParams(window.location.search).get('search') || '';
+  const [search, setSearch] = useState(initialSearch);
+  const [searchInput, setSearchInput] = useState(initialSearch);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(0);

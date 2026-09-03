@@ -60,6 +60,15 @@ async function ensureBillingTaskTables() {
       updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
       UNIQUE(customer_id, username)
     );
+    CREATE TABLE IF NOT EXISTS p1_billing_task_snoozes (
+      id SERIAL PRIMARY KEY,
+      customer_id TEXT NOT NULL,
+      username TEXT NOT NULL,
+      snoozed_until TIMESTAMP NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE(customer_id, username)
+    );
   `);
   billingTaskTablesEnsured = true;
 }
@@ -191,6 +200,171 @@ async function getP2BillingTasksForUser(user: any) {
       packingSlipCount: count,
       oldestCreatedAt: row.oldest_created_at,
       newestCreatedAt: row.newest_created_at,
+      graceDays: BILLING_GRACE_DAYS,
+      overdueDays: BILLING_OVERDUE_DAYS,
+      items: Array.isArray(row.items) ? row.items : [],
+    };
+  });
+}
+
+async function getP1BillingTasksForUser(user: any) {
+  if (!isBillingTaskOwner(user)) return [];
+
+  await ensureBillingTaskTables();
+
+  const { rows } = await optionalQuery<any>(
+    "p1BillingTasks",
+    `
+      WITH shipment_lines AS (
+        SELECT
+          sr.id AS shipment_id,
+          COALESCE(sr.customer_id::text, po.customer_id::text, '0') AS customer_id,
+          COALESCE(NULLIF(sr.customer_name, ''), NULLIF(po.customer_name, ''),
+                   NULLIF(sr.ship_to_snapshot->>'name', ''), 'P1 customer') AS customer_name,
+          sr.reference,
+          sr.master_tracking_number,
+          sr.invoice_number AS shipment_invoice_number,
+          sr.shipped_at,
+          sr.created_at,
+          COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number,
+          si.order_id
+        FROM shipment_records sr
+        JOIN shipment_items si ON si.shipment_id = sr.id
+        LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
+        LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+        LEFT JOIN purchase_orders po ON po.id = poi.po_id
+      ),
+      shipment_po_groups AS (
+        SELECT
+          shipment_id,
+          customer_id,
+          MAX(customer_name) AS customer_name,
+          MAX(reference) AS reference,
+          MAX(master_tracking_number) AS master_tracking_number,
+          MAX(shipment_invoice_number) AS shipment_invoice_number,
+          MAX(shipped_at) AS shipped_at,
+          MAX(created_at) AS created_at,
+          po_number,
+          ARRAY_AGG(DISTINCT order_id) FILTER (WHERE order_id IS NOT NULL) AS order_ids,
+          (
+            SELECT COUNT(DISTINCT sl2.po_number)
+            FROM shipment_lines sl2
+            WHERE sl2.shipment_id = shipment_lines.shipment_id
+              AND NULLIF(sl2.po_number, '') IS NOT NULL
+          ) AS shipment_po_count
+        FROM shipment_lines
+        WHERE NULLIF(po_number, '') IS NOT NULL
+        GROUP BY shipment_id, customer_id, po_number
+      ),
+      eligible_groups AS (
+        SELECT spg.*, invoice_match.*
+        FROM shipment_po_groups spg
+        LEFT JOIN LATERAL (
+          SELECT
+            (ARRAY_AGG(inv.id ORDER BY inv.created_at DESC)
+              FILTER (WHERE COALESCE(inv.status, '') <> 'VOID'))[1] AS invoice_id,
+            (ARRAY_AGG(inv.invoice_number ORDER BY inv.created_at DESC)
+              FILTER (WHERE COALESCE(inv.status, '') <> 'VOID'))[1] AS invoice_number,
+            (ARRAY_AGG(inv.status ORDER BY inv.created_at DESC)
+              FILTER (WHERE COALESCE(inv.status, '') <> 'VOID'))[1] AS invoice_status,
+            COALESCE(BOOL_OR(
+              COALESCE(inv.status, '') <> 'VOID'
+              AND (
+                inv.status = 'POSTED'
+                OR EXISTS (
+                  SELECT 1 FROM journal_entries je
+                  WHERE je.reference_uuid = inv.id
+                    AND je.transaction_type = 'AR_INVOICE'
+                    AND COALESCE(je.status, 'POSTED') = 'POSTED'
+                )
+              )
+            ), false) AS has_posted_invoice
+          FROM ar_invoices inv
+          WHERE EXISTS (
+            SELECT 1
+            FROM ar_invoice_lines line
+            WHERE line.invoice_id = inv.id
+              AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
+              AND line.dimension_tags->>'poNumber' = spg.po_number
+              AND (
+                line.dimension_tags->>'shipmentRecordId' = spg.shipment_id::text
+                OR line.dimension_tags->>'orderId' = ANY(spg.order_ids)
+                OR EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements_text(
+                    CASE WHEN jsonb_typeof(line.dimension_tags->'orderIds') = 'array'
+                         THEN line.dimension_tags->'orderIds' ELSE '[]'::jsonb END
+                  ) order_id(value)
+                  WHERE order_id.value = ANY(spg.order_ids)
+                )
+              )
+          )
+          OR (
+            spg.shipment_po_count = 1
+            AND inv.po_override = spg.po_number
+            AND inv.invoice_number = spg.shipment_invoice_number
+          )
+        ) invoice_match ON true
+        WHERE NOT invoice_match.has_posted_invoice
+          AND spg.shipped_at <= NOW() - ($1::int * INTERVAL '1 day')
+      ),
+      unsnoozed_groups AS (
+        SELECT eg.*
+        FROM eligible_groups eg
+        LEFT JOIN p1_billing_task_snoozes s
+          ON s.customer_id = eg.customer_id
+         AND LOWER(s.username) = LOWER($2)
+         AND s.snoozed_until > NOW()
+        WHERE s.id IS NULL
+      )
+      SELECT
+        customer_id,
+        MAX(customer_name) AS customer_name,
+        COUNT(*)::int AS shipment_po_count,
+        MIN(shipped_at) AS oldest_shipped_at,
+        MAX(shipped_at) AS newest_shipped_at,
+        JSON_AGG(
+          JSON_BUILD_OBJECT(
+            'id', shipment_id::text || ':' || po_number,
+            'shipmentId', shipment_id,
+            'poNumber', po_number,
+            'shipmentReference', reference,
+            'trackingNumber', master_tracking_number,
+            'createdAt', created_at,
+            'shipDate', shipped_at,
+            'invoiceId', invoice_id,
+            'invoiceNumber', invoice_number,
+            'invoiceStatus', invoice_status
+          ) ORDER BY shipped_at ASC, po_number ASC
+        ) AS items
+      FROM unsnoozed_groups
+      GROUP BY customer_id
+      ORDER BY MIN(shipped_at) ASC
+      LIMIT 25
+    `,
+    [BILLING_GRACE_DAYS, BILLING_TASK_OWNER_USERNAME],
+  );
+
+  return rows.map((row: any) => {
+    const oldest = new Date(row.oldest_shipped_at);
+    const ageDays = Math.max(0, Math.floor((Date.now() - oldest.getTime()) / 86_400_000));
+    const count = Number(row.shipment_po_count ?? 0);
+    const label = count === 1 ? "shipment/PO" : "shipment/PO combinations";
+    return {
+      id: `p1-billing-${row.customer_id}`,
+      type: "p1_invoice_posting_group",
+      title: `Post P1 PO invoices: ${row.customer_name}`,
+      description: `${count} ${label} past the ${BILLING_GRACE_DAYS}-day grace period without a posted invoice`,
+      employeeName: BILLING_TASK_OWNER_USERNAME,
+      createdAt: row.oldest_shipped_at,
+      priority: ageDays >= BILLING_OVERDUE_DAYS ? "overdue" : "normal",
+      actionUrl: "/oem-shipments",
+      sourceId: 0,
+      customerId: row.customer_id,
+      customerName: row.customer_name,
+      packingSlipCount: count,
+      oldestCreatedAt: row.oldest_shipped_at,
+      newestCreatedAt: row.newest_shipped_at,
       graceDays: BILLING_GRACE_DAYS,
       overdueDays: BILLING_OVERDUE_DAYS,
       items: Array.isArray(row.items) ? row.items : [],
@@ -345,6 +519,38 @@ router.post(
   }),
 );
 
+router.post(
+  "/my-tasks/p1-billing/:customerId/snooze",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    const user = req.user as any;
+    if (!isBillingTaskOwner(user)) {
+      res.status(403).json({ error: "Only glennj can snooze P1 billing tasks." });
+      return;
+    }
+
+    const customerId = String(req.params.customerId ?? "").trim();
+    if (!customerId) {
+      res.status(400).json({ error: "Customer ID is required." });
+      return;
+    }
+
+    await ensureBillingTaskTables();
+    const { rows } = await pool.query<{ snoozed_until: string }>(
+      `
+        INSERT INTO p1_billing_task_snoozes (customer_id, username, snoozed_until, updated_at)
+        VALUES ($1, $2, DATE_TRUNC('day', NOW()) + INTERVAL '1 day' + INTERVAL '8 hours', NOW())
+        ON CONFLICT (customer_id, username)
+        DO UPDATE SET snoozed_until = EXCLUDED.snoozed_until, updated_at = NOW()
+        RETURNING snoozed_until
+      `,
+      [customerId, BILLING_TASK_OWNER_USERNAME],
+    );
+
+    res.json({ customerId, snoozedUntil: rows[0]?.snoozed_until ?? null });
+  }),
+);
+
 router.get(
   "/my-tasks/:employeeId",
   authenticateToken,
@@ -365,7 +571,7 @@ router.get(
 
     await optionalValue("ensureForkliftTaskTables", ensureForkliftTaskTables(), undefined);
 
-    const [pto, punchCorrections, salaried, hourly, forklift, payrollReview, salariedReviewQueue, p2BillingTasks] = await Promise.all([
+    const [pto, punchCorrections, salaried, hourly, forklift, payrollReview, salariedReviewQueue, p2BillingTasks, p1BillingTasks] = await Promise.all([
       optionalQuery(
         "pto",
         `
@@ -467,6 +673,7 @@ router.get(
       optionalValue("payrollReviewBatch", getPayrollReviewBatch(), emptyPayrollReviewBatch()),
       optionalValue("salariedReviewQueue", getAdminReviewQueue(), []),
       optionalValue("p2BillingTasks", getP2BillingTasksForUser(user), []),
+      optionalValue("p1BillingTasks", getP1BillingTasksForUser(user), []),
     ]);
 
     const ptoTasks = pto.rows.map((r: any) => ({
@@ -603,7 +810,7 @@ router.get(
       testType: r.test_type,
     }));
 
-    const tasks = [...p2BillingTasks, ...ptoTasks, ...punchCorrectionTasks, ...salariedTasks, ...hourlyTasks, ...blockedHourlyTasks, ...missingSalariedTasks, ...needsReviewSalariedTasks, ...forkliftTasks].sort(
+    const tasks = [...p2BillingTasks, ...p1BillingTasks, ...ptoTasks, ...punchCorrectionTasks, ...salariedTasks, ...hourlyTasks, ...blockedHourlyTasks, ...missingSalariedTasks, ...needsReviewSalariedTasks, ...forkliftTasks].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
 

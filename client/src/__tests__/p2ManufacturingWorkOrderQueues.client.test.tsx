@@ -10,17 +10,29 @@ const page = read('client/src/pages/P2WorkOrderQueuePage.tsx');
 
 describe('P2 W/O Queues client surface', () => {
   it('keeps the P2 dropdown distinct from the unchanged P1 manager', () => {
-    expect(navigation).toContain('P2 W/O Queues');
+    expect(navigation).toContain('P2 Work Order Queues');
     expect(navigation).toContain('P1 Department Manager');
     expect(navigation).toContain('/p2-work-orders/queues/');
     expect(navigation).toContain('/department-queue/production-queue');
   });
 
+  it('presents the requested queues and gives CNC machined work a dedicated UI', () => {
+    expect(navigation).toContain("label: 'Manufacturing'");
+    expect(navigation).toContain("label: 'Kits'");
+    expect(navigation).toContain("label: 'Layup'");
+    expect(navigation).toContain("label: 'Core'");
+    expect(navigation).toContain("label: 'Subassembly'");
+    expect(navigation).toContain("label: 'Assembly'");
+    expect(navigation).toContain("label: 'CNC / Machined Parts'");
+    expect(page).toContain('CNC / Machined Parts Work Orders');
+    expect(page).toContain('cnc-machined-work-order-details');
+    expect(page).toContain('Machined Part');
+  });
+
   it('uses authoritative shared Departments rather than a hard-coded P2 taxonomy', () => {
-    expect(navigation).toContain(
-      "apiRequest('/api/shared-departments?routingOnly=true')"
-    );
+    expect(navigation).toContain("apiRequest('/api/shared-departments')");
     expect(navigation).toContain('department.id');
+    expect(navigation).toContain("path: '/p2-work-orders/queues/all'");
     expect(navigation).not.toContain("label: 'P2 Assembly'");
   });
 

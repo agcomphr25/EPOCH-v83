@@ -1785,13 +1785,19 @@ export default function Navigation() {
     }>
   >({
     queryKey: ['/api/shared-departments', 'p2-work-order-queues'],
-    queryFn: () => apiRequest('/api/shared-departments?routingOnly=true'),
+    queryFn: () => apiRequest('/api/shared-departments'),
     enabled: p2QueueReadsEnabled && navCapSet.has('p2.work_orders.view'),
     staleTime: 5 * 60 * 1000,
   });
   const p2WorkOrderQueueItems = useMemo(
-    () =>
-      p2QueueDepartments
+    () => [
+      {
+        path: '/p2-work-orders/queues/all',
+        label: 'All Work Orders',
+        icon: Factory,
+        description: 'All P2 manufacturing work orders grouped by department',
+      },
+      ...p2QueueDepartments
         .filter(
           (department) =>
             department.isActive !== false &&
@@ -1803,6 +1809,7 @@ export default function Navigation() {
           icon: Factory,
           description: `${department.name} P2 manufacturing work-order queue`,
         })),
+    ],
     [p2QueueDepartments]
   );
 

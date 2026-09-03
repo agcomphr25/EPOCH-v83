@@ -121,7 +121,7 @@ export default function ManufacturingQueue() {
   const [selectedDepartment, setSelectedDepartment] = useState<string>(
     ALL_MANUFACTURING_QUEUES
   );
-  const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [selectedStatus, setSelectedStatus] = useState<string>('ACTIVE');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const { data: sharedDepartments = [] } = useQuery<
     SharedManufacturingDepartment[]
@@ -337,6 +337,9 @@ export default function ManufacturingQueue() {
                 </SelectTrigger>
                 <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
                   <SelectItem value="ALL">All</SelectItem>
+                  <SelectItem value="ACTIVE">
+                    Pending &amp; In Progress
+                  </SelectItem>
                   <SelectItem value="PENDING">Pending</SelectItem>
                   <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
                   <SelectItem value="COMPLETED">Completed</SelectItem>

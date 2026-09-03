@@ -89,7 +89,7 @@ interface MyTasksResponse {
 
 interface TimekeepingApprovalTask {
   id: string;
-  type: 'pto_approval' | 'punch_correction_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval' | 'hourly_timesheet_blocked' | 'salaried_timesheet_blocked' | 'forklift_evaluation' | 'p2_invoice_posting_group';
+  type: 'pto_approval' | 'punch_correction_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval' | 'hourly_timesheet_blocked' | 'salaried_timesheet_blocked' | 'forklift_evaluation' | 'p1_invoice_posting_group' | 'p2_invoice_posting_group';
   title: string;
   description: string;
   employeeName: string;
@@ -117,7 +117,10 @@ interface TimekeepingApprovalTask {
 
 interface P2BillingTaskItem {
   id: string;
-  packingSlipNumber: string;
+  packingSlipNumber?: string;
+  shipmentId?: string;
+  shipmentReference?: string | null;
+  trackingNumber?: string | null;
   poNumber: string | null;
   lotNumberId: string | null;
   shipmentNumber: string | null;
@@ -229,8 +232,8 @@ export default function MyTasksControlCenter({
 
   const tasks = tasksData?.tasks || [];
   const timekeepingTasks = timekeepingTasksError ? [] : timekeepingTasksData?.tasks || [];
-  const billingTasks = timekeepingTasks.filter((task) => task.type === 'p2_invoice_posting_group');
-  const workflowTimekeepingTasks = timekeepingTasks.filter((task) => task.type !== 'p2_invoice_posting_group');
+  const billingTasks = timekeepingTasks.filter((task) => task.type === 'p1_invoice_posting_group' || task.type === 'p2_invoice_posting_group');
+  const workflowTimekeepingTasks = timekeepingTasks.filter((task) => task.type !== 'p1_invoice_posting_group' && task.type !== 'p2_invoice_posting_group');
   const approvalTasks = approvalTasksData?.tasks || [];
   const baseStats = tasksData?.stats || { total: 0, completed: 0, pending: 0, overdue: 0 };
   const sigPending = signatureStats?.pending || 0;
@@ -343,7 +346,7 @@ export default function MyTasksControlCenter({
 
               <ApprovalRequestTasks tasks={approvalTasks} compact={true} />
 
-              <P2BillingTasks tasks={billingTasks} compact={true} />
+              <BillingFollowUpTasks tasks={billingTasks} compact={true} />
 
               <TimekeepingApprovalTasks tasks={workflowTimekeepingTasks} compact={true} />
 
@@ -451,7 +454,7 @@ export default function MyTasksControlCenter({
 
         <ApprovalRequestTasks tasks={approvalTasks} />
 
-        <P2BillingTasks tasks={billingTasks} />
+        <BillingFollowUpTasks tasks={billingTasks} />
 
         <TimekeepingApprovalTasks tasks={workflowTimekeepingTasks} />
 
@@ -621,7 +624,7 @@ export default function MyTasksControlCenter({
   );
 }
 
-function P2BillingTasks({
+function BillingFollowUpTasks({
   tasks,
   compact = false,
 }: {
@@ -632,8 +635,8 @@ function P2BillingTasks({
   const queryClient = useQueryClient();
 
   const snoozeMutation = useMutation({
-    mutationFn: (customerId: string) =>
-      apiRequest(`/api/timekeeping/my-tasks/p2-billing/${encodeURIComponent(customerId)}/snooze`, {
+    mutationFn: ({ customerId, productionLine }: { customerId: string; productionLine: 'p1' | 'p2' }) =>
+      apiRequest(`/api/timekeeping/my-tasks/${productionLine}-billing/${encodeURIComponent(customerId)}/snooze`, {
         method: 'POST',
       }),
     onSuccess: () => {
@@ -657,7 +660,7 @@ function P2BillingTasks({
   const visibleTasks = compact ? tasks.slice(0, 2) : tasks;
 
   return (
-    <div className="space-y-2" data-testid="p2-billing-tasks">
+    <div className="space-y-2" data-testid="billing-follow-up-tasks">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground font-medium">
           Billing Follow-up
@@ -666,6 +669,7 @@ function P2BillingTasks({
       </div>
       {visibleTasks.map((task) => {
         const items = task.items || [];
+        const isP1 = task.type === 'p1_invoice_posting_group';
         return (
           <div
             key={task.id}
@@ -694,7 +698,7 @@ function P2BillingTasks({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => task.customerId && snoozeMutation.mutate(task.customerId)}
+                  onClick={() => task.customerId && snoozeMutation.mutate({ customerId: task.customerId, productionLine: isP1 ? 'p1' : 'p2' })}
                   disabled={!task.customerId || snoozeMutation.isPending}
                 >
                   Snooze
@@ -716,6 +720,9 @@ function P2BillingTasks({
                       ? 'Invoice sent - waiting on posting'
                       : `Invoice ${item.invoiceStatus || 'not posted'}`
                     : 'No invoice created yet';
+                  const shipmentText = isP1 && !item.invoiceNumber && item.shipDate
+                    ? `Shipped ${format(new Date(item.shipDate), 'MMM d, yyyy')}${item.trackingNumber ? ` - Tracking ${item.trackingNumber}` : ''}`
+                    : statusText;
                   return (
                     <div key={item.id} className="flex items-center gap-2 rounded-md bg-white/70 border px-2 py-2">
                       <div className="flex-1 min-w-0">
@@ -724,13 +731,19 @@ function P2BillingTasks({
                           {item.poNumber ? ` - PO ${item.poNumber}` : ''}
                         </p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {statusText}
+                          {shipmentText}
                         </p>
                       </div>
                       {item.invoiceId ? (
                         <Link href={`/finance/invoices/${item.invoiceId}`}>
                           <Button variant="outline" size="sm">
                             Open Invoice
+                          </Button>
+                        </Link>
+                      ) : isP1 ? (
+                        <Link href={`/oem-shipments?search=${encodeURIComponent(item.poNumber || task.customerName || '')}`}>
+                          <Button variant="outline" size="sm">
+                            Create Invoice
                           </Button>
                         </Link>
                       ) : (

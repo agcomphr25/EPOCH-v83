@@ -5,70 +5,92 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import P2V2ProjectWorkflow from '../components/projects/P2V2ProjectWorkflow';
 
 const stageDefinitions = [
-  ['rfq_risk_assessment', 'RFQ & Risk Assessment'],
-  ['estimate_quote', 'Estimate & Quote'],
-  ['contract_review', 'Contract Review'],
-  ['technical_configuration_review', 'Technical & Configuration Review'],
-  ['production_planning', 'Production Planning'],
-  ['wad_authorization', 'WAD Authorization'],
-  ['preproduction_release', 'Preproduction & Production Release'],
-  ['production_quality', 'Production Execution'],
-  ['final_release_shipping', 'Quality & Product Release'],
-  ['project_closing', 'Shipping, Delivery & Project Closing'],
+  ['rfq_risk_assessment', 'RFQ & Risk Assessment', 'commercial_review'],
+  ['estimate_quote', 'Estimate & Quote', 'commercial_review'],
+  ['contract_review', 'Contract Review', 'commercial_review'],
+  [
+    'technical_configuration_review',
+    'Technical & Configuration Review',
+    'technical_configuration_review',
+  ],
+  ['production_planning', 'Production Planning', 'production_planning'],
+  ['wad_authorization', 'WAD Authorization', 'wad_authorization'],
+  [
+    'preproduction_release',
+    'Preproduction & Production Release',
+    'preproduction_readiness',
+  ],
+  ['production_quality', 'Production Execution', 'production_execution'],
+  [
+    'final_release_shipping',
+    'Quality & Product Release',
+    'quality_product_release',
+  ],
+  [
+    'project_closing',
+    'Shipping, Delivery & Project Closing',
+    'shipping_project_closeout',
+  ],
 ] as const;
 
-const stages = stageDefinitions.map(([stepType, label], index) => ({
-  id: `step-${index + 1}`,
-  stepType,
-  stepOrder: index + 1,
-  label,
-  description: `Description ${index + 1}`,
-  status: index === 0 ? 'BLOCKED' : 'NOT_STARTED',
-  applicability: 'REQUIRED',
-  blockedReason: index === 0 ? 'Required evidence is missing' : null,
-  activeLinks:
-    index === 0
-      ? [
-          {
-            id: 'link-1',
-            recordType: 'quote',
-            recordId: 'Q-1',
-            relationshipType: 'PRIMARY',
-            isAuthoritative: true,
-            linkedByDisplayName: 'Alex',
-          },
-        ]
-      : [],
-  supersededLinks:
-    index === 0
-      ? [
-          {
-            id: 'link-2',
-            recordType: 'quote',
-            recordId: 'Q-0',
-            relationshipType: 'SUPERSEDES',
-            isAuthoritative: false,
-            supersededAt: '2026-01-01',
-            supersededReason: 'Revised',
-          },
-        ]
-      : [],
-  approvals:
-    index === 0
-      ? [
-          {
-            id: 'approval-1',
-            decision: 'REJECTED',
-            approvalType: 'QUALITY',
-            signatureMeaning: 'Reviewed',
-            actorDisplayName: 'Pat',
-            superseded: false,
-          },
-        ]
-      : [],
-  evidenceCount: index === 0 ? 3 : 0,
-  lastUpdated: '2026-01-01',
-}));
+const stages = stageDefinitions.map(
+  ([stepType, label, workspaceKey], index) => ({
+    id: `step-${index + 1}`,
+    stepType,
+    stepOrder: index + 1,
+    label,
+    description: `Description ${index + 1}`,
+    primaryAction: {
+      label: `Open ${label}`,
+      surface: { kind: 'workspace', key: workspaceKey },
+    },
+    status: index === 0 ? 'BLOCKED' : 'NOT_STARTED',
+    applicability: 'REQUIRED',
+    blockedReason: index === 0 ? 'Required evidence is missing' : null,
+    activeLinks:
+      index === 0
+        ? [
+            {
+              id: 'link-1',
+              recordType: 'quote',
+              recordId: 'Q-1',
+              relationshipType: 'PRIMARY',
+              isAuthoritative: true,
+              linkedByDisplayName: 'Alex',
+            },
+          ]
+        : [],
+    supersededLinks:
+      index === 0
+        ? [
+            {
+              id: 'link-2',
+              recordType: 'quote',
+              recordId: 'Q-0',
+              relationshipType: 'SUPERSEDES',
+              isAuthoritative: false,
+              supersededAt: '2026-01-01',
+              supersededReason: 'Revised',
+            },
+          ]
+        : [],
+    approvals:
+      index === 0
+        ? [
+            {
+              id: 'approval-1',
+              decision: 'REJECTED',
+              approvalType: 'QUALITY',
+              signatureMeaning: 'Reviewed',
+              actorDisplayName: 'Pat',
+              superseded: false,
+            },
+          ]
+        : [],
+    evidenceCount: index === 0 ? 3 : 0,
+    lastUpdated: '2026-01-01',
+  })
+);
 
 const initialized = {
   projectId: 'p1',
@@ -147,7 +169,7 @@ function renderWorkflow(response: object) {
 describe('P2V2ProjectWorkflow', () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it('renders ten ordered, text-labelled read-only stages and integrity/blocker warnings', async () => {
+  it('renders ten ordered stage workspaces and integrity/blocker warnings', async () => {
     renderWorkflow(initialized);
     expect(
       await screen.findByText('P2 Project Workflow V2')
@@ -179,9 +201,12 @@ describe('P2V2ProjectWorkflow', () => {
 
   it('shows active, superseded, and approval evidence in stage details', async () => {
     renderWorkflow(initialized);
-    fireEvent.click(await screen.findByTestId('v2-stage-details-1'));
+    fireEvent.click(await screen.findByTestId('v2-stage-audit-evidence-1'));
     expect(
       await screen.findByTestId('v2-stage-details-dialog')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Read-only workflow stage audit evidence')
     ).toBeInTheDocument();
     expect(screen.getByTestId('v2-active-link')).toHaveTextContent('Q-1');
     expect(screen.getByTestId('v2-superseded-link')).toHaveTextContent('Q-0');
@@ -210,7 +235,7 @@ describe('P2V2ProjectWorkflow', () => {
     expect(screen.getAllByText(/0 \/ 0 \/ 0/)).toHaveLength(10);
   });
 
-  it('makes only the first six stages writable from the ten-stage summary', async () => {
+  it('presents the configured stage workspace before secondary audit evidence', async () => {
     renderWorkflow(initialized);
     expect(
       await screen.findByTestId('open-commercial-review-rfq_risk_assessment')
@@ -238,7 +263,17 @@ describe('P2V2ProjectWorkflow', () => {
     expect(
       screen.getAllByRole('button', { name: 'Open WAD Authorization' })
     ).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: 'Details' })).toHaveLength(10);
+    expect(screen.getAllByTestId(/^v2-stage-workspace-\d+$/)).toHaveLength(10);
+    expect(screen.getByTestId('v2-stage-workspace-1')).toHaveAttribute(
+      'data-workspace-key',
+      'commercial_review'
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Audit evidence' })
+    ).toHaveLength(10);
+    expect(
+      screen.queryByRole('button', { name: 'Details' })
+    ).not.toBeInTheDocument();
   });
 
   it('shows an explicit not-initialized state without an initialize action', async () => {
@@ -288,6 +323,18 @@ describe('P2V2ProjectWorkflow', () => {
       'p2_execution',
       'project_closing',
     ];
+    const workspaceKeys = [
+      'commercial_review',
+      'commercial_review',
+      'commercial_review',
+      'technical_configuration_review',
+      'production_planning',
+      'wad_authorization',
+      'preproduction_readiness',
+      'p2_release_handoff',
+      'p2_execution_summary',
+      'project_closing_summary',
+    ];
     renderWorkflow({
       ...initialized,
       definitionVersion: 3,
@@ -300,6 +347,10 @@ describe('P2V2ProjectWorkflow', () => {
         label,
         stepOrder: index + 1,
         blockedReason: null,
+        primaryAction: {
+          label: `Open ${label}`,
+          surface: { kind: 'workspace', key: workspaceKeys[index] },
+        },
       })),
     });
     for (const label of labels)

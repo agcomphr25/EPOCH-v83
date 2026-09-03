@@ -41,7 +41,30 @@ export type ProjectWorkflowStageDefinition = Readonly<{
   order: number;
   label: string;
   description: string;
+  primaryAction: ProjectWorkflowStagePrimaryAction;
 }>;
+
+export type ProjectWorkflowStagePrimaryAction = Readonly<{
+  label: string;
+  surface: Readonly<{
+    kind: 'workspace';
+    key: ProjectWorkflowStageWorkspaceKey;
+  }>;
+}>;
+
+export type ProjectWorkflowStageWorkspaceKey =
+  | 'commercial_review'
+  | 'design_applicability'
+  | 'technical_configuration_review'
+  | 'production_planning'
+  | 'wad_authorization'
+  | 'preproduction_readiness'
+  | 'p2_release_handoff'
+  | 'p2_execution_summary'
+  | 'production_execution'
+  | 'quality_product_release'
+  | 'shipping_project_closeout'
+  | 'project_closing_summary';
 
 export type ProjectWorkflowDefinition = Readonly<{
   version: ProjectWorkflowVersion;
@@ -65,6 +88,57 @@ const freezeItems = <T extends object>(
   items: readonly T[]
 ): readonly Readonly<T>[] =>
   Object.freeze(items.map((item) => Object.freeze({ ...item })));
+
+type ProjectWorkflowStageMetadata = Omit<
+  ProjectWorkflowStageDefinition,
+  'primaryAction'
+>;
+
+const WORKSPACE_KEY_BY_STAGE_TYPE: Readonly<
+  Record<string, ProjectWorkflowStageWorkspaceKey>
+> = Object.freeze({
+  rfq_risk_assessment: 'commercial_review',
+  estimate_quote: 'commercial_review',
+  contract_review: 'commercial_review',
+  design_applicability: 'design_applicability',
+  technical_configuration_review: 'technical_configuration_review',
+  production_planning: 'production_planning',
+  wad_authorization: 'wad_authorization',
+  preproduction_release: 'preproduction_readiness',
+  p2_release: 'p2_release_handoff',
+  p2_execution: 'p2_execution_summary',
+  production_quality: 'production_execution',
+  final_release_shipping: 'quality_product_release',
+  project_closing: 'shipping_project_closeout',
+});
+
+const freezeStages = (
+  stages: readonly ProjectWorkflowStageMetadata[],
+  workspaceOverrides: Readonly<
+    Record<string, ProjectWorkflowStageWorkspaceKey>
+  > = Object.freeze({})
+): readonly ProjectWorkflowStageDefinition[] =>
+  freezeItems<ProjectWorkflowStageDefinition>(
+    stages.map((stage) => {
+      const workspaceKey =
+        workspaceOverrides[stage.type] ??
+        WORKSPACE_KEY_BY_STAGE_TYPE[stage.type];
+      if (!workspaceKey)
+        throw new ProjectWorkflowDefinitionValidationError(
+          `No primary workspace is registered for p2_v2 stage ${stage.type}`
+        );
+      return {
+        ...stage,
+        primaryAction: Object.freeze({
+          label: `Open ${stage.label}`,
+          surface: Object.freeze({
+            kind: 'workspace' as const,
+            key: workspaceKey,
+          }),
+        }),
+      };
+    })
+  );
 
 const LEGACY_V1_STEPS = freezeItems<ProjectWorkflowStepDefinition>([
   {
@@ -139,7 +213,7 @@ const LEGACY_V1_STEPS = freezeItems<ProjectWorkflowStepDefinition>([
   },
 ]);
 
-const P2_V2_DEFINITION_V1_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
+const P2_V2_DEFINITION_V1_STAGES = freezeStages([
   {
     type: 'rfq_risk_assessment',
     order: 1,
@@ -202,7 +276,7 @@ const P2_V2_DEFINITION_V1_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
   },
 ]);
 
-const P2_V2_DEFINITION_V2_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
+const P2_V2_DEFINITION_V2_STAGES = freezeStages([
   {
     type: 'rfq_risk_assessment',
     order: 1,
@@ -272,76 +346,82 @@ const P2_V2_DEFINITION_V2_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
   },
 ]);
 
-const P2_V2_DEFINITION_V3_STAGES = freezeItems<ProjectWorkflowStageDefinition>([
+const P2_V2_DEFINITION_V3_STAGES = freezeStages(
+  [
+    {
+      type: 'rfq_risk_assessment',
+      order: 1,
+      label: 'RFQ Review',
+      description:
+        'Confirm customer inquiry scope, requirements, and risk evidence.',
+    },
+    {
+      type: 'estimate_quote',
+      order: 2,
+      label: 'Estimate & Quote',
+      description:
+        'Confirm the approved estimate and released commercial offer.',
+    },
+    {
+      type: 'contract_review',
+      order: 3,
+      label: 'Purchase/Contract Review',
+      description:
+        'Confirm the received customer PO against the accepted quote and contractual requirements.',
+    },
+    {
+      type: 'technical_configuration_review',
+      order: 4,
+      label: 'Technical & Configuration Review',
+      description:
+        'Confirm the released technical and configuration baseline required to manufacture and inspect the customer order.',
+    },
+    {
+      type: 'production_planning',
+      order: 5,
+      label: 'Production Planning',
+      description:
+        'Establish the controlled BOM, routing, material, quality, and execution plan.',
+    },
+    {
+      type: 'wad_authorization',
+      order: 6,
+      label: 'WAD Authorization',
+      description: 'Authorize work through current controlled WAD evidence.',
+    },
+    {
+      type: 'preproduction_release',
+      order: 7,
+      label: 'Preproduction Readiness',
+      description:
+        'Confirm materials, tooling, documents, approvals, and readiness before release.',
+    },
+    {
+      type: 'p2_release',
+      order: 8,
+      label: 'Approve and Release to P2',
+      description:
+        'Approve the production-release evidence, then separately release the order to the P2 Control Center.',
+    },
+    {
+      type: 'p2_execution',
+      order: 9,
+      label: 'P2 Execution',
+      description:
+        'Read-only summary of authoritative scheduling, production, quality, certification, packing, and shipping records in the P2 Control Center.',
+    },
+    {
+      type: 'project_closing',
+      order: 10,
+      label: 'Project Closing',
+      description:
+        'Complete the controlled closing review after P2 execution requirements are satisfied.',
+    },
+  ],
   {
-    type: 'rfq_risk_assessment',
-    order: 1,
-    label: 'RFQ Review',
-    description:
-      'Confirm customer inquiry scope, requirements, and risk evidence.',
-  },
-  {
-    type: 'estimate_quote',
-    order: 2,
-    label: 'Estimate & Quote',
-    description: 'Confirm the approved estimate and released commercial offer.',
-  },
-  {
-    type: 'contract_review',
-    order: 3,
-    label: 'Purchase/Contract Review',
-    description:
-      'Confirm the received customer PO against the accepted quote and contractual requirements.',
-  },
-  {
-    type: 'technical_configuration_review',
-    order: 4,
-    label: 'Technical & Configuration Review',
-    description:
-      'Confirm the released technical and configuration baseline required to manufacture and inspect the customer order.',
-  },
-  {
-    type: 'production_planning',
-    order: 5,
-    label: 'Production Planning',
-    description:
-      'Establish the controlled BOM, routing, material, quality, and execution plan.',
-  },
-  {
-    type: 'wad_authorization',
-    order: 6,
-    label: 'WAD Authorization',
-    description: 'Authorize work through current controlled WAD evidence.',
-  },
-  {
-    type: 'preproduction_release',
-    order: 7,
-    label: 'Preproduction Readiness',
-    description:
-      'Confirm materials, tooling, documents, approvals, and readiness before release.',
-  },
-  {
-    type: 'p2_release',
-    order: 8,
-    label: 'Approve and Release to P2',
-    description:
-      'Approve the production-release evidence, then separately release the order to the P2 Control Center.',
-  },
-  {
-    type: 'p2_execution',
-    order: 9,
-    label: 'P2 Execution',
-    description:
-      'Read-only summary of authoritative scheduling, production, quality, certification, packing, and shipping records in the P2 Control Center.',
-  },
-  {
-    type: 'project_closing',
-    order: 10,
-    label: 'Project Closing',
-    description:
-      'Complete the controlled closing review after P2 execution requirements are satisfied.',
-  },
-]);
+    project_closing: 'project_closing_summary',
+  }
+);
 
 export const P2_V2_DEFINITION_VERSION = 3;
 
@@ -441,6 +521,17 @@ export function validateProjectWorkflowDefinition(
     if (definition.stages.length !== 10)
       throw new ProjectWorkflowDefinitionValidationError(
         'p2_v2 must have exactly ten metadata stages'
+      );
+    if (
+      definition.stages.some(
+        (stage) =>
+          stage.primaryAction.label.trim().length === 0 ||
+          stage.primaryAction.surface.kind !== 'workspace' ||
+          stage.primaryAction.surface.key.trim().length === 0
+      )
+    )
+      throw new ProjectWorkflowDefinitionValidationError(
+        'p2_v2 stages must define a valid primary workspace action'
       );
     if (
       !definition.active ||

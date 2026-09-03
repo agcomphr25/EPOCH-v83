@@ -224,7 +224,8 @@ async function sourceSnapshot(
   const items = rows(
     await tx.execute(sql`
       SELECT poi.*,ii.ag_part_number,ii.name inventory_name,ii.item_type,ii.type,
-             ii.manufacturing_level,ii.traceability_required,ii.requires_coc,
+             ii.manufactured_category,ii.manufacturing_level,
+             ii.traceability_required,ii.requires_coc,
              ii.requires_test_report,ii.has_tds,ii.tds_file_path
       FROM p2_purchase_order_items poi
       LEFT JOIN inventory_items ii ON ii.id=poi.inventory_item_id
@@ -346,7 +347,12 @@ export const requiredTechnicalReviewRoles = (supplyChainRequired = false) => [
   ...(supplyChainRequired ? ['SUPPLY_CHAIN'] : []),
 ];
 
-async function readiness(projectId: string, review: Row | null, tx: Executor) {
+async function readiness(
+  projectId: string,
+  review: Row | null,
+  tx: Executor,
+  currentSource?: Awaited<ReturnType<typeof sourceSnapshot>>
+) {
   if (!review)
     return {
       ready: false,
@@ -355,7 +361,8 @@ async function readiness(projectId: string, review: Row | null, tx: Executor) {
       differences: [],
     };
   const ctx = await context(projectId, tx, false, false);
-  const source = await sourceSnapshot(projectId, ctx.project.po_id, tx);
+  const source =
+    currentSource ?? (await sourceSnapshot(projectId, ctx.project.po_id, tx));
   const evidence = await validateEvidence(review.released_evidence ?? [], tx);
   const blockers = [...evidence.blockers];
   const differences: string[] = [];
@@ -440,11 +447,18 @@ async function readiness(projectId: string, review: Row | null, tx: Executor) {
 }
 
 async function readModel(projectId: string, tx: Executor) {
-  await context(projectId, tx, false, false);
+  const ctx = await context(projectId, tx, false, false);
+  const source = await sourceSnapshot(projectId, ctx.project.po_id, tx);
   const review = await current(projectId, tx);
-  const state = await readiness(projectId, review, tx);
+  const state = await readiness(projectId, review, tx, source);
   const reviewApprovals = review ? await approvals(review, tx) : [];
   return {
+    currentSource: {
+      po: source.po,
+      items: source.items,
+      configurations: source.configurations,
+      revision: source.revision,
+    },
     review:
       review && state.stale && review.status === 'COMPLETE'
         ? { ...review, status: 'STALE', detected_status: 'STALE' }

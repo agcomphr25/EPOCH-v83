@@ -80,6 +80,54 @@ describe('project workflow registry', () => {
     expect(definition.stages.map((stage) => stage.order)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
     ]);
+    const primaryActions = definition.stages.map(
+      ({ primaryAction }) => primaryAction
+    );
+    expect(primaryActions).toEqual([
+      {
+        label: 'Open RFQ Review',
+        surface: { kind: 'workspace', key: 'commercial_review' },
+      },
+      {
+        label: 'Open Estimate & Quote',
+        surface: { kind: 'workspace', key: 'commercial_review' },
+      },
+      {
+        label: 'Open Purchase/Contract Review',
+        surface: { kind: 'workspace', key: 'commercial_review' },
+      },
+      {
+        label: 'Open Technical & Configuration Review',
+        surface: {
+          kind: 'workspace',
+          key: 'technical_configuration_review',
+        },
+      },
+      {
+        label: 'Open Production Planning',
+        surface: { kind: 'workspace', key: 'production_planning' },
+      },
+      {
+        label: 'Open WAD Authorization',
+        surface: { kind: 'workspace', key: 'wad_authorization' },
+      },
+      {
+        label: 'Open Preproduction Readiness',
+        surface: { kind: 'workspace', key: 'preproduction_readiness' },
+      },
+      {
+        label: 'Open Approve and Release to P2',
+        surface: { kind: 'workspace', key: 'p2_release_handoff' },
+      },
+      {
+        label: 'Open P2 Execution',
+        surface: { kind: 'workspace', key: 'p2_execution_summary' },
+      },
+      {
+        label: 'Open Project Closing',
+        surface: { kind: 'workspace', key: 'project_closing_summary' },
+      },
+    ]);
     expect(isLegacyProjectWorkflow('p2_v2')).toBe(false);
     expect(getInitializableProjectWorkflowSteps('p2_v2')).toEqual([]);
   });
@@ -113,6 +161,26 @@ describe('project workflow registry', () => {
       'Quality & Product Release',
       'Shipping & Project Closing',
     ]);
+    for (const definitionVersion of [1, 2, 3]) {
+      expect(
+        getP2V2StagesForDefinitionVersion(definitionVersion).every(
+          (stage) =>
+            stage.primaryAction.label === `Open ${stage.label}` &&
+            stage.primaryAction.surface.kind === 'workspace' &&
+            stage.primaryAction.surface.key.length > 0
+        )
+      ).toBe(true);
+    }
+    expect(
+      getP2V2StagesForDefinitionVersion(2).find(
+        (stage) => stage.type === 'project_closing'
+      )?.primaryAction.surface.key
+    ).toBe('shipping_project_closeout');
+    expect(
+      getP2V2StagesForDefinitionVersion(3).find(
+        (stage) => stage.type === 'project_closing'
+      )?.primaryAction.surface.key
+    ).toBe('project_closing_summary');
     expect(() => getP2V2StagesForDefinitionVersion(999)).toThrow(
       'Unknown p2_v2 definition version 999'
     );
@@ -132,6 +200,8 @@ describe('project workflow registry', () => {
     expect(Object.isFrozen(legacy.steps[0])).toBe(true);
     expect(Object.isFrozen(v2.stages)).toBe(true);
     expect(Object.isFrozen(v2.stages[0])).toBe(true);
+    expect(Object.isFrozen(v2.stages[0].primaryAction)).toBe(true);
+    expect(Object.isFrozen(v2.stages[0].primaryAction.surface)).toBe(true);
   });
 
   it('validates both registered definitions at test time', () => {
@@ -169,6 +239,23 @@ describe('project workflow registry', () => {
         })),
       })
     ).toThrow('legacy_v1 step orders must be contiguous from 1');
+  });
+
+  it('rejects a V2 stage without a usable primary workspace action', () => {
+    const v2 = getProjectWorkflowDefinition('p2_v2');
+    expect(() =>
+      validateProjectWorkflowDefinition({
+        ...v2,
+        stages: v2.stages.map((stage, index) =>
+          index === 0
+            ? {
+                ...stage,
+                primaryAction: { ...stage.primaryAction, label: '' },
+              }
+            : stage
+        ),
+      })
+    ).toThrow('p2_v2 stages must define a valid primary workspace action');
   });
 
   it('keeps legacy types exactly equivalent to the PostgreSQL enum', () => {

@@ -17,40 +17,47 @@ const ui = readFileSync(
 );
 
 describe('simple manufacturing work-order action', () => {
-  it('exposes one operator action backed by the controlled sequence', () => {
+  it('keeps the legacy launch route while the project action uses controlled queue materialization', () => {
     expect(route).toContain(
       "'/launch/:launchId/create-manufacturing-work-orders'"
     );
-    expect(route).toContain('authorizeProductionExecution(');
-    expect(route).toContain('provisionP2ProductionOrders(');
-    expect(route).toContain('provisionP2WorkOrders(');
-    expect(route).toContain('provisionP2ComponentTravelers(');
-    expect(route).toContain("'projects.production_launch.launch'");
+    expect(ui).toContain(
+      '/frozen-production-demand/${action.baselineId}/materialize-work-orders'
+    );
   });
 
-  it('uses a deterministic retry key and server-owned quantities', () => {
-    expect(route).toContain('manufacturing-work-orders:${req.params.launchId}');
-    expect(route).not.toContain('req.body.quantity');
-    expect(route).not.toContain('req.body.partNumber');
+  it('uses released baseline evidence and a deterministic retry key', () => {
+    expect(ui).toContain('manufacturing-work-orders:${action.baselineId}');
+    expect(ui).toContain(
+      'expectedBaselineChecksum: action.expectedBaselineChecksum'
+    );
   });
 
-  it('exposes only enabled launch identity in the read model', () => {
+  it('exposes the completed launch and released frozen-demand authority', () => {
     expect(hub).toContain('manufacturingWorkOrderAction');
-    expect(hub).toContain('isP2V2ExecutionAuthorizationEnabled()');
-    expect(hub).toContain('isP2V2ProductionOrderProvisioningEnabled()');
-    expect(hub).toContain('isP2V2WorkOrderProvisioningEnabled()');
-    expect(hub).toContain('isP2V2ComponentTravelerProvisioningEnabled()');
-    expect(hub).toContain("event_type = 'P2_COMPONENT_TRAVELERS_PROVISIONED'");
+    expect(hub).toContain(
+      'areP2ManufacturingWorkOrderMaterializationEnabled()'
+    );
+    expect(hub).toContain("status = 'RELEASED'");
+    expect(hub).toContain('wad_authorization_id = pl.wad_authorization_id');
+    expect(hub).toContain('p2_manufacturing_work_order_authorities');
+    expect(hub).toContain('expectedBaselineChecksum');
   });
 
   it('shows one plain-language button only while work orders are missing and disables it until launch is eligible', () => {
     expect(ui).toContain('Create Manufacturing Work Orders');
     expect(ui).toContain('hasMissingManufacturingWorkOrder');
     expect(ui).toContain(
-      'Complete Production Launch before creating manufacturing work orders.'
+      'Complete Production Launch and release Frozen Production Demand before creating manufacturing work orders.'
     );
     expect(ui).toContain('!hubProduction.manufacturingWorkOrderAction?.launchId');
     expect(ui).toContain('!hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest');
+    expect(ui).toContain(
+      '!hubProduction.manufacturingWorkOrderAction?.baselineId'
+    );
+    expect(ui).toContain(
+      '!hubProduction.manufacturingWorkOrderAction?.expectedBaselineChecksum'
+    );
     expect(ui).toContain('!hubProduction.manufacturingWorkOrderAction?.enabled');
     expect(ui).toContain('manufacturing-work-orders-launch-required');
     expect(ui).not.toContain('Authorize Execution</Button>');

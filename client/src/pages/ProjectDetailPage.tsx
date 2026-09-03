@@ -933,17 +933,22 @@ export default function ProjectDetailPage() {
   const createManufacturingWorkOrders = useMutation({
     mutationFn: async () => {
       const action = p2Hub?.tabs?.production?.manufacturingWorkOrderAction;
-      if (!action?.launchId || !action?.expectedLaunchDigest)
-        throw new Error('Complete Production Launch before creating manufacturing work orders.');
+      if (
+        !action?.launchId ||
+        !action?.expectedLaunchDigest ||
+        !action?.baselineId ||
+        !action?.expectedBaselineChecksum
+      )
+        throw new Error('Complete Production Launch and release Frozen Production Demand before creating manufacturing work orders.');
       if (!action.enabled)
         throw new Error('Manufacturing work-order creation is not enabled for this deployment yet.');
       return apiRequest(
-        `/api/projects/${id}/workflow-v2/production-planning/launch/${action.launchId}/create-manufacturing-work-orders`,
+        `/api/projects/${id}/frozen-production-demand/${action.baselineId}/materialize-work-orders`,
         {
           method: 'POST',
           body: {
-            idempotencyKey: `manufacturing-work-orders:${action.launchId}`,
-            expectedLaunchDigest: action.expectedLaunchDigest,
+            idempotencyKey: `manufacturing-work-orders:${action.baselineId}`,
+            expectedBaselineChecksum: action.expectedBaselineChecksum,
             signatureMeaning: 'Create manufacturing work orders from the released BOM and routing.',
           },
         }
@@ -4178,13 +4183,17 @@ export default function ProjectDetailPage() {
                                     createManufacturingWorkOrders.isPending ||
                                     !hubProduction.manufacturingWorkOrderAction?.launchId ||
                                     !hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest ||
+                                    !hubProduction.manufacturingWorkOrderAction?.baselineId ||
+                                    !hubProduction.manufacturingWorkOrderAction?.expectedBaselineChecksum ||
                                     !hubProduction.manufacturingWorkOrderAction?.enabled
                                   }
                                   onClick={() => createManufacturingWorkOrders.mutate()}
                                   title={
                                     !hubProduction.manufacturingWorkOrderAction?.launchId ||
-                                    !hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest
-                                      ? 'Complete Production Launch before creating manufacturing work orders.'
+                                    !hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest ||
+                                    !hubProduction.manufacturingWorkOrderAction?.baselineId ||
+                                    !hubProduction.manufacturingWorkOrderAction?.expectedBaselineChecksum
+                                      ? 'Complete Production Launch and release Frozen Production Demand before creating manufacturing work orders.'
                                       : !hubProduction.manufacturingWorkOrderAction?.enabled
                                         ? 'Manufacturing work-order creation is not enabled for this deployment yet.'
                                         : undefined
@@ -4200,9 +4209,11 @@ export default function ProjectDetailPage() {
                             <>
                               {!hubProduction.manufacturingWorkOrderAction?.completed &&
                                 (!hubProduction.manufacturingWorkOrderAction?.launchId ||
-                                  !hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest) && (
+                                  !hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest ||
+                                  !hubProduction.manufacturingWorkOrderAction?.baselineId ||
+                                  !hubProduction.manufacturingWorkOrderAction?.expectedBaselineChecksum) && (
                                 <p className="mb-2 text-xs text-muted-foreground" data-testid="manufacturing-work-orders-launch-required">
-                                  Complete Production Launch before creating manufacturing work orders.
+                                  Complete Production Launch and release Frozen Production Demand before creating manufacturing work orders.
                                 </p>
                               )}
                               <ProductionHierarchyNode node={line.manufacturingHierarchy} isRoot />

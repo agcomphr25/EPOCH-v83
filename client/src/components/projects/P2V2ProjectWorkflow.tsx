@@ -65,12 +65,33 @@ type Approval = {
   reason?: string | null;
   superseded: boolean;
 };
+type StageWorkspaceKey =
+  | 'commercial_review'
+  | 'design_applicability'
+  | 'technical_configuration_review'
+  | 'production_planning'
+  | 'wad_authorization'
+  | 'preproduction_readiness'
+  | 'p2_release_handoff'
+  | 'p2_execution_summary'
+  | 'production_execution'
+  | 'quality_product_release'
+  | 'shipping_project_closeout'
+  | 'project_closing_summary';
+type StagePrimaryAction = {
+  label: string;
+  surface: {
+    kind: 'workspace';
+    key: StageWorkspaceKey;
+  };
+};
 type Stage = {
   id: string;
   stepType: string;
   stepOrder: number;
   label: string;
   description?: string | null;
+  primaryAction: StagePrimaryAction | null;
   status: string;
   applicability: string;
   applicabilityReason?: string | null;
@@ -177,6 +198,64 @@ function LinkList({ title, links }: { title: string; links: EvidenceLink[] }) {
   );
 }
 
+const commercialStageTypes = [
+  'rfq_risk_assessment',
+  'estimate_quote',
+  'contract_review',
+] as const;
+type CommercialStageType = (typeof commercialStageTypes)[number];
+const isCommercialStageType = (
+  stepType: string
+): stepType is CommercialStageType =>
+  commercialStageTypes.includes(stepType as CommercialStageType);
+
+function StageWorkspace({
+  projectId,
+  stage,
+}: {
+  projectId: string;
+  stage: Stage;
+}) {
+  const workspaceKey = stage.primaryAction?.surface.key;
+  switch (workspaceKey) {
+    case 'commercial_review':
+      return isCommercialStageType(stage.stepType) ? (
+        <P2V2CommercialReview projectId={projectId} stage={stage.stepType} />
+      ) : null;
+    case 'design_applicability':
+      return <P2V2DesignApplicability projectId={projectId} />;
+    case 'technical_configuration_review':
+      return <P2V2TechnicalConfigurationReview projectId={projectId} />;
+    case 'production_planning':
+      return <P2V2ProductionPlanning projectId={projectId} />;
+    case 'wad_authorization':
+      return <P2V2WadAuthorization projectId={projectId} />;
+    case 'preproduction_readiness':
+      return <P2V2PreproductionReadiness projectId={projectId} />;
+    case 'p2_release_handoff':
+      return <P2V2HandoffExecution projectId={projectId} mode="handoff" />;
+    case 'p2_execution_summary':
+      return <P2V2HandoffExecution projectId={projectId} mode="execution" />;
+    case 'production_execution':
+      return <P2V2ProductionExecution projectId={projectId} />;
+    case 'quality_product_release':
+      return <P2V2QualityProductRelease projectId={projectId} />;
+    case 'shipping_project_closeout':
+      return <P2V2ShippingProjectCloseout projectId={projectId} />;
+    case 'project_closing_summary':
+      return <P2V2ProjectClosingSummary projectId={projectId} />;
+    default:
+      return (
+        <p
+          className="text-sm text-amber-700"
+          data-testid={`v2-stage-workspace-unavailable-${stage.stepOrder}`}
+        >
+          No stage workspace is registered for this workflow definition.
+        </p>
+      );
+  }
+}
+
 export default function P2V2ProjectWorkflow({
   projectId,
 }: {
@@ -258,8 +337,8 @@ export default function P2V2ProjectWorkflow({
             <div>
               <CardTitle>P2 Project Workflow V2</CardTitle>
               <CardDescription>
-                Read-only controlled workflow evidence · Definition v
-                {data.definitionVersion}
+                Controlled stage workspaces with read-only audit evidence ·
+                Definition v{data.definitionVersion}
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -418,103 +497,34 @@ export default function P2V2ProjectWorkflow({
                     Completion: {stage.completedByDisplayName || 'Not complete'}
                   </span>
                 </div>
+                <section
+                  className="mt-4 rounded-md border bg-muted/20 p-3"
+                  aria-label={
+                    stage.primaryAction?.label || `${stage.label} workspace`
+                  }
+                  data-testid={`v2-stage-workspace-${stage.stepOrder}`}
+                  data-workspace-key={stage.primaryAction?.surface.key}
+                >
+                  <div className="mb-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Primary stage workspace
+                    </p>
+                    <h4 className="text-sm font-semibold">
+                      {stage.primaryAction?.label || `Open ${stage.label}`}
+                    </h4>
+                  </div>
+                  <StageWorkspace projectId={projectId} stage={stage} />
+                </section>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   className="mt-3"
                   onClick={() => setSelectedStage(stage)}
-                  data-testid={`v2-stage-details-${stage.stepOrder}`}
+                  data-testid={`v2-stage-audit-evidence-${stage.stepOrder}`}
                 >
                   <Eye className="mr-1 h-4 w-4" />
-                  Details
+                  Audit evidence
                 </Button>
-                {(
-                  [
-                    'rfq_risk_assessment',
-                    'estimate_quote',
-                    'contract_review',
-                  ] as const
-                ).includes(
-                  stage.stepType as
-                    | 'rfq_risk_assessment'
-                    | 'estimate_quote'
-                    | 'contract_review'
-                ) && (
-                  <div className="mt-3">
-                    <P2V2CommercialReview
-                      projectId={projectId}
-                      stage={
-                        stage.stepType as
-                          | 'rfq_risk_assessment'
-                          | 'estimate_quote'
-                          | 'contract_review'
-                      }
-                    />
-                  </div>
-                )}
-                {stage.stepType === 'design_applicability' && (
-                  <div className="mt-3">
-                    <P2V2DesignApplicability projectId={projectId} />
-                  </div>
-                )}
-                {stage.stepType === 'technical_configuration_review' && (
-                  <div className="mt-3">
-                    <P2V2TechnicalConfigurationReview projectId={projectId} />
-                  </div>
-                )}
-                {stage.stepType === 'production_planning' && (
-                  <div className="mt-3">
-                    <P2V2ProductionPlanning projectId={projectId} />
-                  </div>
-                )}
-                {stage.stepType === 'wad_authorization' && (
-                  <div className="mt-3">
-                    <P2V2WadAuthorization projectId={projectId} />
-                  </div>
-                )}
-                {stage.stepType === 'preproduction_release' && (
-                  <div className="mt-3">
-                    <P2V2PreproductionReadiness projectId={projectId} />
-                  </div>
-                )}
-                {stage.stepType === 'p2_release' && (
-                  <div className="mt-3">
-                    <P2V2HandoffExecution
-                      projectId={projectId}
-                      mode="handoff"
-                    />
-                  </div>
-                )}
-                {stage.stepType === 'p2_execution' && (
-                  <div className="mt-3">
-                    <P2V2HandoffExecution
-                      projectId={projectId}
-                      mode="execution"
-                    />
-                  </div>
-                )}
-                {stage.stepType === 'production_quality' && (
-                  <div className="mt-3">
-                    <P2V2ProductionExecution projectId={projectId} />
-                  </div>
-                )}
-                {stage.stepType === 'final_release_shipping' && (
-                  <div className="mt-3">
-                    <P2V2QualityProductRelease projectId={projectId} />
-                  </div>
-                )}
-                {stage.stepType === 'project_closing' &&
-                  data.definitionVersion !== 3 && (
-                    <div className="mt-3">
-                      <P2V2ShippingProjectCloseout projectId={projectId} />
-                    </div>
-                  )}
-                {stage.stepType === 'project_closing' &&
-                  data.definitionVersion === 3 && (
-                    <div className="mt-3">
-                      <P2V2ProjectClosingSummary projectId={projectId} />
-                    </div>
-                  )}
               </CardContent>
             </Card>
           </div>
@@ -531,7 +541,7 @@ export default function P2V2ProjectWorkflow({
           <DialogHeader>
             <DialogTitle>{selectedStage?.label}</DialogTitle>
             <DialogDescription>
-              Read-only workflow stage evidence
+              Read-only workflow stage audit evidence
             </DialogDescription>
           </DialogHeader>
           {selectedStage && (

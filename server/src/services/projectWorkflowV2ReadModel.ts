@@ -1,3 +1,5 @@
+import { getP2V2StagesForDefinitionVersion } from './projectWorkflowRegistry';
+
 type Row = Record<string, unknown>;
 
 const text = (value: unknown) => (value == null ? null : String(value));
@@ -59,17 +61,26 @@ export function buildP2V2WorkflowResponse(projectId: string, model: Row) {
   const instance = model.instance as Row;
   const integrity = model.integrity as { valid: boolean; issues: unknown[] };
   const rawSteps = (model.steps as Row[]) ?? [];
+  const stageDefinitionByType = new Map(
+    getP2V2StagesForDefinitionVersion(Number(instance.definition_version)).map(
+      (stage) => [stage.type, stage] as const
+    )
+  );
   const stages = rawSteps.map((step) => {
+    const stepType = text(step.step_type);
     const links = ((step.links as Row[]) ?? []).map(mapLink);
     const approvals = ((step.approvals as Row[]) ?? []).map(mapApproval);
     const activeLinks = links.filter((link) => !link.supersededAt);
     const supersededLinks = links.filter((link) => Boolean(link.supersededAt));
     return {
       id: text(step.id),
-      stepType: text(step.step_type),
+      stepType,
       stepOrder: Number(step.step_order),
       label: text(step.label_snapshot),
       description: text(step.description_snapshot),
+      primaryAction: stepType
+        ? (stageDefinitionByType.get(stepType)?.primaryAction ?? null)
+        : null,
       status: text(step.status),
       applicability: text(step.applicability),
       applicabilityReason: text(step.applicability_reason),

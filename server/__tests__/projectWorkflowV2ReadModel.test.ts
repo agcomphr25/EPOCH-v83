@@ -91,10 +91,45 @@ describe('P2 V2 read model', () => {
     });
     expect(response.integrityStatus).toBe('INVALID');
     expect(response.stages[0]).toMatchObject({
+      primaryAction: {
+        label: 'Open RFQ & Risk',
+        surface: { kind: 'workspace', key: 'commercial_review' },
+      },
       activeLinks: [{ id: 'a' }],
       supersededLinks: [{ id: 'b' }],
       evidenceCount: 3,
     });
+  });
+
+  it('resolves primary workspaces from the instance definition version', () => {
+    const responseFor = (definitionVersion: number) =>
+      buildP2V2WorkflowResponse('project-1', {
+        instance: {
+          id: 'instance-1',
+          status: 'ACTIVE',
+          definition_version: definitionVersion,
+        },
+        integrity: { valid: true, issues: [] },
+        steps: [
+          {
+            id: 'step-10',
+            step_type: 'project_closing',
+            step_order: 10,
+            label_snapshot: 'Project Closing',
+            status: 'NOT_STARTED',
+            applicability: 'REQUIRED',
+            links: [],
+            approvals: [],
+          },
+        ],
+      });
+
+    expect(responseFor(2).stages[0].primaryAction?.surface.key).toBe(
+      'shipping_project_closeout'
+    );
+    expect(responseFor(3).stages[0].primaryAction?.surface.key).toBe(
+      'project_closing_summary'
+    );
   });
 });
 

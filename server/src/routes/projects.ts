@@ -30,10 +30,7 @@ import { evaluateDocumentationRequirements } from '../lib/documentationRequireme
 import { cancelWadWorkOrdersSupersededByP2 } from '../services/wadSupersedeService';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import {
-  isP2V2ComponentTravelerProvisioningEnabled,
-  isP2V2ExecutionAuthorizationEnabled,
-  isP2V2ProductionOrderProvisioningEnabled,
-  isP2V2WorkOrderProvisioningEnabled,
+  areP2ManufacturingWorkOrderMaterializationEnabled,
 } from '../lib/featureFlags';
 import { resolveCustomersIntegerId } from '../lib/customerResolver';
 import { getQuoteContractReviewGate } from '../services/quoteContractService';
@@ -4587,12 +4584,22 @@ router.get('/:id/p2-hub', async (req, res) => {
       (
         await pool.query(
           `SELECT pl.id, pl.preview_digest AS "previewDigest", pl.status,
+             baseline.id AS "baselineId",
+             baseline.baseline_checksum AS "baselineChecksum",
              EXISTS (
-               SELECT 1 FROM project_production_launch_events ple
-               WHERE ple.production_launch_id = pl.id
-                 AND ple.event_type = 'P2_COMPONENT_TRAVELERS_PROVISIONED'
+               SELECT 1 FROM p2_manufacturing_work_order_authorities authority
+               WHERE authority.frozen_demand_baseline_id = baseline.id
              ) AS completed
            FROM project_production_launches pl
+           LEFT JOIN LATERAL (
+             SELECT id, baseline_checksum
+             FROM p2_frozen_production_demand_baselines
+             WHERE project_id = pl.project_id
+               AND wad_authorization_id = pl.wad_authorization_id
+               AND status = 'RELEASED'
+             ORDER BY revision_number DESC
+             LIMIT 1
+           ) baseline ON true
            WHERE pl.project_id = $1 AND pl.status = 'COMPLETE'
           ORDER BY pl.launched_at DESC
           LIMIT 1`,
@@ -4602,12 +4609,11 @@ router.get('/:id/p2-hub', async (req, res) => {
     const manufacturingWorkOrderAction = {
       launchId: manufacturingWorkOrderLaunch?.id ?? null,
       expectedLaunchDigest: manufacturingWorkOrderLaunch?.previewDigest ?? null,
+      baselineId: manufacturingWorkOrderLaunch?.baselineId ?? null,
+      expectedBaselineChecksum:
+        manufacturingWorkOrderLaunch?.baselineChecksum ?? null,
       completed: Boolean(manufacturingWorkOrderLaunch?.completed),
-      enabled:
-        isP2V2ComponentTravelerProvisioningEnabled() &&
-        isP2V2ExecutionAuthorizationEnabled() &&
-        isP2V2ProductionOrderProvisioningEnabled() &&
-        isP2V2WorkOrderProvisioningEnabled(),
+      enabled: areP2ManufacturingWorkOrderMaterializationEnabled(),
     };
     const laborBudgetHours = workOrders.reduce(
       (sum: number, workOrder: LegacyProjectValue) => {

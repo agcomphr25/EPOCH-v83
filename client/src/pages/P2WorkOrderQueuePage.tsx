@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Cog,
   Factory,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -53,6 +54,11 @@ type QueueWorkOrder = {
   blockers: Blocker[];
 };
 type QueueResponse = { departmentId: string; workOrders: QueueWorkOrder[] };
+type QueueDepartment = {
+  id: number;
+  name: string;
+  departmentCode?: string | null;
+};
 
 const queueReadsEnabled =
   import.meta.env.VITE_P2_MANUFACTURING_WORK_ORDER_QUEUE_READS_ENABLED ===
@@ -79,6 +85,12 @@ export default function P2WorkOrderQueuePage() {
   const { can } = usePermissions();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const queryKey = ['/api/p2-work-orders/queues', departmentId];
+  const departments = useQuery<QueueDepartment[]>({
+    queryKey: ['/api/shared-departments', 'p2-work-order-queue-page'],
+    queryFn: () => apiRequest('/api/shared-departments?routingOnly=true'),
+    enabled: queueReadsEnabled && Boolean(departmentId),
+    staleTime: 5 * 60 * 1000,
+  });
   const queue = useQuery<QueueResponse>({
     queryKey,
     queryFn: () => apiRequest(`/api/p2-work-orders/queues/${departmentId}`),
@@ -122,6 +134,18 @@ export default function P2WorkOrderQueuePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey }),
   });
 
+  const currentDepartment = departments.data?.find(
+    (department) => String(department.id) === departmentId
+  );
+  const departmentIdentity = `${currentDepartment?.departmentCode ?? ''} ${
+    currentDepartment?.name ?? ''
+  }`.toUpperCase();
+  const isMachinedPartsQueue =
+    departmentIdentity.includes('CNC') || departmentIdentity.includes('MACHIN');
+  const queueTitle = isMachinedPartsQueue
+    ? 'CNC / Machined Parts Work Orders'
+    : `${currentDepartment?.name ?? 'P2'} Work Order Queue`;
+
   if (!queueReadsEnabled)
     return (
       <div className="p-6">
@@ -146,11 +170,17 @@ export default function P2WorkOrderQueuePage() {
     >
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold">
-          <Factory className="h-6 w-6" /> P2 W/O Queue
+          {isMachinedPartsQueue ? (
+            <Cog className="h-6 w-6" />
+          ) : (
+            <Factory className="h-6 w-6" />
+          )}{' '}
+          {queueTitle}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Frozen released P2 work only. Blocked work remains visible and cannot
-          be started.
+          {isMachinedPartsQueue
+            ? 'Controlled CNC work orders for inventory classified as machined parts. Open the released traveler before machining.'
+            : 'Frozen released P2 work only. Blocked work remains visible and cannot be started.'}
         </p>
       </div>
       {queue.isLoading && <p>Loading work orders…</p>}
@@ -185,6 +215,23 @@ export default function P2WorkOrderQueuePage() {
                     · {workOrder.completedQuantity}/{workOrder.requiredQuantity}{' '}
                     complete
                   </p>
+                  {isMachinedPartsQueue && (
+                    <div
+                      className="mt-2 flex flex-wrap gap-2 text-xs"
+                      data-testid="cnc-machined-work-order-details"
+                    >
+                      <Badge variant="secondary">Machined Part</Badge>
+                      <span className="rounded-md border px-2 py-1">
+                        Revision {workOrder.revision || 'Not specified'}
+                      </span>
+                      <span className="rounded-md border px-2 py-1">
+                        Traveler{' '}
+                        {workOrder.travelerRequirement === 'REQUIRED'
+                          ? 'required'
+                          : 'not required (approved)'}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <Badge variant={blocked ? 'destructive' : 'outline'}>
                   {label(workOrder.readiness)}

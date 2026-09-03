@@ -331,7 +331,14 @@ export async function frozenProductionDemandDetail(
     );
   const nodes = (
     await pool.query(
-      `SELECT * FROM p2_frozen_production_demand_nodes WHERE baseline_id=$1 ORDER BY depth,assembly_path_identity`,
+      `SELECT n.*,a.id materialized_authority_id,
+              a.production_work_order_id,a.status work_order_status,
+              pwo.work_order_number
+         FROM p2_frozen_production_demand_nodes n
+         LEFT JOIN p2_manufacturing_work_order_authorities a
+           ON a.frozen_demand_node_id=n.id
+         LEFT JOIN production_work_orders pwo ON pwo.id=a.production_work_order_id
+        WHERE n.baseline_id=$1 ORDER BY n.depth,n.assembly_path_identity`,
       [id]
     )
   ).rows;

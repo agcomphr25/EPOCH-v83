@@ -56,6 +56,10 @@ type Node = {
     traveler_type?: string;
     traveler_requirement?: string;
   };
+  materialized_authority_id?: string | null;
+  production_work_order_id?: string | null;
+  work_order_number?: string | null;
+  work_order_status?: string | null;
 };
 type Blocker = {
   code: string;
@@ -109,6 +113,9 @@ export default function P2FrozenProductionDemand({
     import.meta.env.VITE_P2_FROZEN_PRODUCTION_DEMAND_WRITES_ENABLED === 'true';
   const releases =
     import.meta.env.VITE_P2_FROZEN_PRODUCTION_DEMAND_RELEASES_ENABLED ===
+    'true';
+  const workOrderMaterialization =
+    import.meta.env.VITE_P2_MANUFACTURING_WORK_ORDER_MATERIALIZATION_ENABLED ===
     'true';
   const combinedProcessReads =
     import.meta.env.VITE_COMBINED_MANUFACTURING_PROCESS_READS_ENABLED ===
@@ -305,6 +312,39 @@ export default function P2FrozenProductionDemand({
         variant: 'destructive',
       }),
   });
+  const materializeNode = useMutation({
+    mutationFn: (node: Node) => {
+      if (!current?.id || !current.baseline_checksum)
+        throw new Error('Release the frozen production-demand baseline first.');
+      return apiRequest(
+        `/api/projects/${projectId}/frozen-production-demand/${current.id}/materialize-work-orders`,
+        {
+          method: 'POST',
+          body: {
+            frozenDemandNodeId: node.id,
+            expectedBaselineChecksum: current.baseline_checksum,
+            idempotencyKey: `work-order:${current.id}:${node.id}`,
+            signatureMeaning:
+              'Create this manufactured work order from the released parent PO, WAD, BOM, routing, and frozen demand.',
+          },
+        }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [
+          `/api/configuration-control/projects/${projectId}/frozen-production-demand/${current?.id}`,
+        ],
+      });
+      toast({ title: 'Manufacturing work order created' });
+    },
+    onError: (error: Error) =>
+      toast({
+        title: 'Work order was not created',
+        description: error.message,
+        variant: 'destructive',
+      }),
+  });
   if (!reads)
     return (
       <Card>
@@ -449,30 +489,56 @@ export default function P2FrozenProductionDemand({
                 className="rounded border p-2 text-sm"
                 style={{ marginLeft: `${Math.min(n.depth, 8) * 16}px` }}
               >
-                <button
-                  className="flex w-full items-center gap-2 text-left"
-                  onClick={() =>
-                    setOpen((s) => {
-                      const x = new Set(s);
-                      x.has(n.id) ? x.delete(n.id) : x.add(n.id);
-                      return x;
-                    })
-                  }
-                >
-                  {open.has(n.id) ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                  <strong>{n.inventory_item_snapshot.partNumber}</strong>
-                  <span>
-                    {n.required_gross_quantity} {n.unit_of_measure}
-                  </span>
-                  <Badge variant="outline">{n.make_buy_disposition}</Badge>
-                  <span className="text-muted-foreground">
-                    {n.assembly_path_identity}
-                  </span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    onClick={() =>
+                      setOpen((s) => {
+                        const x = new Set(s);
+                        x.has(n.id) ? x.delete(n.id) : x.add(n.id);
+                        return x;
+                      })
+                    }
+                  >
+                    {open.has(n.id) ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    <strong>{n.inventory_item_snapshot.partNumber}</strong>
+                    <span>
+                      {n.required_gross_quantity} {n.unit_of_measure}
+                    </span>
+                    <Badge variant="outline">{n.make_buy_disposition}</Badge>
+                    <span className="text-muted-foreground">
+                      {n.assembly_path_identity}
+                    </span>
+                  </button>
+                  {n.make_buy_disposition === 'MAKE' &&
+                    n.depth > 0 &&
+                    current?.status === 'RELEASED' &&
+                    workOrderMaterialization &&
+                    can('p2.work_orders.materialize') &&
+                    (n.materialized_authority_id ? (
+                      <Badge variant="secondary">
+                        {n.work_order_number ?? 'Work order created'}
+                      </Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        disabled={materializeNode.isPending}
+                        onClick={() => materializeNode.mutate(n)}
+                      >
+                        Create this work order
+                      </Button>
+                    ))}
+                </div>
+                {n.depth === 0 && n.make_buy_disposition === 'MAKE' && (
+                  <p className="mt-1 pl-6 text-xs text-muted-foreground">
+                    Parent PO item authority — child work orders inherit this
+                    released baseline.
+                  </p>
+                )}
                 {open.has(n.id) && (
                   <div className="mt-2 grid gap-1 pl-6 text-xs text-muted-foreground">
                     <span>

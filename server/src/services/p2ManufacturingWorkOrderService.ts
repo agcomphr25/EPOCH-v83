@@ -137,6 +137,7 @@ export async function materializeP2ManufacturingWorkOrders(
     expectedBaselineChecksum: string;
     idempotencyKey: string;
     signatureMeaning: string;
+    frozenDemandNodeId?: string;
   },
   actor: P2WorkOrderActor
 ) {
@@ -153,6 +154,7 @@ export async function materializeP2ManufacturingWorkOrders(
     baselineId,
     expectedBaselineChecksum: input.expectedBaselineChecksum,
     requestKey,
+    frozenDemandNodeId: input.frozenDemandNodeId ?? null,
   });
   const client = await pool.connect();
   try {
@@ -207,10 +209,10 @@ export async function materializeP2ManufacturingWorkOrders(
       [baselineId]
     );
     const nodes: Row[] = nodeResult.rows;
-    const manufactured = nodes.filter(
+    const allManufactured = nodes.filter(
       (node) => node.make_buy_disposition === 'MAKE'
     );
-    if (!manufactured.length)
+    if (!allManufactured.length)
       throw new P2WorkOrderError(
         'MANUFACTURED_DEMAND_REQUIRED',
         'Released frozen demand contains no manufactured nodes.'
@@ -219,17 +221,46 @@ export async function materializeP2ManufacturingWorkOrders(
       nodes.map((node) => [clean(node.node_identity), node])
     );
     const existing = await client.query(
-      `SELECT id FROM p2_manufacturing_work_order_authorities
-       WHERE frozen_demand_baseline_id=$1 LIMIT 1`,
+      `SELECT * FROM p2_manufacturing_work_order_authorities
+       WHERE frozen_demand_baseline_id=$1`,
       [baselineId]
     );
-    if (existing.rows.length)
+    if (!input.frozenDemandNodeId && existing.rows.length)
       throw new P2WorkOrderError(
         'EXISTING_WORK_ORDERS_REQUIRE_RECONCILIATION',
         'Work orders already exist without matching retry evidence.'
       );
+    const manufactured = input.frozenDemandNodeId
+      ? allManufactured.filter(
+          (node) =>
+            clean(node.id) === input.frozenDemandNodeId &&
+            Number(node.depth) > 0
+        )
+      : allManufactured;
+    if (!manufactured.length)
+      throw new P2WorkOrderError(
+        'MANUFACTURED_DEMAND_NODE_NOT_FOUND',
+        'The selected frozen-demand node is not a manufactured child in this released parent-PO baseline.',
+        404
+      );
+    if (
+      input.frozenDemandNodeId &&
+      existing.rows.some(
+        (authority) =>
+          clean(authority.frozen_demand_node_id) === input.frozenDemandNodeId
+      )
+    )
+      throw new P2WorkOrderError(
+        'WORK_ORDER_ALREADY_MATERIALIZED',
+        'The selected manufactured child already has a work order.'
+      );
 
-    const authorityByNode = new Map<string, string>();
+    const authorityByNode = new Map<string, string>(
+      existing.rows.map((authority) => [
+        clean(authority.frozen_demand_node_id),
+        clean(authority.id),
+      ])
+    );
     const workOrderIds: string[] = [];
     for (const node of manufactured) {
       const quantity = Number(node.required_gross_quantity);
@@ -243,6 +274,20 @@ export async function materializeP2ManufacturingWorkOrders(
       const item = jsonRecord(node.inventory_item_snapshot);
       const operations = routingOperations(node.routing_snapshot);
       const requirement = travelerRequirement(node.wad_decision_snapshot);
+      const parent = nearestManufacturedParent(node, nodesByIdentity);
+      const parentAuthorityId = parent
+        ? authorityByNode.get(clean(parent.id))
+        : null;
+      if (parent && Number(parent.depth) > 0 && !parentAuthorityId)
+        throw new P2WorkOrderError(
+          'MANUFACTURED_PARENT_WORK_ORDER_REQUIRED',
+          'Release the parent manufactured work order before this child.',
+          409,
+          {
+            parentNodeId: parent.id,
+            parentAssemblyPathIdentity: parent.assembly_path_identity,
+          }
+        );
       const workOrderId = randomUUID();
       const authorityId = randomUUID();
       const workOrderNumber = `P2-WO-${String(baseline.revision_number).padStart(3, '0')}-${clean(node.id).slice(0, 8).toUpperCase()}`;
@@ -269,10 +314,11 @@ export async function materializeP2ManufacturingWorkOrders(
             frozenDemandBaselineId: baselineId,
             frozenDemandNodeId: node.id,
             assemblyPathIdentity: node.assembly_path_identity,
+            parentPoAuthorityInherited: true,
+            parentManufacturedAuthorityId: parentAuthorityId,
           }),
         ]
       );
-      const parent = nearestManufacturedParent(node, nodesByIdentity);
       const authorityEvidence = {
         baselineChecksum: baseline.baseline_checksum,
         nodeChecksum: node.node_checksum,
@@ -298,7 +344,7 @@ export async function materializeP2ManufacturingWorkOrders(
           baselineId,
           node.id,
           workOrderId,
-          parent ? (authorityByNode.get(clean(parent.id)) ?? null) : null,
+          parentAuthorityId,
           node.assembly_path_identity,
           node.inventory_item_id,
           partNumber,
@@ -342,9 +388,17 @@ export async function materializeP2ManufacturingWorkOrders(
       workOrderIds.push(workOrderId);
     }
 
+    const materializedNodeIds = new Set(
+      manufactured.map((node) => clean(node.id))
+    );
     for (const node of nodes) {
       const parent = nearestManufacturedParent(node, nodesByIdentity);
-      if (!parent) continue;
+      if (
+        !parent ||
+        (!materializedNodeIds.has(clean(parent.id)) &&
+          !materializedNodeIds.has(clean(node.id)))
+      )
+        continue;
       const successorId = authorityByNode.get(clean(parent.id));
       if (!successorId) continue;
       if (node.make_buy_disposition === 'MAKE') {
@@ -354,14 +408,15 @@ export async function materializeP2ManufacturingWorkOrders(
         const requirements = jsonRecord(traceability.requirements);
         const requiresAcceptance = Boolean(
           requirements.outputSerializationRequired ??
-            requirements.lotScanRequired ??
-            requirements.batchScanRequired
+          requirements.lotScanRequired ??
+          requirements.batchScanRequired
         );
         await client.query(
           `INSERT INTO p2_manufacturing_work_order_dependencies
             (project_id,predecessor_authority_id,successor_authority_id,
              dependency_type,required_quantity)
-           VALUES ($1,$2,$3,$4,$5)`,
+           VALUES ($1,$2,$3,$4,$5)
+           ON CONFLICT (predecessor_authority_id,successor_authority_id,dependency_type) DO NOTHING`,
           [
             projectId,
             predecessorId,
@@ -377,7 +432,8 @@ export async function materializeP2ManufacturingWorkOrders(
             (project_id,successor_authority_id,frozen_demand_node_id,
              inventory_item_id,assembly_path_identity,part_number_snapshot,
              required_quantity)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (successor_authority_id,frozen_demand_node_id) DO NOTHING`,
           [
             projectId,
             successorId,
@@ -396,12 +452,15 @@ export async function materializeP2ManufacturingWorkOrders(
     const eventId = randomUUID();
     await client.query(
       `INSERT INTO p2_manufacturing_work_order_events
-        (id,frozen_demand_baseline_id,event_type,request_key,request_hash,
+        (id,authority_id,frozen_demand_baseline_id,event_type,request_key,request_hash,
          actor_user_id,actor_employee_id,actor_display_name,actor_role,
          signature_meaning,evidence)
-       VALUES ($1,$2,'WORK_ORDERS_MATERIALIZED',$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
+       VALUES ($1,$2,$3,'WORK_ORDERS_MATERIALIZED',$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
       [
         eventId,
+        manufactured.length === 1
+          ? authorityByNode.get(clean(manufactured[0].id))
+          : null,
         baselineId,
         requestKey,
         requestHash,
@@ -414,6 +473,7 @@ export async function materializeP2ManufacturingWorkOrders(
           projectId,
           baselineId,
           baselineChecksum: baseline.baseline_checksum,
+          frozenDemandNodeIds: manufactured.map((node) => node.id),
           workOrderIds,
           createsTravelers: false,
           changesInventory: false,

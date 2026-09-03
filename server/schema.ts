@@ -43,26 +43,32 @@ import { z } from 'zod';
 import { getManufacturingRouteDefinition as resolveManufacturingRouteDefinition } from '../shared/utils/manufacturingRouting';
 
 // Order Department Types Reference Table (separate from order_departments tracking table)
-export const inventoryDepartments = pgTable('inventory_departments', {
-  id: serial('id').primaryKey(),
-  name: text('name').notNull(),
-  departmentCode: text('department_code'),
-  isActive: boolean('is_active').default(true),
-  routingEnabled: boolean('routing_enabled').notNull().default(true),
-  productionEnabled: boolean('production_enabled').notNull().default(true),
-  schedulingEnabled: boolean('scheduling_enabled').notNull().default(true),
-  sortOrder: integer('sort_order').default(0),
-  defaultReceivingLocation: text('default_receiving_location'),
-  defaultReceivingFreezer: integer('default_receiving_freezer'),
-  createdBy: text('created_by'),
-  updatedBy: text('updated_by'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-}, (table) => ({
-  departmentCodeUnique: uniqueIndex('inventory_departments_department_code_uidx')
-    .on(sql`lower(${table.departmentCode})`)
-    .where(sql`${table.departmentCode} IS NOT NULL`),
-}));
+export const inventoryDepartments = pgTable(
+  'inventory_departments',
+  {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull(),
+    departmentCode: text('department_code'),
+    isActive: boolean('is_active').default(true),
+    routingEnabled: boolean('routing_enabled').notNull().default(true),
+    productionEnabled: boolean('production_enabled').notNull().default(true),
+    schedulingEnabled: boolean('scheduling_enabled').notNull().default(true),
+    sortOrder: integer('sort_order').default(0),
+    defaultReceivingLocation: text('default_receiving_location'),
+    defaultReceivingFreezer: integer('default_receiving_freezer'),
+    createdBy: text('created_by'),
+    updatedBy: text('updated_by'),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  (table) => ({
+    departmentCodeUnique: uniqueIndex(
+      'inventory_departments_department_code_uidx'
+    )
+      .on(sql`lower(${table.departmentCode})`)
+      .where(sql`${table.departmentCode} IS NOT NULL`),
+  })
+);
 
 export const insertInventoryDepartmentSchema = createInsertSchema(
   inventoryDepartments
@@ -767,127 +773,139 @@ export {
 } from '../shared/utils/supplySourceDashboard';
 
 // Inventory Management Tables
-export const inventoryItems = pgTable('inventory_items', {
-  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
-  agPartNumber: text('ag_part_number').notNull().unique(), // AG Part#
-  name: text('name').notNull(), // Name
-  source: text('source'), // Source
-  supplierPartNumber: text('supplier_part_number'), // Supplier Part #
-  orderUrl: text('order_url'), // Website link for ordering this item
-  costPer: real('cost_per'), // Purchase cost from vendor (e.g., $491.20 for 80lb box)
-  orderDate: date('order_date'), // Order Date
-  notes: text('notes'), // Notes
-  department: text('department'), // Dept. (legacy - kept for backward compatibility)
-  assignedDepartments: jsonb('assigned_departments')
-    .$type<string[]>()
-    .default(sql`'[]'::jsonb`), // Departments that can request/use this part
-  defaultDepartmentId: integer('default_department_id').references(
-    () => inventoryDepartments.id,
-    { onDelete: 'restrict' }
-  ), // Prospective owning/default department; released routing remains execution authority
-  secondarySource: text('secondary_source'), // Secondary Source
-  isActive: boolean('is_active').default(true),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-  // Legacy columns (preserved for data integrity)
-  code: text('code'), // Legacy code field
-  description: text('description'), // Legacy description
-  category: text('category'), // Legacy category
-  quantityInStock: integer('quantity_in_stock'), // Legacy quantity
-  unitCost: real('unit_cost'), // Legacy unit cost
-  supplier: text('supplier'), // Legacy supplier text field
-  status: text('status'), // Legacy status
-  onHand: integer('on_hand'), // On-hand quantity
-  location: text('location'), // Storage location
-  minimumStock: integer('minimum_stock'), // Minimum stock level
-  lastUpdated: timestamp('last_updated'), // Last update timestamp
-  committed: integer('committed'), // Committed quantity
-  available: integer('available'), // Available quantity
-  reorderPoint: integer('reorder_point'), // Reorder point
-  // Current/Enhanced MRP columns
-  sku: text('sku'), // SKU - Links to stock models (informational)
-  secondarySupplierPartNumber: text('secondary_supplier_part_number'), // Secondary Supplier Part #
-  vendorUnit: text('vendor_unit'), // Vendor's unit of sale (e.g., "BOX", "DRUM", "PAIL")
-  purchaseUnitLabel: text('purchase_unit_label'), // Human-readable vendor unit (e.g., "80 lb box", "5 gallon pail")
-  purchaseUnit: text('purchase_unit'), // Standard purchase unit for calculations (e.g., "lb", "gal")
-  purchaseQuantity: real('purchase_quantity'), // Quantity in purchase unit per vendor unit (e.g., 80 lbs per BOX)
-  consumptionRate: real('consumption_rate'), // Amount per item manufactured (e.g., 50 grams per rod)
-  usageUnit: text('usage_unit'), // Unit of measurement for consumption (e.g., "g", "oz", "ea")
-  cogsPerUnit: real('cogs_per_unit'), // Calculated or manual COGS per manufactured unit
-  latestCost: real('latest_cost'), // Latest cost per usage unit (auto-calculated from PO receipts)
-  allowManualCostOverride: boolean('allow_manual_cost_override').default(false), // Allow manual COGS override
-  leadTimeDays: integer('lead_time_days'), // Lead time in days for forecasting/MRP
-  isStockItem: boolean('is_stock_item').default(false), // Used in stock models
-  utilizedInPL1: boolean('utilized_in_pl1').default(false), // Used in Production Line 1
-  utilizedInPL2: boolean('utilized_in_pl2').default(false), // Used in Production Line 2
-  utilizedInPL3: boolean('utilized_in_pl3').default(false), // Used in Production Line 3
-  traceabilityRequired: boolean('traceability_required').default(false), // Traceability required for P2 items
-  traceabilityFields: jsonb('traceability_fields')
-    .$type<string[]>()
-    .default(sql`'[]'::jsonb`), // Specific traceability fields required (Lot #, Batch #, Exp Date, Part #)
-  utilizedInFacilities: boolean('utilized_in_facilities').default(false), // Used in Facilities
-  utilizedInAdmin: boolean('utilized_in_admin').default(false), // Used in Admin
-  utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
-  utilizedInNonInventory: boolean('utilized_in_non_inventory').notNull().default(false), // Purchased/physical item not tracked in ordinary balances
-  utilizedInCustomerSupplied: boolean('utilized_in_customer_supplied').notNull().default(false), // Customer-owned material; custody tracking remains enabled
-  isPacket: boolean('is_packet').default(false), // Packet item for cutting table BOM
-  isPacketPart: boolean('is_packet_part').default(false), // Part of cutting table packet
-  isFabric: boolean('is_fabric').default(false), // Fabric for cutting table
-  type: text('type'), // Type: Purchased or Manufactured
-  manufacturingDepartment: text('manufacturing_department'), // Manufacturing department: CNC, Cutting Table, or Cores (required when type is Manufactured)
-  vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
-  hasSds: boolean('has_sds').default(false), // Has Safety Data Sheet
-  sdsFilePath: text('sds_file_path'), // Path to uploaded SDS PDF file
-  hasTds: boolean('has_tds').default(false), // Has Technical Data Sheet
-  tdsFilePath: text('tds_file_path'), // Path to uploaded TDS PDF file
-  hasOtherDocs: boolean('has_other_docs').default(false), // Has Other Documents
-  otherDocsFilePath: text('other_docs_file_path'), // Path to uploaded Other Docs PDF file
-  assignedToAsset: text('assigned_to_asset'), // Asset this item is assigned to (name + tag from /assets)
-  defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO', 'WEBSITE', or 'EMAIL'
-  purchaseUnitId: integer('purchase_unit_id').references(() => units.id), // FK â†’ units (measurement unit for purchasing)
-  usageUnitId: integer('usage_unit_id').references(() => units.id), // FK â†’ units (measurement unit for consumption)
-  // Formal item type classification (replaces loose text `type` field)
-  itemType: inventoryItemTypeEnum('item_type'), // PURCHASED | MANUFACTURED
-  // Manufactured items only â€” category determines production routing
-  manufacturedCategory: inventoryManufacturedCategoryEnum(
-    'manufactured_category'
-  ), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY | FINAL_ASSEMBLY | COMPOSITE | COMPONENT
-  // Manufactured items only â€” production level independent of category
-  manufacturingLevel: inventoryManufacturingLevelEnum('manufacturing_level'), // COMPONENT | INTERMEDIATE | FINAL
-  // Machined parts only â€” type of machine required to produce the part
-  machineType: text('machine_type'),
-  machiningTimeMinutes: integer('machining_time_minutes'),
-  // Required receiving documents â€” enforced on acceptance in Receiving Control Center
-  requiresSds: boolean('requires_sds').notNull().default(false),
-  requiresTds: boolean('requires_tds').notNull().default(false),
-  requiresCoc: boolean('requires_coc').notNull().default(false), // Certificate of Conformance
-  requiresTestReport: boolean('requires_test_report').notNull().default(false),
-  requiresPackingSlipPhoto: boolean('requires_packing_slip_photo')
-    .notNull()
-    .default(false),
-  primaryImageMediaId: uuid('primary_image_media_id'),
-  // Per-field traceability configuration â€” map of received_units field name â†’ visibility setting
-  // Fields: lotNumber, batchNumber, serialNumber, expirationDate, manufactureDate, heatLot, rollNumber, certReference
-  // Values: 'required' | 'optional' | 'hidden'
-  // When null/absent, all fields are treated as optional (legacy behavior)
-  traceabilityFieldConfig: jsonb('traceability_field_config').$type<
-    Record<string, 'required' | 'optional' | 'hidden'>
-  >(),
-  // Shelf-life & out-time policy (Task #165)
-  shelfLifeControlled: boolean('shelf_life_controlled')
-    .notNull()
-    .default(false),
-  frozenShelfLifeDays: integer('frozen_shelf_life_days'),
-  roomTempShelfLifeDays: integer('room_temp_shelf_life_days'),
-  defaultMaxOutTimeMinutes: integer('default_max_out_time_minutes'),
-  outTimeEnforcementRequired: boolean('out_time_enforcement_required')
-    .notNull()
-    .default(false),
-}, (table) => ({
-  defaultDepartmentIdx: index('inventory_items_default_department_id_idx').on(
-    table.defaultDepartmentId
-  ),
-}));
+export const inventoryItems = pgTable(
+  'inventory_items',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    agPartNumber: text('ag_part_number').notNull().unique(), // AG Part#
+    name: text('name').notNull(), // Name
+    source: text('source'), // Source
+    supplierPartNumber: text('supplier_part_number'), // Supplier Part #
+    orderUrl: text('order_url'), // Website link for ordering this item
+    costPer: real('cost_per'), // Purchase cost from vendor (e.g., $491.20 for 80lb box)
+    orderDate: date('order_date'), // Order Date
+    notes: text('notes'), // Notes
+    department: text('department'), // Dept. (legacy - kept for backward compatibility)
+    assignedDepartments: jsonb('assigned_departments')
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`), // Departments that can request/use this part
+    defaultDepartmentId: integer('default_department_id').references(
+      () => inventoryDepartments.id,
+      { onDelete: 'restrict' }
+    ), // Prospective owning/default department; released routing remains execution authority
+    secondarySource: text('secondary_source'), // Secondary Source
+    isActive: boolean('is_active').default(true),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+    // Legacy columns (preserved for data integrity)
+    code: text('code'), // Legacy code field
+    description: text('description'), // Legacy description
+    category: text('category'), // Legacy category
+    quantityInStock: integer('quantity_in_stock'), // Legacy quantity
+    unitCost: real('unit_cost'), // Legacy unit cost
+    supplier: text('supplier'), // Legacy supplier text field
+    status: text('status'), // Legacy status
+    onHand: integer('on_hand'), // On-hand quantity
+    location: text('location'), // Storage location
+    minimumStock: integer('minimum_stock'), // Minimum stock level
+    lastUpdated: timestamp('last_updated'), // Last update timestamp
+    committed: integer('committed'), // Committed quantity
+    available: integer('available'), // Available quantity
+    reorderPoint: integer('reorder_point'), // Reorder point
+    // Current/Enhanced MRP columns
+    sku: text('sku'), // SKU - Links to stock models (informational)
+    secondarySupplierPartNumber: text('secondary_supplier_part_number'), // Secondary Supplier Part #
+    vendorUnit: text('vendor_unit'), // Vendor's unit of sale (e.g., "BOX", "DRUM", "PAIL")
+    purchaseUnitLabel: text('purchase_unit_label'), // Human-readable vendor unit (e.g., "80 lb box", "5 gallon pail")
+    purchaseUnit: text('purchase_unit'), // Standard purchase unit for calculations (e.g., "lb", "gal")
+    purchaseQuantity: real('purchase_quantity'), // Quantity in purchase unit per vendor unit (e.g., 80 lbs per BOX)
+    consumptionRate: real('consumption_rate'), // Amount per item manufactured (e.g., 50 grams per rod)
+    usageUnit: text('usage_unit'), // Unit of measurement for consumption (e.g., "g", "oz", "ea")
+    cogsPerUnit: real('cogs_per_unit'), // Calculated or manual COGS per manufactured unit
+    latestCost: real('latest_cost'), // Latest cost per usage unit (auto-calculated from PO receipts)
+    allowManualCostOverride: boolean('allow_manual_cost_override').default(
+      false
+    ), // Allow manual COGS override
+    leadTimeDays: integer('lead_time_days'), // Lead time in days for forecasting/MRP
+    isStockItem: boolean('is_stock_item').default(false), // Used in stock models
+    utilizedInPL1: boolean('utilized_in_pl1').default(false), // Used in Production Line 1
+    utilizedInPL2: boolean('utilized_in_pl2').default(false), // Used in Production Line 2
+    utilizedInPL3: boolean('utilized_in_pl3').default(false), // Used in Production Line 3
+    traceabilityRequired: boolean('traceability_required').default(false), // Traceability required for P2 items
+    traceabilityFields: jsonb('traceability_fields')
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`), // Specific traceability fields required (Lot #, Batch #, Exp Date, Part #)
+    utilizedInFacilities: boolean('utilized_in_facilities').default(false), // Used in Facilities
+    utilizedInAdmin: boolean('utilized_in_admin').default(false), // Used in Admin
+    utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
+    utilizedInNonInventory: boolean('utilized_in_non_inventory')
+      .notNull()
+      .default(false), // Purchased/physical item not tracked in ordinary balances
+    utilizedInCustomerSupplied: boolean('utilized_in_customer_supplied')
+      .notNull()
+      .default(false), // Customer-owned material; custody tracking remains enabled
+    isPacket: boolean('is_packet').default(false), // Packet item for cutting table BOM
+    isPacketPart: boolean('is_packet_part').default(false), // Part of cutting table packet
+    isFabric: boolean('is_fabric').default(false), // Fabric for cutting table
+    type: text('type'), // Type: Purchased or Manufactured
+    manufacturingDepartment: text('manufacturing_department'), // Manufacturing department: CNC, Cutting Table, or Cores (required when type is Manufactured)
+    vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
+    hasSds: boolean('has_sds').default(false), // Has Safety Data Sheet
+    sdsFilePath: text('sds_file_path'), // Path to uploaded SDS PDF file
+    hasTds: boolean('has_tds').default(false), // Has Technical Data Sheet
+    tdsFilePath: text('tds_file_path'), // Path to uploaded TDS PDF file
+    hasOtherDocs: boolean('has_other_docs').default(false), // Has Other Documents
+    otherDocsFilePath: text('other_docs_file_path'), // Path to uploaded Other Docs PDF file
+    assignedToAsset: text('assigned_to_asset'), // Asset this item is assigned to (name + tag from /assets)
+    defaultOrderMethod: text('default_order_method'), // Default procurement method: 'PO', 'WEBSITE', or 'EMAIL'
+    purchaseUnitId: integer('purchase_unit_id').references(() => units.id), // FK â†’ units (measurement unit for purchasing)
+    usageUnitId: integer('usage_unit_id').references(() => units.id), // FK â†’ units (measurement unit for consumption)
+    // Formal item type classification (replaces loose text `type` field)
+    itemType: inventoryItemTypeEnum('item_type'), // PURCHASED | MANUFACTURED
+    // Manufactured items only â€” category determines production routing
+    manufacturedCategory: inventoryManufacturedCategoryEnum(
+      'manufactured_category'
+    ), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY | FINAL_ASSEMBLY | COMPOSITE | COMPONENT
+    // Manufactured items only â€” production level independent of category
+    manufacturingLevel: inventoryManufacturingLevelEnum('manufacturing_level'), // COMPONENT | INTERMEDIATE | FINAL
+    // Machined parts only â€” type of machine required to produce the part
+    machineType: text('machine_type'),
+    machiningTimeMinutes: integer('machining_time_minutes'),
+    // Required receiving documents â€” enforced on acceptance in Receiving Control Center
+    requiresSds: boolean('requires_sds').notNull().default(false),
+    requiresTds: boolean('requires_tds').notNull().default(false),
+    requiresCoc: boolean('requires_coc').notNull().default(false), // Certificate of Conformance
+    requiresTestReport: boolean('requires_test_report')
+      .notNull()
+      .default(false),
+    requiresPackingSlipPhoto: boolean('requires_packing_slip_photo')
+      .notNull()
+      .default(false),
+    primaryImageMediaId: uuid('primary_image_media_id'),
+    // Per-field traceability configuration â€” map of received_units field name â†’ visibility setting
+    // Fields: lotNumber, batchNumber, serialNumber, expirationDate, manufactureDate, heatLot, rollNumber, certReference
+    // Values: 'required' | 'optional' | 'hidden'
+    // When null/absent, all fields are treated as optional (legacy behavior)
+    traceabilityFieldConfig: jsonb('traceability_field_config').$type<
+      Record<string, 'required' | 'optional' | 'hidden'>
+    >(),
+    // Shelf-life & out-time policy (Task #165)
+    shelfLifeControlled: boolean('shelf_life_controlled')
+      .notNull()
+      .default(false),
+    frozenShelfLifeDays: integer('frozen_shelf_life_days'),
+    roomTempShelfLifeDays: integer('room_temp_shelf_life_days'),
+    defaultMaxOutTimeMinutes: integer('default_max_out_time_minutes'),
+    outTimeEnforcementRequired: boolean('out_time_enforcement_required')
+      .notNull()
+      .default(false),
+  },
+  (table) => ({
+    defaultDepartmentIdx: index('inventory_items_default_department_id_idx').on(
+      table.defaultDepartmentId
+    ),
+  })
+);
 
 // Inventory Item Cost History - Tracks price changes over time
 export const inventoryItemCostHistory = pgTable('inventory_item_cost_history', {
@@ -4764,7 +4782,9 @@ export const vendorPOs = pgTable('vendor_pos', {
   issueDpasRated: boolean('issue_dpas_rated'),
   issueDpasRating: text('issue_dpas_rating'),
   issueFlowdownsRequired: boolean('issue_flowdowns_required'),
-  issueComplianceConfirmedByUserId: integer('issue_compliance_confirmed_by_user_id'),
+  issueComplianceConfirmedByUserId: integer(
+    'issue_compliance_confirmed_by_user_id'
+  ),
   issueComplianceConfirmedByName: text('issue_compliance_confirmed_by_name'),
   issueComplianceConfirmedAt: timestamp('issue_compliance_confirmed_at'),
   rfqOutcomeNotes: text('rfq_outcome_notes'),
@@ -6401,11 +6421,17 @@ export const p2OrderDrafts = pgTable(
       .notNull()
       .references((): AnyPgColumn => projects.id, { onDelete: 'cascade' }),
     currentStep: integer('current_step').notNull().default(0),
-    draftData: jsonb('draft_data').notNull().default(sql`'{}'::jsonb`),
+    draftData: jsonb('draft_data')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     createdBy: text('created_by'),
     updatedBy: text('updated_by'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
     projectUnique: unique('p2_order_drafts_project_unique').on(table.projectId),
@@ -6771,62 +6797,66 @@ export const partRoutings = pgTable(
 );
 
 // Routing Operations - Step-by-step operations within a part routing
-export const routingOperations = pgTable('routing_operations', {
-  id: serial('id').primaryKey(),
+export const routingOperations = pgTable(
+  'routing_operations',
+  {
+    id: serial('id').primaryKey(),
 
-  partRoutingId: uuid('part_routing_id')
-    .references(() => partRoutings.id)
-    .notNull(),
+    partRoutingId: uuid('part_routing_id')
+      .references(() => partRoutings.id)
+      .notNull(),
 
-  stepNumber: integer('step_number').notNull(),
-  departmentName: text('department_name').notNull(),
-  departmentId: integer('department_id').references(
-    () => inventoryDepartments.id,
-    { onDelete: 'restrict' }
-  ),
-  departmentNameSnapshot: text('department_name_snapshot'),
+    stepNumber: integer('step_number').notNull(),
+    departmentName: text('department_name').notNull(),
+    departmentId: integer('department_id').references(
+      () => inventoryDepartments.id,
+      { onDelete: 'restrict' }
+    ),
+    departmentNameSnapshot: text('department_name_snapshot'),
 
-  operationName: text('operation_name').notNull(),
+    operationName: text('operation_name').notNull(),
 
-  operationType: text('operation_type', {
-    enum: ['SETUP', 'RUN', 'INSPECT', 'OSP', 'MATERIAL', 'QC'],
-  }).notNull(),
+    operationType: text('operation_type', {
+      enum: ['SETUP', 'RUN', 'INSPECT', 'OSP', 'MATERIAL', 'QC'],
+    }).notNull(),
 
-  workCenter: text('work_center'),
+    workCenter: text('work_center'),
 
-  estimatedMinutes: integer('estimated_minutes'),
+    estimatedMinutes: integer('estimated_minutes'),
 
-  requiresSignature: boolean('requires_signature').default(false),
-  requiresCertification: boolean('requires_certification').default(false),
-  certificationId: integer('certification_id').references(
-    () => certifications.id
-  ),
+    requiresSignature: boolean('requires_signature').default(false),
+    requiresCertification: boolean('requires_certification').default(false),
+    certificationId: integer('certification_id').references(
+      () => certifications.id
+    ),
 
-  isOutsideProcess: boolean('is_outside_process').default(false),
-  vendorId: integer('vendor_id'),
+    isOutsideProcess: boolean('is_outside_process').default(false),
+    vendorId: integer('vendor_id'),
 
-  outsideProcessType: text('outside_process_type'),
-  expectedLeadDays: integer('expected_lead_days'),
-  certificateRequired: boolean('certificate_required').default(false),
-  receivingInspectionRequired: boolean('receiving_inspection_required').default(
-    false
-  ),
-  requiredCalibrationAssetTags: text('required_calibration_asset_tags')
-    .array()
-    .notNull()
-    .default(sql`ARRAY[]::text[]`),
+    outsideProcessType: text('outside_process_type'),
+    expectedLeadDays: integer('expected_lead_days'),
+    certificateRequired: boolean('certificate_required').default(false),
+    receivingInspectionRequired: boolean(
+      'receiving_inspection_required'
+    ).default(false),
+    requiredCalibrationAssetTags: text('required_calibration_asset_tags')
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
 
-  instructionPack: jsonb('instruction_pack').default('{}'),
+    instructionPack: jsonb('instruction_pack').default('{}'),
 
-  createdAt: timestamp('created_at').defaultNow(),
-}, (table) => ({
-  departmentIdx: index('routing_operations_department_id_idx').on(
-    table.departmentId
-  ),
-  routingStepUnique: uniqueIndex('routing_operations_routing_step_uidx')
-    .on(table.partRoutingId, table.stepNumber)
-    .where(sql`${table.departmentId} IS NOT NULL`),
-}));
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => ({
+    departmentIdx: index('routing_operations_department_id_idx').on(
+      table.departmentId
+    ),
+    routingStepUnique: uniqueIndex('routing_operations_routing_step_uidx')
+      .on(table.partRoutingId, table.stepNumber)
+      .where(sql`${table.departmentId} IS NOT NULL`),
+  })
+);
 
 // CNC Extension for Routing Operations - links CNC-specific data to a routing operation
 export const routingCncOperations = pgTable('routing_cnc_operations', {
@@ -9965,7 +9995,10 @@ export const boms = pgTable(
     parentPartAgNumber: text('parent_part_ag_number')
       .notNull()
       .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' }),
-    parentInventoryItemId: integer('parent_inventory_item_id').references(() => inventoryItems.id, { onDelete: 'restrict' }),
+    parentInventoryItemId: integer('parent_inventory_item_id').references(
+      () => inventoryItems.id,
+      { onDelete: 'restrict' }
+    ),
     parentPartNumberSnapshot: text('parent_part_number_snapshot'),
     parentNameSnapshot: text('parent_name_snapshot'),
     parentRevisionSnapshot: text('parent_revision_snapshot'),
@@ -9993,7 +10026,9 @@ export const bomRevisions = pgTable(
     notes: text('notes').default(''),
     isReleased: boolean('is_released').notNull().default(false),
     lifecycleStatus: text('lifecycle_status'),
-    effectivity: jsonb('effectivity').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+    effectivity: jsonb('effectivity')
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`),
     contentChecksum: text('content_checksum'),
     concurrencyVersion: integer('concurrency_version').notNull().default(1),
     submittedBy: integer('submitted_by'),
@@ -10029,7 +10064,10 @@ export const bomLines = pgTable(
     childPartAgNumber: text('child_part_ag_number')
       .notNull()
       .references(() => inventoryItems.agPartNumber, { onDelete: 'restrict' }),
-    childInventoryItemId: integer('child_inventory_item_id').references(() => inventoryItems.id, { onDelete: 'restrict' }),
+    childInventoryItemId: integer('child_inventory_item_id').references(
+      () => inventoryItems.id,
+      { onDelete: 'restrict' }
+    ),
     childPartNumberSnapshot: text('child_part_number_snapshot'),
     childNameSnapshot: text('child_name_snapshot'),
     childRevisionSnapshot: text('child_revision_snapshot'),
@@ -10041,11 +10079,22 @@ export const bomLines = pgTable(
     inheritedPolicyType: text('inherited_policy_type'),
     traceabilityOverridePolicyType: text('traceability_override_policy_type'),
     traceabilityOverrideReason: text('traceability_override_reason'),
-    traceabilityOverrideEffectivity: jsonb('traceability_override_effectivity').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
-    traceabilityOverrideApprovedBy: integer('traceability_override_approved_by'),
-    traceabilityOverrideApproverName: text('traceability_override_approver_name'),
-    traceabilityOverrideSignatureMeaning: text('traceability_override_signature_meaning'),
-    traceabilityOverrideApprovedAt: timestamp('traceability_override_approved_at', { withTimezone: true }),
+    traceabilityOverrideEffectivity: jsonb('traceability_override_effectivity')
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`),
+    traceabilityOverrideApprovedBy: integer(
+      'traceability_override_approved_by'
+    ),
+    traceabilityOverrideApproverName: text(
+      'traceability_override_approver_name'
+    ),
+    traceabilityOverrideSignatureMeaning: text(
+      'traceability_override_signature_meaning'
+    ),
+    traceabilityOverrideApprovedAt: timestamp(
+      'traceability_override_approved_at',
+      { withTimezone: true }
+    ),
     qtyPer: numeric('qty_per', { precision: 18, scale: 6 })
       .notNull()
       .default('1'),
@@ -17673,9 +17722,9 @@ export const routingDocuments = pgTable(
     departmentIdx: index('routing_documents_department_idx').on(
       table.departmentName
     ),
-    controlledDocumentIdx: index('routing_documents_controlled_document_idx').on(
-      table.controlledDocumentId
-    ),
+    controlledDocumentIdx: index(
+      'routing_documents_controlled_document_idx'
+    ).on(table.controlledDocumentId),
   })
 );
 
@@ -21087,11 +21136,20 @@ export const p2DepositApplications = pgTable(
   'p2_deposit_applications',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    depositInvoiceId: uuid('deposit_invoice_id').notNull().references(() => arInvoices.id, { onDelete: 'restrict' }),
-    finalInvoiceId: uuid('final_invoice_id').notNull().references(() => arInvoices.id, { onDelete: 'restrict' }),
-    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'restrict' }),
+    depositInvoiceId: uuid('deposit_invoice_id')
+      .notNull()
+      .references(() => arInvoices.id, { onDelete: 'restrict' }),
+    finalInvoiceId: uuid('final_invoice_id')
+      .notNull()
+      .references(() => arInvoices.id, { onDelete: 'restrict' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'restrict' }),
     amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
-    journalEntryId: integer('journal_entry_id').references(() => journalEntries.id, { onDelete: 'restrict' }),
+    journalEntryId: integer('journal_entry_id').references(
+      () => journalEntries.id,
+      { onDelete: 'restrict' }
+    ),
     status: text('status').notNull().default('POSTED'),
     reason: text('reason').notNull(),
     appliedBy: text('applied_by'),
@@ -21102,8 +21160,14 @@ export const p2DepositApplications = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({
-    depositIdx: index('p2_deposit_applications_deposit_idx').on(table.depositInvoiceId, table.status),
-    finalIdx: index('p2_deposit_applications_final_idx').on(table.finalInvoiceId, table.status),
+    depositIdx: index('p2_deposit_applications_deposit_idx').on(
+      table.depositInvoiceId,
+      table.status
+    ),
+    finalIdx: index('p2_deposit_applications_final_idx').on(
+      table.finalInvoiceId,
+      table.status
+    ),
   })
 );
 
@@ -21113,11 +21177,16 @@ export const arPaymentSettlements = pgTable('ar_payment_settlements', {
   processor: text('processor').notNull(),
   bankReference: text('bank_reference').notNull(),
   grossAmount: numeric('gross_amount', { precision: 14, scale: 2 }).notNull(),
-  feeAmount: numeric('fee_amount', { precision: 14, scale: 2 }).notNull().default('0'),
+  feeAmount: numeric('fee_amount', { precision: 14, scale: 2 })
+    .notNull()
+    .default('0'),
   netAmount: numeric('net_amount', { precision: 14, scale: 2 }).notNull(),
   bankAccountNumber: text('bank_account_number').notNull().default('10100'),
   feeAccountNumber: text('fee_account_number').notNull().default('77000'),
-  journalEntryId: integer('journal_entry_id').references(() => journalEntries.id, { onDelete: 'restrict' }),
+  journalEntryId: integer('journal_entry_id').references(
+    () => journalEntries.id,
+    { onDelete: 'restrict' }
+  ),
   status: text('status').notNull().default('POSTED'),
   reason: text('reason').notNull(),
   createdBy: text('created_by'),
@@ -21131,15 +21200,22 @@ export const arPaymentSettlementItems = pgTable(
   'ar_payment_settlement_items',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    settlementId: uuid('settlement_id').notNull().references(() => arPaymentSettlements.id, { onDelete: 'restrict' }),
+    settlementId: uuid('settlement_id')
+      .notNull()
+      .references(() => arPaymentSettlements.id, { onDelete: 'restrict' }),
     paymentSource: text('payment_source').notNull(),
     paymentId: text('payment_id').notNull(),
     amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({
-    paymentIdx: index('ar_payment_settlement_items_payment_idx').on(table.paymentSource, table.paymentId),
-    settlementIdx: index('ar_payment_settlement_items_settlement_idx').on(table.settlementId),
+    paymentIdx: index('ar_payment_settlement_items_payment_idx').on(
+      table.paymentSource,
+      table.paymentId
+    ),
+    settlementIdx: index('ar_payment_settlement_items_settlement_idx').on(
+      table.settlementId
+    ),
   })
 );
 
@@ -21539,7 +21615,9 @@ export type InsertQuickNoteShare = z.infer<typeof insertQuickNoteShareSchema>;
 // intentionally store suggestions only and never mutate operational records.
 export const moveForwardCaptures = pgTable('move_forward_captures', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').notNull().references(() => users.id),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
   originalText: text('original_text').notNull(),
   inputMethod: text('input_method').notNull().default('typed'),
   status: text('status').notNull().default('draft'),
@@ -21551,8 +21629,12 @@ export const moveForwardCaptures = pgTable('move_forward_captures', {
 
 export const moveForwardItems = pgTable('move_forward_items', {
   id: serial('id').primaryKey(),
-  captureId: integer('capture_id').notNull().references(() => moveForwardCaptures.id, { onDelete: 'cascade' }),
-  userId: integer('user_id').notNull().references(() => users.id),
+  captureId: integer('capture_id')
+    .notNull()
+    .references(() => moveForwardCaptures.id, { onDelete: 'cascade' }),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
   itemType: text('item_type').notNull(),
   title: text('title').notNull(),
   details: text('details'),
@@ -21561,28 +21643,42 @@ export const moveForwardItems = pgTable('move_forward_items', {
   dueDate: date('due_date'),
   amountCents: integer('amount_cents'),
   status: text('status').notNull().default('proposed'),
-  suggestedLinks: jsonb('suggested_links').$type<Array<{ type: string; id: string; label: string }>>().default([]).notNull(),
-  rundownItemId: integer('rundown_item_id').references(() => executiveRundownItems.id),
+  suggestedLinks: jsonb('suggested_links')
+    .$type<Array<{ type: string; id: string; label: string }>>()
+    .default([])
+    .notNull(),
+  rundownItemId: integer('rundown_item_id').references(
+    () => executiveRundownItems.id
+  ),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   completedAt: timestamp('completed_at'),
 });
 
-export const moveForwardClarifications = pgTable('move_forward_clarifications', {
-  id: serial('id').primaryKey(),
-  captureId: integer('capture_id').notNull().references(() => moveForwardCaptures.id, { onDelete: 'cascade' }),
-  userId: integer('user_id').notNull().references(() => users.id),
-  question: text('question').notNull(),
-  answer: text('answer'),
-  sortOrder: integer('sort_order').notNull().default(0),
-  status: text('status').notNull().default('pending'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  answeredAt: timestamp('answered_at'),
-});
+export const moveForwardClarifications = pgTable(
+  'move_forward_clarifications',
+  {
+    id: serial('id').primaryKey(),
+    captureId: integer('capture_id')
+      .notNull()
+      .references(() => moveForwardCaptures.id, { onDelete: 'cascade' }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    question: text('question').notNull(),
+    answer: text('answer'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    status: text('status').notNull().default('pending'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    answeredAt: timestamp('answered_at'),
+  }
+);
 
 export const moveForwardRules = pgTable('move_forward_rules', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').notNull().references(() => users.id),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
   triggerText: text('trigger_text').notNull(),
   instruction: text('instruction').notNull(),
   status: text('status').notNull().default('proposed'),
@@ -22786,6 +22882,7 @@ export const productionWorkOrders = pgTable(
       .notNull(),
     startDate: date('start_date'),
     dueDate: date('due_date'),
+    priority: text('priority').notNull().default('LOW'),
     warningThreshold: numeric('warning_threshold'),
     blockedThreshold: numeric('blocked_threshold'),
     defaultChargeCodeId: integer('default_charge_code_id').references(
@@ -22839,6 +22936,7 @@ export const insertProductionWorkOrderSchema = createInsertSchema(
     totalBudgetHours: z.string().optional().nullable(),
     startDate: z.string().optional().nullable(),
     dueDate: z.string().optional().nullable(),
+    priority: z.enum(['LOW', 'URGENT', 'CRITICAL']).optional().default('LOW'),
     departmentBudgets: z.record(z.any()).optional(),
     warningThreshold: z
       .string()
@@ -27591,10 +27689,16 @@ export const farFlowdownClauses = pgTable('far_flowdown_clauses', {
   regulation: text('regulation').notNull().default('OTHER'),
   clauseDate: text('clause_date'),
   officialUrl: text('official_url'),
-  incorporationMethod: text('incorporation_method').notNull().default('REFERENCE'),
-  commercialApplicability: text('commercial_applicability').notNull().default('CONDITIONAL'),
+  incorporationMethod: text('incorporation_method')
+    .notNull()
+    .default('REFERENCE'),
+  commercialApplicability: text('commercial_applicability')
+    .notNull()
+    .default('CONDITIONAL'),
   fullText: text('full_text'),
-  legalReviewRequired: boolean('legal_review_required').notNull().default(false),
+  legalReviewRequired: boolean('legal_review_required')
+    .notNull()
+    .default(false),
   applicabilityRule: jsonb('applicability_rule'),
   defaultApplicable: boolean('default_applicable').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
@@ -27627,24 +27731,37 @@ export const vendorPoFarFlowdowns = pgTable(
   (t) => ({ uniq: unique().on(t.vendorPoId, t.clauseId) })
 );
 
-export const vendorPoFlowdownAssessments = pgTable('vendor_po_flowdown_assessments', {
-  id: serial('id').primaryKey(),
-  vendorPoId: integer('vendor_po_id').notNull().unique().references(() => vendorPOs.id, { onDelete: 'cascade' }),
-  governmentSupported: boolean('government_supported').notNull().default(false),
-  internalContractReference: text('internal_contract_reference'),
-  sourceDocumentReference: text('source_document_reference'),
-  discloseContractReference: boolean('disclose_contract_reference').notNull().default(false),
-  procurementClass: text('procurement_class').notNull().default('UNKNOWN'),
-  answers: jsonb('answers').$type<Record<string, boolean | null>>().notNull().default(sql`'{}'::jsonb`),
-  reviewStatus: text('review_status').notNull().default('DRAFT'),
-  reviewNotes: text('review_notes').notNull().default(''),
-  approvedByUserId: integer('approved_by_user_id'),
-  approvedByDisplayName: text('approved_by_display_name'),
-  approvedAt: timestamp('approved_at'),
-  exhibitRevision: integer('exhibit_revision').notNull().default(0),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const vendorPoFlowdownAssessments = pgTable(
+  'vendor_po_flowdown_assessments',
+  {
+    id: serial('id').primaryKey(),
+    vendorPoId: integer('vendor_po_id')
+      .notNull()
+      .unique()
+      .references(() => vendorPOs.id, { onDelete: 'cascade' }),
+    governmentSupported: boolean('government_supported')
+      .notNull()
+      .default(false),
+    internalContractReference: text('internal_contract_reference'),
+    sourceDocumentReference: text('source_document_reference'),
+    discloseContractReference: boolean('disclose_contract_reference')
+      .notNull()
+      .default(false),
+    procurementClass: text('procurement_class').notNull().default('UNKNOWN'),
+    answers: jsonb('answers')
+      .$type<Record<string, boolean | null>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    reviewStatus: text('review_status').notNull().default('DRAFT'),
+    reviewNotes: text('review_notes').notNull().default(''),
+    approvedByUserId: integer('approved_by_user_id'),
+    approvedByDisplayName: text('approved_by_display_name'),
+    approvedAt: timestamp('approved_at'),
+    exhibitRevision: integer('exhibit_revision').notNull().default(0),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  }
+);
 
 export const projectFarFlowdowns = pgTable(
   'project_far_flowdowns',

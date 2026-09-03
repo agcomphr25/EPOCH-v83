@@ -30,10 +30,9 @@ describe('P2 W/O Queues client surface', () => {
   });
 
   it('uses authoritative shared Departments rather than a hard-coded P2 taxonomy', () => {
-    expect(navigation).toContain(
-      "apiRequest('/api/shared-departments?routingOnly=true')"
-    );
+    expect(navigation).toContain("apiRequest('/api/shared-departments')");
     expect(navigation).toContain('department.id');
+    expect(navigation).toContain("path: '/p2-work-orders/queues/all'");
     expect(navigation).not.toContain("label: 'P2 Assembly'");
   });
 

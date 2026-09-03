@@ -1785,7 +1785,7 @@ export default function Navigation() {
     }>
   >({
     queryKey: ['/api/shared-departments', 'p2-work-order-queues'],
-    queryFn: () => apiRequest('/api/shared-departments?routingOnly=true'),
+    queryFn: () => apiRequest('/api/shared-departments'),
     enabled: p2QueueReadsEnabled && navCapSet.has('p2.work_orders.view'),
     staleTime: 5 * 60 * 1000,
   });
@@ -1819,7 +1819,7 @@ export default function Navigation() {
         return { label: department.name, order: 100 };
       };
 
-      return p2QueueDepartments
+      const departmentItems = p2QueueDepartments
         .filter(
           (department) =>
             department.isActive !== false &&
@@ -1839,6 +1839,17 @@ export default function Navigation() {
           (left, right) =>
             left.order - right.order || left.label.localeCompare(right.label)
         );
+
+      return [
+        {
+          path: '/p2-work-orders/queues/all',
+          label: 'All Work Orders',
+          icon: Factory,
+          description: 'All P2 manufacturing work orders grouped by department',
+          order: 0,
+        },
+        ...departmentItems,
+      ];
     },
     [p2QueueDepartments]
   );

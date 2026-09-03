@@ -12,6 +12,15 @@ import {
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Card,
   CardContent,
@@ -107,6 +116,10 @@ export default function P2FrozenProductionDemand({
   const { toast } = useToast();
   const { can } = usePermissions();
   const [open, setOpen] = useState(new Set<string>());
+  const [workOrderPriority, setWorkOrderPriority] = useState<
+    'LOW' | 'URGENT' | 'CRITICAL'
+  >('LOW');
+  const [workOrderDueDate, setWorkOrderDueDate] = useState('');
   const reads =
     import.meta.env.VITE_P2_FROZEN_PRODUCTION_DEMAND_READS_ENABLED === 'true';
   const writes =
@@ -313,7 +326,7 @@ export default function P2FrozenProductionDemand({
       }),
   });
   const materializeNode = useMutation({
-    mutationFn: (node: Node) => {
+    mutationFn: (node?: Node) => {
       if (!current?.id || !current.baseline_checksum)
         throw new Error('Release the frozen production-demand baseline first.');
       return apiRequest(
@@ -321,11 +334,15 @@ export default function P2FrozenProductionDemand({
         {
           method: 'POST',
           body: {
-            frozenDemandNodeId: node.id,
+            ...(node ? { frozenDemandNodeId: node.id } : {}),
             expectedBaselineChecksum: current.baseline_checksum,
-            idempotencyKey: `work-order:${current.id}:${node.id}`,
+            idempotencyKey: node
+              ? `work-order:${current.id}:${node.id}`
+              : `work-orders:${current.id}:${crypto.randomUUID()}`,
             signatureMeaning:
               'Create this manufactured work order from the released parent PO, WAD, BOM, routing, and frozen demand.',
+            priority: workOrderPriority,
+            ...(workOrderDueDate ? { dueDate: workOrderDueDate } : {}),
           },
         }
       );
@@ -483,6 +500,62 @@ export default function P2FrozenProductionDemand({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-1">
+            {current?.status === 'RELEASED' &&
+              workOrderMaterialization &&
+              can('p2.work_orders.materialize') && (
+                <div className="mb-4 flex flex-wrap items-end gap-3 rounded-md border p-3">
+                  <div className="space-y-1">
+                    <Label>Priority for generated work orders</Label>
+                    <Select
+                      value={workOrderPriority}
+                      onValueChange={(value) =>
+                        setWorkOrderPriority(
+                          value as 'LOW' | 'URGENT' | 'CRITICAL'
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        className="w-[180px]"
+                        data-testid="select-generated-work-order-priority"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="URGENT">Urgent</SelectItem>
+                        <SelectItem value="CRITICAL">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="generated-work-order-due-date">
+                      Due date
+                    </Label>
+                    <Input
+                      id="generated-work-order-due-date"
+                      type="date"
+                      value={workOrderDueDate}
+                      onChange={(event) =>
+                        setWorkOrderDueDate(event.target.value)
+                      }
+                    />
+                  </div>
+                  <Button
+                    disabled={
+                      materializeNode.isPending ||
+                      !nodes.some(
+                        (node) =>
+                          node.make_buy_disposition === 'MAKE' &&
+                          node.depth > 0 &&
+                          !node.materialized_authority_id
+                      )
+                    }
+                    onClick={() => materializeNode.mutate(undefined)}
+                  >
+                    Create All Remaining Work Orders
+                  </Button>
+                </div>
+              )}
             {nodes.map((n) => (
               <div
                 key={n.id}

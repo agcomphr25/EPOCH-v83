@@ -34,7 +34,7 @@ import {
   Bell,
   Link as LinkIcon,
   Edit,
-  Settings,
+  Pencil,
   Upload,
   Paperclip,
   Download,
@@ -2105,8 +2105,8 @@ export default function ProjectDetailPage() {
           });
           setIsEditDialogOpen(true);
         }} data-testid="button-edit-project">
-          <Settings className="mr-2 h-4 w-4" />
-          Settings
+          <Pencil className="mr-2 h-4 w-4" />
+          Edit details
         </Button>
       </div>
 
@@ -7152,7 +7152,7 @@ export default function ProjectDetailPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Project Settings</DialogTitle>
+            <DialogTitle>Edit Project Details</DialogTitle>
             <DialogDescription>Update project details and configuration</DialogDescription>
           </DialogHeader>
           <div className="overflow-y-auto max-h-[65vh] space-y-4 py-4 pr-1">

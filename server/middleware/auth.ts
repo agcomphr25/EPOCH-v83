@@ -31,26 +31,36 @@ declare global {
  * SECURITY: Authentication bypass requires BOTH conditions:
  * 1. NODE_ENV is NOT 'production'
  * 2. DEV_AUTH_BYPASS environment variable is explicitly set to 'true'
- * 
+ *
  * This prevents accidental security bypass in preview/staging deployments
  */
 function isAuthBypassEnabled(): boolean {
   const isProduction = process.env.NODE_ENV === 'production';
   const bypassEnabled = process.env.DEV_AUTH_BYPASS === 'true';
-  
+
   // Only bypass if NOT production AND bypass is explicitly enabled
   return !isProduction && bypassEnabled;
 }
 
 // Log security status at startup
 if (process.env.NODE_ENV === 'production') {
-  console.log('🔒 SECURITY: Running in production mode - full authentication enforced');
+  console.log(
+    '🔒 SECURITY: Running in production mode - full authentication enforced'
+  );
 } else if (process.env.DEV_AUTH_BYPASS === 'true') {
-  console.warn('⚠️ SECURITY WARNING: DEV_AUTH_BYPASS is enabled - authentication is bypassed');
-  console.warn('⚠️ Remove DEV_AUTH_BYPASS=true before deploying to any public environment');
+  console.warn(
+    '⚠️ SECURITY WARNING: DEV_AUTH_BYPASS is enabled - authentication is bypassed'
+  );
+  console.warn(
+    '⚠️ Remove DEV_AUTH_BYPASS=true before deploying to any public environment'
+  );
 } else {
-  console.log('🔒 SECURITY: Running in development mode with authentication enforced');
-  console.log('💡 Set DEV_AUTH_BYPASS=true if you need to bypass authentication for local testing');
+  console.log(
+    '🔒 SECURITY: Running in development mode with authentication enforced'
+  );
+  console.log(
+    '💡 Set DEV_AUTH_BYPASS=true if you need to bypass authentication for local testing'
+  );
 }
 
 /**
@@ -65,11 +75,19 @@ export async function authenticateToken(
     // Browser logins are stored in the Express session. In hosted development
     // environments the separate sessionToken cookie may be unavailable (for
     // example inside the Replit preview iframe), so honor the authenticated
-    // server-side session before falling back to token authentication.
+    // server-side session before falling back to token authentication. Rehydrate
+    // it from the authoritative user row so employee links and role changes made
+    // after login are available to controlled actions immediately.
     const sessionUser = (req as any).session?.user;
     if (sessionUser && sessionUser.username && sessionUser.isActive !== false) {
-      req.user = sessionUser;
-      return next();
+      const currentUser = sessionUser.id
+        ? await AuthService.getUserById(Number(sessionUser.id))
+        : null;
+      if (currentUser?.isActive) {
+        req.user = currentUser;
+        (req as any).session.user = currentUser;
+        return next();
+      }
     }
 
     const authHeader = req.headers['authorization'];
@@ -124,7 +142,9 @@ export async function authenticateToken(
       return next();
     }
 
-    return res.status(token ? 403 : 401).json({ error: token ? 'Invalid or expired token' : 'No session token' });
+    return res
+      .status(token ? 403 : 401)
+      .json({ error: token ? 'Invalid or expired token' : 'No session token' });
   } catch (error) {
     console.error('Authentication error:', error);
     return res.status(500).json({ error: 'Authentication failed' });
@@ -242,7 +262,10 @@ export function requireStepUp(maxAgeMs: number = 30 * 60 * 1000) {
     }
 
     // Skip in dev bypass mode
-    if (process.env.DEV_AUTH_BYPASS === 'true' && process.env.NODE_ENV !== 'production') {
+    if (
+      process.env.DEV_AUTH_BYPASS === 'true' &&
+      process.env.NODE_ENV !== 'production'
+    ) {
       return next();
     }
 
@@ -253,11 +276,18 @@ export function requireStepUp(maxAgeMs: number = 30 * 60 * 1000) {
       // user_sessions would always fail. Cookie tokens are always real session rows.
       const sessionToken =
         req.cookies?.sessionToken ||
-        (req.headers['authorization'] as string | undefined)?.replace('Bearer ', '');
+        (req.headers['authorization'] as string | undefined)?.replace(
+          'Bearer ',
+          ''
+        );
 
       if (!sessionToken) {
         res.setHeader('WWW-Authenticate', 'StepUp');
-        return res.status(401).json({ error: 'Step-up authentication required', code: 'STEP_UP_REQUIRED', requireStepUp: true });
+        return res.status(401).json({
+          error: 'Step-up authentication required',
+          code: 'STEP_UP_REQUIRED',
+          requireStepUp: true,
+        });
       }
 
       const result = await pool.query(
@@ -268,7 +298,11 @@ export function requireStepUp(maxAgeMs: number = 30 * 60 * 1000) {
 
       if (!row || !row.last_credential_verified_at) {
         res.setHeader('WWW-Authenticate', 'StepUp');
-        return res.status(401).json({ error: 'Step-up authentication required', code: 'STEP_UP_REQUIRED', requireStepUp: true });
+        return res.status(401).json({
+          error: 'Step-up authentication required',
+          code: 'STEP_UP_REQUIRED',
+          requireStepUp: true,
+        });
       }
 
       const verifiedAt = new Date(row.last_credential_verified_at).getTime();
@@ -285,7 +319,11 @@ export function requireStepUp(maxAgeMs: number = 30 * 60 * 1000) {
     } catch (err) {
       console.error('requireStepUp error:', err);
       res.setHeader('WWW-Authenticate', 'StepUp');
-      return res.status(401).json({ error: 'Step-up authentication required', code: 'STEP_UP_REQUIRED', requireStepUp: true });
+      return res.status(401).json({
+        error: 'Step-up authentication required',
+        code: 'STEP_UP_REQUIRED',
+        requireStepUp: true,
+      });
     }
   };
 }
@@ -311,7 +349,7 @@ setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
  * Soft authentication middleware for bypass routes
  * Only bypasses authentication if DEV_AUTH_BYPASS is explicitly enabled
  * Otherwise enforces full authentication (same as authenticateToken)
- * 
+ *
  * This allows bypass routes to work during local development while enforcing
  * authentication in all deployed environments (preview, staging, production).
  */
@@ -321,10 +359,12 @@ export async function softAuth(
   next: NextFunction
 ) {
   const bypassEnabled = isAuthBypassEnabled();
-  
+
   // Log that a bypass route is being accessed
-  console.log(`⚠️ BYPASS ROUTE ACCESSED: ${req.method} ${req.originalUrl} (bypass: ${bypassEnabled})`);
-  
+  console.log(
+    `⚠️ BYPASS ROUTE ACCESSED: ${req.method} ${req.originalUrl} (bypass: ${bypassEnabled})`
+  );
+
   if (bypassEnabled) {
     // Only bypass if explicitly enabled for local development
     req.user = {
@@ -337,7 +377,7 @@ export async function softAuth(
     };
     return next();
   }
-  
+
   // Enforce full authentication in all other environments
   return authenticateToken(req, res, next);
 }
@@ -354,7 +394,7 @@ export const requireAdminOrOwner = [
  * Session-aware authentication middleware that prioritizes real session users
  * over DEV_AUTH_BYPASS. Use this for routes where the actual logged-in user
  * identity matters (e.g., user-specific access control).
- * 
+ *
  * This middleware:
  * 1. First checks for req.session.user (Express session) and uses it if present
  * 2. Then checks for token-based auth (JWT/cookie)
@@ -438,7 +478,7 @@ export async function sessionAwareAuth(
  * 1. Attempts to authenticate the user if they have a session/token
  * 2. Sets req.user if authentication succeeds
  * 3. ALWAYS calls next() - never blocks the request
- * 
+ *
  * Use this for public routes where authenticated users get extra functionality
  * (e.g., starting a timer requires login, but viewing timers is public).
  */

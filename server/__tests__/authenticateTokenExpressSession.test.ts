@@ -17,7 +17,7 @@ describe('authenticateToken Express session support', () => {
     vi.clearAllMocks();
   });
 
-  it('accepts an active user from the server-side login session without a token cookie', async () => {
+  it('rehydrates an active server-side login session without a token cookie', async () => {
     const sessionUser = {
       id: 2,
       username: 'glennj',
@@ -26,6 +26,8 @@ describe('authenticateToken Express session support', () => {
       canOverridePrices: true,
       isActive: true,
     };
+    const currentUser = { ...sessionUser, employeeId: 6 };
+    vi.mocked(AuthService.getUserById).mockResolvedValue(currentUser);
     const req = {
       headers: {},
       cookies: {},
@@ -36,7 +38,9 @@ describe('authenticateToken Express session support', () => {
 
     await authenticateToken(req, res, next);
 
-    expect(req.user).toBe(sessionUser);
+    expect(AuthService.getUserById).toHaveBeenCalledWith(2);
+    expect(req.user).toBe(currentUser);
+    expect((req as any).session.user).toBe(currentUser);
     expect(next).toHaveBeenCalledOnce();
     expect(AuthService.getUserBySession).not.toHaveBeenCalled();
   });

@@ -10,6 +10,10 @@ const migration = read(
 );
 const service = read('server/src/services/p2ManufacturingWorkOrderService.ts');
 const routes = read('server/src/routes/p2ManufacturingWorkOrders.ts');
+const frozenDemand = read(
+  'server/src/services/p2FrozenProductionDemandService.ts'
+);
+const client = read('client/src/components/p2/P2FrozenProductionDemand.tsx');
 
 describe('Phase 6 P2 manufacturing work-order queue foundation', () => {
   it('is prospective, additive, registered, and defaults every server flag off', () => {
@@ -57,6 +61,21 @@ describe('Phase 6 P2 manufacturing work-order queue foundation', () => {
     );
     expect(service).toContain('replayed: true');
     expect(service).toContain('pg_advisory_xact_lock');
+  });
+
+  it('can materialize one manufactured child without repeating parent gates', () => {
+    expect(routes).toContain(
+      'frozenDemandNodeId: z.string().uuid().optional()'
+    );
+    expect(service).toContain('input.frozenDemandNodeId');
+    expect(service).toContain('Number(node.depth) > 0');
+    expect(service).toContain('MANUFACTURED_PARENT_WORK_ORDER_REQUIRED');
+    expect(service).toContain('parentPoAuthorityInherited: true');
+    expect(frozenDemand).toContain('materialized_authority_id');
+    expect(client).toContain('Create this work order');
+    expect(client).toContain(
+      'Parent PO item authority — child work orders inherit this'
+    );
   });
 
   it('enforces quantity-aware child and material readiness centrally', () => {

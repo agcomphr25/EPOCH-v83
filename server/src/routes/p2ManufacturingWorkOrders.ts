@@ -72,6 +72,7 @@ const materializeBody = z.object({
   expectedBaselineChecksum: z.string().trim().min(1).max(128),
   idempotencyKey: z.string().trim().min(1).max(200),
   signatureMeaning: z.string().trim().min(1).max(1000),
+  frozenDemandNodeId: z.string().uuid().optional(),
 });
 const startBody = z.object({
   expectedConcurrencyVersion: z.number().int().positive(),

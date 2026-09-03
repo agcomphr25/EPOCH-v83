@@ -372,8 +372,8 @@ export const safeMigrationFiles = [
   '0320_combined_manufacturing_process_foundation.sql',
   '0321_combined_manufacturing_process_selection.sql',
   '0322_combined_manufacturing_work_order_authority.sql',
-  '0323_p2_work_order_management.sql',
   '0323_reconcile_converted_project_history.sql',
+  '0324_p2_work_order_management.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -495,8 +495,8 @@ export const criticalMigrationFiles = new Set([
   '0320_combined_manufacturing_process_foundation.sql',
   '0321_combined_manufacturing_process_selection.sql',
   '0322_combined_manufacturing_work_order_authority.sql',
-  '0323_p2_work_order_management.sql',
   '0323_reconcile_converted_project_history.sql',
+  '0324_p2_work_order_management.sql',
 ]);
 
 export async function runSafeBootMigrations() {

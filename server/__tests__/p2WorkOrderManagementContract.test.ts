@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const read = (path: string) =>
   readFileSync(resolve(process.cwd(), path), 'utf8');
-const migration = read('migrations/0323_p2_work_order_management.sql');
+const migration = read('migrations/0324_p2_work_order_management.sql');
 const service = read('server/src/services/p2ManufacturingWorkOrderService.ts');
 const routes = read('server/src/routes/p2ManufacturingWorkOrders.ts');
 const queuePage = read('client/src/pages/P2WorkOrderQueuePage.tsx');
@@ -21,7 +21,7 @@ describe('P2 BOM-generated work-order management', () => {
       "CHECK (priority IN ('LOW','URGENT','CRITICAL'))"
     );
     expect(migration).toContain("'p2.work_orders.manage'");
-    expect(safeBoot.match(/0323_p2_work_order_management\.sql/g)).toHaveLength(
+    expect(safeBoot.match(/0324_p2_work_order_management\.sql/g)).toHaveLength(
       2
     );
   });

@@ -12,6 +12,7 @@ import {
 import { getFileStorageProvider } from './fileStorageProvider';
 
 export type P1ImportDocumentType = 'NEW_PO_PDF' | 'CANCELLATION_CSV';
+export type P1ImportCustomer = 'MIDWAY' | 'RED_HAWK';
 export type P1ImportRowStatus =
   | 'READY'
   | 'ALREADY_APPLIED'
@@ -75,6 +76,7 @@ export interface P1ImportPreviewGroup {
 
 export interface P1ImportPreview {
   documentType: P1ImportDocumentType;
+  customerCode: P1ImportCustomer;
   customerName: string;
   fileName: string;
   fileSha256: string;
@@ -94,6 +96,7 @@ export interface P1ImportPreview {
     targetCanceledQuantity: number;
     cancellationDelta: number;
     documentTotal: number | null;
+    requiresDueDate: boolean;
   };
   parsed: Record<string, unknown>;
 }
@@ -129,6 +132,27 @@ type MidwayPdf = {
   lines: MidwayPdfLine[];
 };
 
+type CustomerPoPdfLine = {
+  supplierProductNumber: string;
+  customerProductNumber: string | null;
+  quantity: number;
+  description: string;
+  unitPrice: number;
+  extendedPrice: number;
+};
+
+type CustomerPoPdf = {
+  customerCode: P1ImportCustomer;
+  customerName: string;
+  customerSearchTerm: string;
+  poNumber: string;
+  poDate: string;
+  dueDate: string | null;
+  totalQuantity: number;
+  poTotal: number;
+  lines: CustomerPoPdfLine[];
+};
+
 function normalizeIdentifier(value: unknown): string {
   return String(value ?? '')
     .trim()
@@ -149,6 +173,7 @@ function parseInteger(
 }
 
 function toIsoDate(value: string, label: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
   const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!match)
     throw new Error(`${label} is not a valid MM/DD/YYYY date: ${value}`);
@@ -379,12 +404,94 @@ export function parseMidwayPoText(text: string): MidwayPdf {
   };
 }
 
-async function extractPdf(buffer: Buffer): Promise<MidwayPdf> {
+export function parseRedHawkPoText(text: string): CustomerPoPdf {
+  if (!/Red Hawk Rifles LLC/i.test(text)) {
+    throw new Error(
+      'The PDF is not recognized as a Red Hawk Rifles purchase order'
+    );
+  }
+  const heading = text.match(
+    /Purchase Order\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+Order\s*#\s*(P\d+)/i
+  );
+  const total = text.match(/Total:\s*\$\s*([\d,]+\.\d{2})/i);
+  if (!heading || !total) {
+    throw new Error(
+      'The Red Hawk PDF is missing its PO number, PO date, or total'
+    );
+  }
+
+  const tableStart = text.search(/Type\s+Number\s+Description\s+Unit Cost/i);
+  const tableEnd = text.search(/\n[A-Z][a-z]+\s+\d{1,2},\s+\d{4},/);
+  if (tableStart < 0 || tableEnd < tableStart) {
+    throw new Error('The Red Hawk PDF line-item table could not be located');
+  }
+  const body = text.slice(tableStart, tableEnd);
+  const rowPattern =
+    /Purchase\s+([\s\S]*?)\s+(AG Composites[\s\S]*?)\s+\$\s*([\d,]+\.\d{2})\s+(\d+)\s+([A-Za-z]+)\s+\$\s*([\d,]+\.\d{2})/gi;
+  const lines: CustomerPoPdfLine[] = [];
+  for (const match of body.matchAll(rowPattern)) {
+    const supplierProductNumber = normalizeIdentifier(match[1]);
+    if (!supplierProductNumber.startsWith('AG-')) {
+      throw new Error(
+        `Invalid Red Hawk product number: ${supplierProductNumber}`
+      );
+    }
+    lines.push({
+      supplierProductNumber,
+      customerProductNumber: null,
+      description: match[2].replace(/\s+/g, ' ').trim(),
+      unitPrice: Number(match[3].replace(/,/g, '')),
+      quantity: Number(match[4]),
+      extendedPrice: Number(match[6].replace(/,/g, '')),
+    });
+  }
+  if (lines.length === 0)
+    throw new Error('No Red Hawk PO line items were found');
+
+  const poTotal = Number(total[1].replace(/,/g, ''));
+  const parsedTotal = lines.reduce((sum, line) => sum + line.extendedPrice, 0);
+  const invalidLine = lines.find(
+    (line) =>
+      Math.abs(line.quantity * line.unitPrice - line.extendedPrice) > 0.005
+  );
+  if (invalidLine || Math.abs(parsedTotal - poTotal) > 0.005) {
+    throw new Error(
+      'The Red Hawk PDF line quantities or prices do not reconcile to its printed total'
+    );
+  }
+  return {
+    customerCode: 'RED_HAWK',
+    customerName: 'Red Hawk Rifles LLC',
+    customerSearchTerm: 'red hawk',
+    poNumber: heading[2],
+    poDate: toIsoDate(heading[1], 'PO Date'),
+    dueDate: null,
+    totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+    poTotal,
+    lines,
+  };
+}
+
+async function extractPdf(buffer: Buffer): Promise<CustomerPoPdf> {
   const { PDFParse } = await import('pdf-parse/node');
   const parser = new PDFParse({ data: new Uint8Array(buffer), verbosity: 0 });
   try {
     const result = await parser.getText();
-    return parseMidwayPoText(result.text);
+    if (/Red Hawk Rifles LLC/i.test(result.text)) {
+      return parseRedHawkPoText(result.text);
+    }
+    const midway = parseMidwayPoText(result.text);
+    return {
+      customerCode: 'MIDWAY',
+      customerName: 'MidwayUSA Inc',
+      customerSearchTerm: 'midway',
+      poNumber: midway.poNumber,
+      poDate: midway.poDate,
+      dueDate: midway.shipOnDate,
+      totalQuantity: midway.totalQuantity,
+      poTotal: midway.poTotal,
+      lines: midway.lines,
+    };
   } finally {
     await parser.destroy();
   }
@@ -590,7 +697,7 @@ async function previewCancellationRows(
   return groups;
 }
 
-async function previewPdf(pdf: MidwayPdf): Promise<P1ImportPreviewGroup[]> {
+async function previewPdf(pdf: CustomerPoPdf): Promise<P1ImportPreviewGroup[]> {
   const existing = await pool.query<{ id: number }>(
     'SELECT id FROM purchase_orders WHERE po_number = $1 LIMIT 1',
     [pdf.poNumber]
@@ -618,7 +725,8 @@ async function previewPdf(pdf: MidwayPdf): Promise<P1ImportPreviewGroup[]> {
             barrel_inlet, qds, swivel_studs, paint_options, texture, flat_top
        FROM po_products
       WHERE is_active IS NOT FALSE
-        AND lower(customer_name) LIKE '%midway%'`
+        AND lower(customer_name) LIKE $1`,
+    [`%${pdf.customerSearchTerm}%`]
   );
   const rows: P1ImportPreviewRow[] = pdf.lines.map((line, index) => {
     const supplier = normalizeIdentifier(line.supplierProductNumber);
@@ -650,7 +758,7 @@ async function previewPdf(pdf: MidwayPdf): Promise<P1ImportPreviewGroup[]> {
       rowNumber: index + 1,
       poNumber: pdf.poNumber,
       poDate: pdf.poDate,
-      dueDate: pdf.shipOnDate,
+      dueDate: pdf.dueDate,
       description: line.description,
       supplierProductNumber: line.supplierProductNumber,
       customerProductNumber: line.customerProductNumber,
@@ -674,8 +782,8 @@ async function previewPdf(pdf: MidwayPdf): Promise<P1ImportPreviewGroup[]> {
         : product
           ? `Matched ${product.product_name}`
           : candidates.length > 1
-            ? 'The two product identifiers match different catalog products'
-            : 'No active Midway PO Product matches these identifiers',
+            ? 'Multiple catalog products match the supplied identifiers'
+            : `No active ${pdf.customerName} PO Product matches these identifiers`,
     };
   });
   return [
@@ -689,7 +797,8 @@ async function previewPdf(pdf: MidwayPdf): Promise<P1ImportPreviewGroup[]> {
 }
 
 export async function previewP1CustomerPoImport(
-  file: P1ImportFile
+  file: P1ImportFile,
+  options: { dueDate?: string | null } = {}
 ): Promise<P1ImportPreview> {
   const fileSha256 = crypto
     .createHash('sha256')
@@ -704,15 +813,28 @@ export async function previewP1CustomerPoImport(
   const parsedDocument = isCsv
     ? { rows: parseMidwayCancellationCsv(file.buffer) }
     : await extractPdf(file.buffer);
+  if (!isCsv && options.dueDate && !(parsedDocument as CustomerPoPdf).dueDate) {
+    (parsedDocument as CustomerPoPdf).dueDate = toIsoDate(
+      options.dueDate,
+      'Due date'
+    );
+  }
   const groups = isCsv
     ? await previewCancellationRows(
         (parsedDocument as { rows: MidwayCsvRow[] }).rows
       )
-    : await previewPdf(parsedDocument as MidwayPdf);
+    : await previewPdf(parsedDocument as CustomerPoPdf);
   const allRows = groups.flatMap((group) => group.rows);
+  const customerCode: P1ImportCustomer = isCsv
+    ? 'MIDWAY'
+    : (parsedDocument as CustomerPoPdf).customerCode;
+  const customerName = isCsv
+    ? 'MidwayUSA Inc'
+    : (parsedDocument as CustomerPoPdf).customerName;
   return {
     documentType,
-    customerName: 'MidwayUSA Inc',
+    customerCode,
+    customerName,
     fileName: file.originalname,
     fileSha256,
     duplicateImport: await duplicateImport(fileSha256),
@@ -739,8 +861,11 @@ export async function previewP1CustomerPoImport(
       ),
       documentTotal:
         documentType === 'NEW_PO_PDF'
-          ? (parsedDocument as MidwayPdf).poTotal
+          ? (parsedDocument as CustomerPoPdf).poTotal
           : null,
+      requiresDueDate:
+        documentType === 'NEW_PO_PDF' &&
+        !(parsedDocument as CustomerPoPdf).dueDate,
     },
     parsed: parsedDocument as unknown as Record<string, unknown>,
   };
@@ -814,17 +939,25 @@ async function applyNewPo(preview: P1ImportPreview, importId: string) {
   if (!group || group.status !== 'READY')
     throw new Error('The new PO has unresolved validation issues');
   const customerResult = await pool.query<{ id: number; name: string }>(
-    `SELECT id, name FROM customers WHERE lower(name) LIKE '%midway%' ORDER BY is_active DESC NULLS LAST, id LIMIT 1`
+    `SELECT id, name FROM customers
+      WHERE lower(name) LIKE $1
+      ORDER BY is_active DESC NULLS LAST, id LIMIT 1`,
+    [preview.customerCode === 'RED_HAWK' ? '%red hawk%' : '%midway%']
   );
   const customer = customerResult.rows[0];
   if (!customer)
     throw new Error(
-      'MidwayUSA must exist in Customer Management before importing its PO'
+      `${preview.customerName} must exist in Customer Management before importing its PO`
     );
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const first = group.rows[0];
+    if (!first.dueDate) {
+      throw new Error(
+        'A due date is required because the customer PO does not provide one'
+      );
+    }
     const poResult = await client.query<{ id: number }>(
       `INSERT INTO purchase_orders (
          po_number, customer_id, customer_name, item_type, po_date,
@@ -836,7 +969,7 @@ async function applyNewPo(preview: P1ImportPreview, importId: string) {
         customer.name,
         first.poDate,
         first.dueDate,
-        `Imported from MidwayUSA PDF ${preview.fileName}`,
+        `Imported from ${preview.customerName} PDF ${preview.fileName}`,
       ]
     );
     const poId = poResult.rows[0].id;
@@ -917,10 +1050,13 @@ async function applyNewPo(preview: P1ImportPreview, importId: string) {
 export async function applyP1CustomerPoImport(input: {
   file: P1ImportFile;
   selectedPoNumbers?: string[];
+  dueDate?: string | null;
   reason: string;
   actor: P1ImportActor;
 }) {
-  const preview = await previewP1CustomerPoImport(input.file);
+  const preview = await previewP1CustomerPoImport(input.file, {
+    dueDate: input.dueDate,
+  });
   if (preview.duplicateImport) {
     return {
       duplicate: true,

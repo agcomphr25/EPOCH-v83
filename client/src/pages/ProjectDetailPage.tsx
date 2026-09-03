@@ -208,6 +208,10 @@ interface ProjectStep {
   completedAt: string | null;
   completedBy: number | null;
   completedByDisplayName: string | null;
+  completionMethod: 'SYSTEM_RECORD' | 'OFF_SYSTEM_FILE';
+  offSystemFileUrl: string | null;
+  offSystemFileTitle: string | null;
+  offSystemCompletionReason: string | null;
   linkedRfqId: number | null;
   linkedQuoteId: string | null;
   linkedPurchaseReviewId: number | null;
@@ -604,6 +608,10 @@ export default function ProjectDetailPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const [isSkipDialogOpen, setIsSkipDialogOpen] = useState(false);
+  const [isOffSystemDialogOpen, setIsOffSystemDialogOpen] = useState(false);
+  const [offSystemFileUrl, setOffSystemFileUrl] = useState('');
+  const [offSystemFileTitle, setOffSystemFileTitle] = useState('');
+  const [offSystemReason, setOffSystemReason] = useState('');
   const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string } | null>(null);
   const [skipReason, setSkipReason] = useState('');
   const [closingForm, setClosingForm] = useState({
@@ -1743,6 +1751,40 @@ export default function ProjectDetailPage() {
     },
   });
 
+  const completeOffSystemMutation = useMutation({
+    mutationFn: async ({ stepId, fileUrl, title, reason }: {
+      stepId: string;
+      fileUrl: string;
+      title: string;
+      reason: string;
+    }) => apiRequest(`/api/projects/${id}/steps/${stepId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status: 'completed',
+        offSystemEvidence: { fileUrl, title, reason },
+      }),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      setIsOffSystemDialogOpen(false);
+      setSelectedStep(null);
+      setOffSystemFileUrl('');
+      setOffSystemFileTitle('');
+      setOffSystemReason('');
+      toast({
+        title: 'Step completed',
+        description: 'The off-system file was recorded as controlled completion evidence.',
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Failed to complete step',
+        description: err?.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const startStepMutation = useMutation({
     mutationFn: async (stepId: string) => {
       return apiRequest(`/api/projects/${id}/steps/${stepId}`, {
@@ -2690,7 +2732,7 @@ export default function ProjectDetailPage() {
                   const isLast = index === sortedStepsForGate.length - 1;
                   const stepAttachments = getAttachmentsForStep(step.id);
                   const isExpanded = expandedSteps.has(step.id);
-                  const hasContent = stepAttachments.length > 0 || linkedId;
+                  const hasContent = stepAttachments.length > 0 || Boolean(linkedId) || step.completionMethod === 'OFF_SYSTEM_FILE';
 
                   const prevStep = index > 0 ? sortedStepsForGate[index - 1] : null;
                   const isLocked = (step.status === 'pending' || step.status === 'blocked')
@@ -2788,6 +2830,25 @@ export default function ProjectDetailPage() {
                                 >
                                   <CheckCircle2 className="mr-1 h-4 w-4" />
                                   Mark Complete
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedStep(step);
+                                    setOffSystemFileUrl('');
+                                    setOffSystemFileTitle('');
+                                    setOffSystemReason('');
+                                    setIsOffSystemDialogOpen(true);
+                                  }}
+                                  disabled={completeOffSystemMutation.isPending || (step.stepType === 'p2_order' && !isClosingReady)}
+                                  title={step.stepType === 'p2_order' && !isClosingReady
+                                    ? 'Complete and approve the closing record before finishing this step'
+                                    : 'Link an externally stored file and complete this step'}
+                                  data-testid={`button-complete-off-system-${step.stepType}`}
+                                >
+                                  <LinkIcon className="mr-1 h-4 w-4" />
+                                  Complete Off-System
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -2942,6 +3003,26 @@ export default function ProjectDetailPage() {
                         </div>
                         {step.notes && (
                           <p className="text-sm bg-muted p-2 rounded">{step.notes}</p>
+                        )}
+                        {step.completionMethod === 'OFF_SYSTEM_FILE' && step.offSystemFileUrl && (
+                          <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3 text-sm dark:border-indigo-800 dark:bg-indigo-950/30">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="secondary">Off-system evidence</Badge>
+                              <a
+                                href={step.offSystemFileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 font-medium text-indigo-700 underline underline-offset-2 dark:text-indigo-300"
+                                data-testid={`link-off-system-evidence-${step.stepType}`}
+                              >
+                                {step.offSystemFileTitle || 'Open external file'}
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </a>
+                            </div>
+                            {step.offSystemCompletionReason && (
+                              <p className="mt-2 text-muted-foreground">Completion basis: {step.offSystemCompletionReason}</p>
+                            )}
+                          </div>
                         )}
                         {step.stepType === 'p2_order' && step.status === 'in_progress' && (
                           <div className={`flex items-start gap-2 text-sm rounded-md px-3 py-2 border ${
@@ -7451,6 +7532,64 @@ export default function ProjectDetailPage() {
               disabled={!skipReason.trim() || skipStepMutation.isPending}
             >
               {skipStepMutation.isPending ? 'Skipping...' : 'Skip Step'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isOffSystemDialogOpen} onOpenChange={(open) => {
+        setIsOffSystemDialogOpen(open);
+        if (!open) {
+          setOffSystemFileUrl('');
+          setOffSystemFileTitle('');
+          setOffSystemReason('');
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete with Off-System File</DialogTitle>
+            <DialogDescription>
+              Link controlled evidence stored outside EPOCH and complete {selectedStep
+                ? STEP_CONFIG[selectedStep.stepType]?.label || selectedStep.stepType
+                : 'this workflow step'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="off-system-file-url">Secure file link</Label>
+              <Input id="off-system-file-url" type="url" placeholder="https://sharepoint.example.com/..."
+                value={offSystemFileUrl} onChange={(event) => setOffSystemFileUrl(event.target.value)}
+                data-testid="input-off-system-file-url" />
+              <p className="text-xs text-muted-foreground">The link must use HTTPS.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="off-system-file-title">Document title</Label>
+              <Input id="off-system-file-title" placeholder="Signed purchase review checklist"
+                value={offSystemFileTitle} onChange={(event) => setOffSystemFileTitle(event.target.value)}
+                maxLength={200} data-testid="input-off-system-file-title" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="off-system-completion-reason">Completion reason</Label>
+              <Textarea id="off-system-completion-reason"
+                placeholder="Explain why the authoritative record is maintained outside EPOCH."
+                value={offSystemReason} onChange={(event) => setOffSystemReason(event.target.value)}
+                maxLength={1000} data-testid="textarea-off-system-completion-reason" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsOffSystemDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => selectedStep && completeOffSystemMutation.mutate({
+                stepId: selectedStep.id,
+                fileUrl: offSystemFileUrl.trim(),
+                title: offSystemFileTitle.trim(),
+                reason: offSystemReason.trim(),
+              })}
+              disabled={!selectedStep || !offSystemFileUrl.trim().startsWith('https://') ||
+                !offSystemFileTitle.trim() || !offSystemReason.trim() || completeOffSystemMutation.isPending}
+              data-testid="button-confirm-off-system-completion"
+            >
+              {completeOffSystemMutation.isPending ? 'Completing...' : 'Link File & Complete Step'}
             </Button>
           </DialogFooter>
         </DialogContent>

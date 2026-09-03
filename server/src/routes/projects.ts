@@ -789,6 +789,14 @@ const updateStepRequestSchema = z.object({
   notes: z.string().optional().nullable(),
   completedBy: z.number().optional(),
   updatedBy: z.number().optional(),
+  offSystemEvidence: z.object({
+    fileUrl: z.string().url().max(2048).refine(
+      (value) => value.startsWith('https://'),
+      'File link must use HTTPS'
+    ),
+    title: z.string().trim().min(1).max(200),
+    reason: z.string().trim().min(1).max(1000),
+  }).optional(),
 });
 
 router.get('/', async (req, res) => {
@@ -2671,6 +2679,7 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       linkedPreproductionChecklistId,
       linkedP2OrderId,
       notes,
+      offSystemEvidence,
     } = validatedData;
 
     const allSteps = await storage.getProjectSteps(projectId);
@@ -2687,6 +2696,37 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
             'Cannot complete a step that is not in progress. Start the step first.',
         });
       }
+      if (offSystemEvidence && !req.user?.id) {
+        return res.status(401).json({
+          message: 'An authenticated user is required for off-system completion.',
+        });
+      }
+      if (offSystemEvidence && currentStep.stepType === 'p2_order') {
+        const closing = await storage.getProjectClosingByProjectId(projectId);
+        if (!closing) {
+          return res.status(400).json({
+            message: 'Cannot complete P2 Order without a closing record. Create the closing/lessons-learned record first.',
+          });
+        }
+        const { valid, missing } = validateProjectClosing(closing);
+        if (!valid) {
+          return res.status(400).json({
+            message: 'Cannot complete P2 Order: the closing record is incomplete.',
+            missingFields: missing,
+          });
+        }
+        if (!closing.approvedBy) {
+          return res.status(403).json({
+            message: 'Cannot complete P2 Order: the closing record has not been approved by a manager.',
+          });
+        }
+      }
+    }
+
+    if (offSystemEvidence && status !== 'completed') {
+      return res.status(400).json({
+        message: 'Off-system evidence can only be recorded while completing a step.',
+      });
     }
 
     const performerUserId =
@@ -2704,9 +2744,17 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       }
       if (status === 'completed') {
         updateData.completedAt = new Date();
-        updateData.completedBy = validatedData.completedBy;
+        updateData.completedBy = validatedData.completedBy ?? req.user?.employeeId ?? null;
         updateData.completedByDisplayName =
-          performerSnapshot?.displayName || null;
+          performerSnapshot?.displayName || req.user?.username || null;
+        if (offSystemEvidence) {
+          updateData.completionMethod = 'OFF_SYSTEM_FILE';
+          updateData.offSystemFileUrl = offSystemEvidence.fileUrl;
+          updateData.offSystemFileTitle = offSystemEvidence.title;
+          updateData.offSystemCompletionReason = offSystemEvidence.reason;
+        } else {
+          updateData.completionMethod = 'SYSTEM_RECORD';
+        }
       }
     }
 
@@ -2737,10 +2785,16 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       stepType: step.stepType,
       description:
         status === 'completed'
-          ? `${stepInfo?.label || step.stepType} completed`
+          ? `${stepInfo?.label || step.stepType} completed${offSystemEvidence ? ' with off-system file evidence' : ''}`
           : `${stepInfo?.label || step.stepType} updated`,
-      performedBy: performerUserId,
-      performedByDisplayName: performerSnapshot?.displayName || null,
+      performedBy: performerUserId ?? req.user?.employeeId ?? null,
+      performedByDisplayName: performerSnapshot?.displayName || req.user?.username || null,
+      metadata: offSystemEvidence ? {
+        completionMethod: 'OFF_SYSTEM_FILE',
+        fileUrl: offSystemEvidence.fileUrl,
+        fileTitle: offSystemEvidence.title,
+        reason: offSystemEvidence.reason,
+      } : undefined,
     });
 
     if (status === 'completed') {

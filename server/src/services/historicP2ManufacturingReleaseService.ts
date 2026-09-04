@@ -16,10 +16,15 @@ export const HISTORIC_P2_COMPATIBILITY_RELEASE =
   'HISTORIC_P2_COMPATIBILITY_RELEASE' as const;
 
 export type HistoricP2ReleaseAuthorityMode =
-  'HISTORIC_P2_COMPATIBILITY' | 'P2_V2' | 'UNRELATED_LEGACY' | 'UNKNOWN';
+  | 'HISTORIC_P2_COMPATIBILITY'
+  | 'P2_V2'
+  | 'UNRELATED_LEGACY'
+  | 'UNKNOWN';
 
 export type ManufacturingOrderReleaseAuthority =
-  'P2_V2' | 'HISTORIC_P2' | 'UNRELATED_LEGACY';
+  | 'P2_V2'
+  | 'HISTORIC_P2'
+  | 'UNRELATED_LEGACY';
 
 export type HistoricP2ReleaseActor = {
   userId: number;
@@ -81,6 +86,13 @@ const rows = <T extends Row>(value: unknown): T[] =>
   Array.isArray(value)
     ? (value as T[])
     : ((value as { rows?: T[] } | null)?.rows ?? []);
+const uuidArray = (values: string[]) =>
+  values.length
+    ? sql`ARRAY[${sql.join(
+        values.map((value) => sql`${value}`),
+        sql`,`
+      )}]::uuid[]`
+    : sql`ARRAY[]::uuid[]`;
 
 const clean = (value: unknown): string => String(value ?? '').trim();
 const normalized = (value: unknown): string => clean(value).toLowerCase();
@@ -194,32 +206,49 @@ async function evaluateCompatibilityReadiness(
   }
 
   if (input.routingIds.length > 0) {
-    const certificationRows = rows(
+    const certificationRequirements = rows(
       await tx.execute(sql`
-        SELECT operation.id,operation.operation_name,operation.certification_id,
-               CASE WHEN operation.certification_id IS NULL THEN false ELSE EXISTS (
-                 SELECT 1 FROM employee_certifications certification
-                 JOIN employees employee ON employee.id=certification.employee_id
-                 WHERE certification.certification_id=operation.certification_id
-                   AND certification.is_active=true
-                   AND (certification.expiry_date IS NULL OR certification.expiry_date>=CURRENT_DATE)
-                   AND employee.is_active=true
-               ) END AS covered
+        SELECT operation.id,operation.operation_name,operation.certification_id
         FROM routing_operations operation
-        WHERE operation.part_routing_id=ANY(${input.routingIds}::uuid[])
+        WHERE operation.part_routing_id=ANY(${uuidArray(input.routingIds)})
           AND operation.requires_certification=true
         ORDER BY operation.part_routing_id,operation.step_number,operation.id`)
     );
-    if (
-      certificationRows.some(
-        (operation) => operation.certification_id == null || !operation.covered
-      )
-    ) {
-      return {
-        status: 'PARTIAL',
-        reason:
-          'One or more required certifications are missing for this routing — contact your supervisor before starting work',
-      };
+    if (certificationRequirements.length > 0) {
+      if (
+        certificationRequirements.some(
+          (operation) => operation.certification_id == null
+        )
+      ) {
+        return {
+          status: 'PARTIAL',
+          reason:
+            'One or more required certifications are missing for this routing — contact your supervisor before starting work',
+        };
+      }
+      const certificationRows = rows(
+        await tx.execute(sql`
+          SELECT operation.id,operation.operation_name,operation.certification_id,
+                 CASE WHEN operation.certification_id IS NULL THEN false ELSE EXISTS (
+                   SELECT 1 FROM employee_certifications certification
+                   JOIN employees employee ON employee.id=certification.employee_id
+                   WHERE certification.certification_id=operation.certification_id
+                     AND certification.is_active=true
+                     AND (certification.expiry_date IS NULL OR certification.expiry_date>=CURRENT_DATE)
+                     AND employee.is_active=true
+                 ) END AS covered
+          FROM routing_operations operation
+          WHERE operation.part_routing_id=ANY(${uuidArray(input.routingIds)})
+            AND operation.requires_certification=true
+          ORDER BY operation.part_routing_id,operation.step_number,operation.id`)
+      );
+      if (certificationRows.some((operation) => !operation.covered)) {
+        return {
+          status: 'PARTIAL',
+          reason:
+            'One or more required certifications are missing for this routing — contact your supervisor before starting work',
+        };
+      }
     }
   }
 
@@ -605,11 +634,11 @@ async function evaluate(
   )[0];
   const conflictingV2Authority = Boolean(
     v2Conflict?.active_workflow ||
-    v2Conflict?.current_plan ||
-    v2Conflict?.production_release ||
-    v2Conflict?.production_launch ||
-    v2Conflict?.frozen_demand ||
-    v2Conflict?.manufacturing_authority
+      v2Conflict?.current_plan ||
+      v2Conflict?.production_release ||
+      v2Conflict?.production_launch ||
+      v2Conflict?.frozen_demand ||
+      v2Conflict?.manufacturing_authority
   );
   evidence.push({
     key: 'no_p2_v2_authority_conflict',

@@ -55,6 +55,10 @@ import { getUserPermissions } from '../services/permissionService';
 import { notificationManager } from '../services/notificationManager';
 import { areSharedInventoryDepartmentWritesEnabled } from '../lib/featureFlags';
 import {
+  assertInventoryMachineRequirementsForCreate,
+  assertInventoryMachineRequirementsForUpdate,
+} from '../lib/inventoryMachineRequirements';
+import {
   createSharedDepartment,
   deactivateUnreferencedDepartment,
   updateSharedDepartment,
@@ -142,6 +146,8 @@ const draftBuilderInventoryItemSchema = z.object({
     .enum(['PACKET', 'FOAM_CUTTING', 'THREE_D_PRINTING_CUTTING', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT'])
     .optional()
     .nullable(),
+  machineType: z.string().optional().nullable(),
+  machiningTimeMinutes: z.number().int().min(0).optional().nullable(),
   project: z.string().optional().nullable(),
   draftName: z.string().optional().nullable(),
   draftLineId: z.string().optional().nullable(),
@@ -394,8 +400,11 @@ router.post('/items/from-draft-builder', requirePermission('inventory.adjust'), 
         type: draftPart.isManufactured ? 'Manufactured' : 'Purchased',
         manufacturedCategory,
         manufacturingLevel: draftPart.isManufactured ? 'COMPONENT' : null,
+        machineType: draftPart.machineType ?? null,
+        machiningTimeMinutes: draftPart.machiningTimeMinutes ?? null,
         isActive: true,
       });
+      assertInventoryMachineRequirementsForCreate(itemData);
 
       try {
         const newItem = await storage.createInventoryItem(itemData);
@@ -620,6 +629,7 @@ router.put('/inventory/items/:id', requirePermission('inventory.adjust'), handle
         return res.status(400).json({ error: 'Manufactured items must have a manufactured category. Please select a category (Packet, Kit, Machined Part, Core, Sub-Assembly, or Assembly).' });
       }
     }
+    assertInventoryMachineRequirementsForUpdate(updates, existingItem);
     
     // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
@@ -733,6 +743,7 @@ router.post('/', requirePermission('inventory.adjust'), handleInventoryPdfUpload
     if (itemData.itemType === 'MANUFACTURED' && !itemData.manufacturedCategory) {
       return res.status(400).json({ error: 'Manufactured items must have a manufactured category. Please select a category (Packet, Kit, Machined Part, Core, Sub-Assembly, or Assembly).' });
     }
+    assertInventoryMachineRequirementsForCreate(itemData);
     
     // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
@@ -785,9 +796,10 @@ router.put('/:id', requirePermission('inventory.adjust'), handleInventoryPdfUplo
       updates = insertInventoryItemSchema.partial().parse(req.body);
     }
 
+    const existingItem = await storage.getInventoryItem(itemId);
+
     // Validate itemType + manufacturedCategory consistency against merged effective state
     if (updates.itemType !== undefined || updates.manufacturedCategory !== undefined) {
-      const existingItem = await storage.getInventoryItem(itemId);
       const effectiveType = updates.itemType !== undefined ? updates.itemType : existingItem?.itemType;
       const effectiveCategory = updates.manufacturedCategory !== undefined ? updates.manufacturedCategory : existingItem?.manufacturedCategory;
       if (effectiveType === 'PURCHASED' && effectiveCategory) {
@@ -797,6 +809,7 @@ router.put('/:id', requirePermission('inventory.adjust'), handleInventoryPdfUplo
         return res.status(400).json({ error: 'Manufactured items must have a manufactured category. Please select a category (Packet, Kit, Machined Part, Core, Sub-Assembly, or Assembly).' });
       }
     }
+    assertInventoryMachineRequirementsForUpdate(updates, existingItem);
     
     // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
@@ -812,12 +825,11 @@ router.put('/:id', requirePermission('inventory.adjust'), handleInventoryPdfUplo
       updates.hasOtherDocs = true;
     }
     
-    const existingForDefault = await storage.getInventoryItem(itemId);
     updates = await prepareProspectiveDefaultDepartment(
       updates,
-      updates.itemType ?? existingForDefault?.itemType
+      updates.itemType ?? existingItem?.itemType
     );
-    await assertSafeNonInventoryTransition(existingForDefault, updates);
+    await assertSafeNonInventoryTransition(existingItem, updates);
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
@@ -926,6 +938,7 @@ router.post('/items', requirePermission('inventory.adjust'), handleInventoryPdfU
     if (itemData.itemType === 'MANUFACTURED' && !itemData.manufacturedCategory) {
       return res.status(400).json({ error: 'Manufactured items must have a manufactured category. Please select a category (Packet, Kit, Machined Part, Core, Sub-Assembly, or Assembly).' });
     }
+    assertInventoryMachineRequirementsForCreate(itemData);
     
     // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
@@ -997,6 +1010,7 @@ router.put('/items/:id', requirePermission('inventory.adjust'), handleInventoryP
         return res.status(400).json({ error: 'Manufactured items must have a manufactured category. Please select a category (Packet, Kit, Machined Part, Core, Sub-Assembly, or Assembly).' });
       }
     }
+    assertInventoryMachineRequirementsForUpdate(updates, existingItem);
     
     // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {

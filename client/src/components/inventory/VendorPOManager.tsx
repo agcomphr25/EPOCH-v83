@@ -148,6 +148,9 @@ const DEFAULT_ISSUE_EMAIL_MESSAGE =
 const DEFAULT_RESEND_EMAIL_MESSAGE =
   'AG Composites is resending this Purchase Order. Please see the attached purchase order PDF for details.';
 
+const DEFAULT_RFQ_EMAIL_MESSAGE =
+  'AG Composites is requesting a quotation. Please review the attached RFQ and provide pricing, availability, and lead time.';
+
 function EmailAttachmentPicker({
   attachments,
   selected,
@@ -2735,9 +2738,11 @@ export default function VendorPOManager({
 
   const queryClient = useQueryClient();
 
-  const vendorPoEmailPreviewPurpose = showResendDialog
-    ? 'resend'
-    : showStatusChangeDialog && pendingStatus === 'Sent' && !noEmailMode ? 'issue' : null;
+  const vendorPoEmailPreviewPurpose = showRFQDialog
+    ? 'rfq'
+    : showResendDialog
+      ? 'resend'
+      : showStatusChangeDialog && pendingStatus === 'Sent' && !noEmailMode ? 'issue' : null;
   const currentVendorPoPreviewPayload = vendorPoEmailPreviewPurpose && selectedVendorPO ? JSON.stringify({
     purpose: vendorPoEmailPreviewPurpose,
     recipients: selectedRecipients,
@@ -3061,10 +3066,10 @@ export default function VendorPOManager({
 
   // Send RFQ mutation - sends quote request email to vendor
   const sendRFQMutation = useMutation({
-    mutationFn: ({ id, recipients, skipEmail = false, reason }: { id: number; recipients: string[]; skipEmail?: boolean; reason?: string }) =>
+    mutationFn: ({ id, recipients, message, attachmentIds, previewFingerprint, skipEmail = false, reason }: { id: number; recipients: string[]; message?: string; attachmentIds?: number[]; previewFingerprint?: string; skipEmail?: boolean; reason?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/send-rfq`, {
         method: 'POST',
-        body: JSON.stringify({ recipients, printOnly: skipEmail, reason }),
+        body: JSON.stringify({ recipients, message, attachmentIds, previewFingerprint, printOnly: skipEmail, reason }),
       }),
     onSuccess: (data: any, variables) => {
       getSendRFQInvalidationKeys(variables.id).forEach((key) =>
@@ -3257,8 +3262,10 @@ export default function VendorPOManager({
 
   const handleOpenRFQDialog = () => {
     if (!selectedVendorPO) return;
+    setEmailMessage(DEFAULT_RFQ_EMAIL_MESSAGE);
     setShowRFQDialog(true);
     loadRecipientsForPO(selectedVendorPO.id);
+    loadAttachmentsForPO(selectedVendorPO.id);
   };
 
   const handleOpenResendDialog = () => {
@@ -4132,7 +4139,7 @@ export default function VendorPOManager({
 
         {/* Send RFQ Confirmation Dialog */}
         <AlertDialog open={showRFQDialog} onOpenChange={setShowRFQDialog}>
-          <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
             <AlertDialogHeader>
               <AlertDialogTitle>{selectedVendorPO?.status === 'RFQ Sent' ? 'Resend Request for Quote' : 'Send Request for Quote'}</AlertDialogTitle>
               <AlertDialogDescription>
@@ -4149,16 +4156,31 @@ export default function VendorPOManager({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="vendor-po-resend-message" className="text-sm font-medium">Email Message</Label>
+              <Label htmlFor="vendor-rfq-message" className="text-sm font-medium">Email Message</Label>
               <Textarea
-                id="vendor-po-resend-message"
+                id="vendor-rfq-message"
                 value={emailMessage}
                 onChange={(e) => setEmailMessage(e.target.value)}
                 rows={4}
                 className="resize-none"
-                data-testid="textarea-vendor-po-resend-message"
+                data-testid="textarea-vendor-rfq-message"
               />
             </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Email Attachments</Label>
+              <EmailAttachmentPicker
+                attachments={dialogAttachments}
+                selected={selectedAttachmentIds}
+                onChange={setSelectedAttachmentIds}
+                isLoading={isLoadingAttachments}
+              />
+            </div>
+            <VendorPoEmailPreviewPanel
+              preview={vendorPoEmailPreview.data}
+              isFetching={vendorPoEmailPreview.isFetching}
+              isCurrent={isVendorPoEmailPreviewCurrent}
+              error={vendorPoEmailPreview.isError ? vendorPoEmailPreview.error as Error : null}
+            />
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <Button
@@ -4184,10 +4206,13 @@ export default function VendorPOManager({
                     sendRFQMutation.mutate({
                       id: selectedVendorPO.id,
                       recipients: selectedRecipients,
+                      message: emailMessage.trim() || DEFAULT_RFQ_EMAIL_MESSAGE,
+                      attachmentIds: selectedAttachmentIds,
+                      previewFingerprint: vendorPoEmailPreview.data!.fingerprint,
                     });
                   }
                 }}
-                disabled={sendRFQMutation.isPending || selectedRecipients.length === 0 || isLoadingRecipients}
+                disabled={sendRFQMutation.isPending || selectedRecipients.length === 0 || !isVendorPoEmailPreviewCurrent}
                 data-testid="button-confirm-send-rfq"
               >
                 {sendRFQMutation.isPending ? (

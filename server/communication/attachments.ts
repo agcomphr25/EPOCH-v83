@@ -48,7 +48,7 @@ export async function buildAttachments(
     }
   }
 
-  if (['vendor_po_issue', 'vendor_po_resend'].includes(templateKey) && orderId) {
+  if (['vendor_po_issue', 'vendor_po_resend', 'vendor_rfq'].includes(templateKey) && orderId) {
     const poId = parseInt(orderId, 10);
     if (!isNaN(poId)) {
       const { storage } = await import('../storage');

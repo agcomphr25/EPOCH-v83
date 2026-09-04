@@ -1869,7 +1869,7 @@ router.get('/:projectId/production', h(async (req, res) => {
       dashboardType: row.dashboardType ?? assignment.dashboardType,
       queueType: row.queueType ?? assignment.queueType,
       assignedDepartment: row.assignedDepartment ?? assignment.assignedDepartment,
-      assignedDashboardRoute: row.assignedDashboardRoute ?? assignment.assignedDashboardRoute,
+      assignedDashboardRoute: assignment.assignedDashboardRoute,
       dashboardLabel: assignment.dashboardLabel,
       manufacturingQueueId: row.manufacturingQueueId ?? null,
       wizardData: undefined,

@@ -30,4 +30,13 @@ describe('Daily Tag Up authority contract', () => {
     expect(route).toContain("router.get('/',");
     expect(route).toContain("router.get('/projects/:projectId'");
   });
+
+  it('links issues only to mounted project-scoped destinations', () => {
+    expect(service).toContain('/p2-work-orders/queues/${encodeURIComponent');
+    expect(service).toContain('?projectId=${encodeURIComponent');
+    expect(service).toContain('/inventory/enhanced-mrp?search=${encodeURIComponent');
+    expect(service).toContain('?tab=production');
+    expect(service).not.toContain('href: `/p2-work-orders/${row.authorityId}`');
+    expect(service).not.toContain('href: `/inventory/items/${node.inventoryItemId}`');
+  });
 });

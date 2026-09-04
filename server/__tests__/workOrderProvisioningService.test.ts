@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   enabled: vi.fn(() => true),
+  queueMaterializationEnabled: vi.fn(() => false),
   transaction: vi.fn(),
 }));
 vi.mock('../db', () => ({ db: { transaction: mocks.transaction } }));
 vi.mock('../src/lib/featureFlags', () => ({
   isP2V2WorkOrderProvisioningEnabled: mocks.enabled,
+  areP2ManufacturingWorkOrderMaterializationEnabled:
+    mocks.queueMaterializationEnabled,
 }));
 
 import { provisionP2WorkOrders } from '../src/services/workOrderProvisioningService';
@@ -15,6 +18,30 @@ describe('P2 work-order provisioning service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.enabled.mockReturnValue(true);
+    mocks.queueMaterializationEnabled.mockReturnValue(false);
+  });
+
+  it('fails before a transaction when frozen-demand queue materialization is authoritative', async () => {
+    mocks.queueMaterializationEnabled.mockReturnValue(true);
+    await expect(
+      provisionP2WorkOrders(
+        'project-1',
+        'launch-1',
+        {
+          idempotencyKey: 'synthetic-key',
+          expectedLaunchDigest: 'a'.repeat(64),
+          signatureMeaning: 'Provision work orders.',
+        },
+        {
+          userId: 1,
+          employeeId: 2,
+          username: 'operator',
+          displayName: 'Synthetic Operator',
+          role: 'OPERATIONS',
+        }
+      )
+    ).rejects.toMatchObject({ code: 'P2_WORK_ORDER_AUTHORITY_PATH_CONFLICT' });
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it('performs no transaction while disabled', async () => {

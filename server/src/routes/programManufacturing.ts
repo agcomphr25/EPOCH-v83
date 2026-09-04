@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+
 import {
   getProgramBuilds,
   getProgramBuildStatus,
@@ -19,18 +20,29 @@ function h(fn: (req: Request, res: Response) => Promise<void>) {
 
 router.get('/builds', h(async (req, res) => {
   const ready = await programManufacturingTablesReady();
+  const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : null;
   if (!ready) {
-    return res.json({ ready: false, builds: [] });
+    const fallback = projectId
+      ? await getProgramBuildStatus(null, { projectId })
+      : null;
+    return res.json({
+      ready: Boolean(fallback),
+      builds: fallback ? [fallback.build] : [],
+    });
   }
 
-  const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : null;
   const builds = await getProgramBuilds({ projectId });
-  res.json({ ready: true, builds });
+  if (builds.length > 0 || !projectId)
+    return res.json({ ready: true, builds });
+  const fallback = await getProgramBuildStatus(null, { projectId });
+  res.json({ ready: true, builds: fallback ? [fallback.build] : [] });
 }));
 
 router.get('/status', h(async (req, res) => {
   const ready = await programManufacturingTablesReady();
-  if (!ready) {
+  const buildId = typeof req.query.buildId === 'string' ? req.query.buildId : null;
+  const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : null;
+  if (!ready && !projectId) {
     return res.json({
       ready: false,
       build: null,
@@ -52,12 +64,10 @@ router.get('/status', h(async (req, res) => {
     });
   }
 
-  const buildId = typeof req.query.buildId === 'string' ? req.query.buildId : null;
-  const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : null;
   const status = await getProgramBuildStatus(buildId, { projectId });
   if (!status) {
     return res.json({
-      ready: true,
+      ready,
       build: null,
       summary: {
         totalAssemblies: 0,
@@ -82,13 +92,9 @@ router.get('/status', h(async (req, res) => {
 
 router.get('/projects/:projectId/health', h(async (req, res) => {
   const ready = await programManufacturingTablesReady();
-  if (!ready) {
-    return res.json({ ready: false, build: null, widgets: null });
-  }
-
   const status = await getProgramBuildStatus(null, { projectId: req.params.projectId });
   if (!status) {
-    return res.json({ ready: true, build: null, widgets: null });
+    return res.json({ ready, build: null, widgets: null });
   }
 
   res.json({

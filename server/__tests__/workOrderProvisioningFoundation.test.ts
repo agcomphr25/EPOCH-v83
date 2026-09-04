@@ -12,6 +12,10 @@ const runner = read('server/scripts/migrations/runSafeBootMigrations.ts');
 describe('P2 work-order provisioning boundary', () => {
   it('is independently disabled and capability protected', () => {
     expect(service).toContain('isP2V2WorkOrderProvisioningEnabled()');
+    expect(service).toContain(
+      'areP2ManufacturingWorkOrderMaterializationEnabled()'
+    );
+    expect(service).toContain('P2_WORK_ORDER_AUTHORITY_PATH_CONFLICT');
     expect(route).toContain("'/launch/:launchId/provision-work-orders'");
     expect(route).toContain("'projects.production_launch.launch'");
   });

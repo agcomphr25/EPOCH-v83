@@ -390,6 +390,19 @@ export async function getP2ExecutionReadModel(
                 : Number(production?.planned ?? 0) > 0
                   ? 'Scheduled'
                   : 'Released to P2';
+  const p2ControlCenterLink = (
+    tab: 'status' | 'production' | 'production-map'
+  ) => {
+    const params = new URLSearchParams({ tab, projectId });
+    if (po?.id != null) params.set('poId', String(po.id));
+    if (po?.po_number) params.set('po', String(po.po_number));
+    return `/p2-control-center?${params.toString()}`;
+  };
+  const dailyTagUpParams = new URLSearchParams({ projectId });
+  if (po?.po_number) dailyTagUpParams.set('customerPo', String(po.po_number));
+  const workOrderQueueParams = new URLSearchParams({ projectId });
+  if (po?.id != null) workOrderQueueParams.set('poId', String(po.id));
+  if (po?.po_number) workOrderQueueParams.set('po', String(po.po_number));
   return {
     projectId,
     definitionVersion: 3,
@@ -436,8 +449,13 @@ export async function getP2ExecutionReadModel(
     lastAuthoritativeUpdate:
       production?.updated_at ?? po?.updated_at ?? handoff?.released_at ?? null,
     links: {
-      controlCenter: '/p2-control-center',
-      production: po ? `/p2-control-center?poId=${po.id}` : null,
+      controlCenter: p2ControlCenterLink('status'),
+      production: p2ControlCenterLink('production'),
+      productionMap: p2ControlCenterLink('production-map'),
+      projectProduction: `/projects/${encodeURIComponent(projectId)}?tab=production`,
+      pmControlCenter: `/pm-control-center?project=${encodeURIComponent(projectId)}`,
+      dailyTagUp: `/daily-tag-up?${dailyTagUpParams.toString()}`,
+      p2WorkOrderQueues: `/p2-work-orders/queues/all?${workOrderQueueParams.toString()}`,
     },
   };
 }

@@ -39,6 +39,7 @@ export type ProductionLaunchPersistenceFault =
 
 type PersistenceDependencies = {
   fault?: (point: ProductionLaunchPersistenceFault) => void | Promise<void>;
+  preview?: Awaited<ReturnType<typeof buildProductionLaunchPreview>>;
 };
 
 const clean = (value: string) => value.trim();
@@ -98,7 +99,25 @@ async function persistProductionLaunchWithDependencies(
       503
     );
 
-  return db.transaction(async (tx) => {
+  return db.transaction((tx) =>
+    persistProductionLaunchInTransactionWithDependencies(
+      projectId,
+      input,
+      actor,
+      tx,
+      dependencies
+    )
+  );
+}
+
+async function persistProductionLaunchInTransactionWithDependencies(
+  projectId: string,
+  input: ProductionLaunchPersistenceInput,
+  actor: PlanningActor,
+  tx: Executor,
+  dependencies: PersistenceDependencies
+) {
+  return (async () => {
     const executor: Executor = tx;
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${`p2-production-launch:${projectId}`},0))`
@@ -158,12 +177,14 @@ async function persistProductionLaunchWithDependencies(
         'The approved Production Release references a stale WAD revision.'
       );
 
-    const preview = await buildProductionLaunchPreview(
-      projectId,
-      new Date(),
-      executor,
-      'UPDATE'
-    );
+    const preview =
+      dependencies.preview ??
+      (await buildProductionLaunchPreview(
+        projectId,
+        new Date(),
+        executor,
+        'UPDATE'
+      ));
     if (preview.resultChecksum !== clean(input.expectedPreviewDigest))
       throw fail(
         'STALE_PREVIEW',
@@ -362,7 +383,72 @@ async function persistProductionLaunchWithDependencies(
       launch: { id: launchId, status: 'COMPLETE', evidenceDigest },
       createdRecordIds,
     };
-  });
+  })();
+}
+
+/**
+ * Persists the canonical launch authority and recursive demand graph inside an
+ * existing transaction. Callers use this seam when execution-side effects
+ * must commit or roll back with the launch evidence.
+ */
+export function persistProductionLaunchInTransaction(
+  projectId: string,
+  input: ProductionLaunchPersistenceInput,
+  actor: PlanningActor,
+  tx: Executor
+) {
+  validateInput(input);
+  if (!isP2V2ProductionLaunchPersistenceEnabled())
+    throw fail(
+      'P2_V2_PRODUCTION_LAUNCH_PERSISTENCE_DISABLED',
+      'Recursive Production Launch persistence is disabled.',
+      503
+    );
+  return persistProductionLaunchInTransactionWithDependencies(
+    projectId,
+    input,
+    actor,
+    tx,
+    {}
+  );
+}
+
+/**
+ * Compatibility seam for trusted service callers that already hold the
+ * release transaction. HTTP callers must supply and confirm a preview digest;
+ * this variant captures one authoritative preview and persists that exact
+ * result without a second time-of-check/time-of-use window.
+ */
+export async function persistCurrentProductionLaunchInTransaction(
+  projectId: string,
+  input: Omit<ProductionLaunchPersistenceInput, 'expectedPreviewDigest'>,
+  actor: PlanningActor,
+  tx: Executor
+) {
+  if (!isP2V2ProductionLaunchPersistenceEnabled())
+    throw fail(
+      'P2_V2_PRODUCTION_LAUNCH_PERSISTENCE_DISABLED',
+      'Recursive Production Launch persistence is disabled.',
+      503
+    );
+  const preview = await buildProductionLaunchPreview(
+    projectId,
+    new Date(),
+    tx,
+    'UPDATE'
+  );
+  const exactInput: ProductionLaunchPersistenceInput = {
+    ...input,
+    expectedPreviewDigest: preview.resultChecksum,
+  };
+  validateInput(exactInput);
+  return persistProductionLaunchInTransactionWithDependencies(
+    projectId,
+    exactInput,
+    actor,
+    tx,
+    { preview }
+  );
 }
 
 export function persistProductionLaunchForCertification(

@@ -79,6 +79,12 @@ function renderReadiness(
         if (url === '/api/preproduction-checklists/templates') {
           return jsonResponse([]);
         }
+        if (url.endsWith('/production-planning/launch-preview')) {
+          return jsonResponse({
+            resultChecksum: 'a'.repeat(64),
+            blockers: [],
+          });
+        }
         if (actionFailure && method !== 'GET') {
           return jsonResponse({ message: actionFailure }, false);
         }
@@ -188,6 +194,7 @@ describe('P2V2PreproductionReadiness', () => {
     });
     await openReadinessForm();
     const launch = screen.getByTestId('launch-production');
+    await waitFor(() => expect(launch).toBeEnabled());
     fireEvent.click(launch);
     expect(
       await screen.findByText(/Travelers, inventory demands, reservations/i)
@@ -195,6 +202,27 @@ describe('P2V2PreproductionReadiness', () => {
     expect(
       screen.getByText(/changes the project to IN_PRODUCTION/i)
     ).toBeInTheDocument();
+  });
+
+  it('allows a canonical planning launch to continue into the confirmed execution handoff', async () => {
+    renderReadiness({
+      release: {
+        id: 'release-1',
+        status: 'APPROVED',
+        approved_at: '2026-07-23T12:00:00Z',
+      },
+      launch: {
+        id: 'launch-1',
+        status: 'COMPLETE',
+        launched_at: '2026-07-23T12:30:00Z',
+        execution_completed: false,
+      },
+      projectStatus: 'READY_FOR_P2_RELEASE',
+    });
+
+    await openReadinessForm();
+    const launch = screen.getByTestId('launch-production');
+    await waitFor(() => expect(launch).toBeEnabled());
   });
 
   it('keeps the confirmation open and shows no false success when launch fails', async () => {
@@ -210,14 +238,20 @@ describe('P2V2PreproductionReadiness', () => {
       'Routing revision changed.'
     );
     await openReadinessForm();
-    fireEvent.click(screen.getByTestId('launch-production'));
+    const launch = screen.getByTestId('launch-production');
+    await waitFor(() => expect(launch).toBeEnabled());
+    fireEvent.click(launch);
     fireEvent.click(screen.getByText('Confirm Launch Production'));
-    await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-        `${readinessEndpoint}/launch`,
-        expect.objectContaining({ method: 'POST' })
-      )
-    );
+    await waitFor(() => {
+      const post = vi
+        .mocked(fetch)
+        .mock.calls.find(([, init]) => init?.method === 'POST');
+      expect(post).toBeDefined();
+      expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({
+        expectedPreviewDigest: 'a'.repeat(64),
+        pilotConfirmation: 'LAUNCH P2 PRODUCTION',
+      });
+    });
     expect(
       screen.getByTestId('launch-production-confirmation')
     ).toBeInTheDocument();

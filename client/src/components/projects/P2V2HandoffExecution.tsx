@@ -36,7 +36,15 @@ type Model = {
   blockers: string[];
   nextAction: string;
   lastAuthoritativeUpdate?: string | null;
-  links: { controlCenter: string; production?: string | null };
+  links: {
+    controlCenter: string;
+    production?: string | null;
+    productionMap?: string | null;
+    projectProduction?: string | null;
+    pmControlCenter?: string | null;
+    dailyTagUp?: string | null;
+    p2WorkOrderQueues?: string | null;
+  };
 };
 
 export default function P2V2HandoffExecution({
@@ -145,6 +153,64 @@ export default function P2V2HandoffExecution({
     data.links && typeof data.links.controlCenter === 'string'
       ? data.links.controlCenter
       : '/p2-control-center';
+  const encodedProjectId = encodeURIComponent(projectId);
+  const navigationLinks = [
+    { label: 'Open P2 Control Center', href: controlCenterLink },
+    {
+      label: 'Open Production Queue',
+      href:
+        data.links?.production ??
+        `/p2-control-center?tab=production&projectId=${encodedProjectId}`,
+    },
+    {
+      label: 'Open Production Map',
+      href:
+        data.links?.productionMap ??
+        `/p2-control-center?tab=production-map&projectId=${encodedProjectId}`,
+    },
+    {
+      label: 'Open Project Production',
+      href:
+        data.links?.projectProduction ??
+        `/projects/${encodedProjectId}?tab=production`,
+    },
+    {
+      label: 'Open PM Dashboard',
+      href:
+        data.links?.pmControlCenter ??
+        `/pm-control-center?project=${encodedProjectId}`,
+    },
+    {
+      label: 'Open Daily Tag Up',
+      href:
+        data.links?.dailyTagUp ?? `/daily-tag-up?projectId=${encodedProjectId}`,
+    },
+    {
+      label: 'Open P2 Work Order Queues',
+      href:
+        data.links?.p2WorkOrderQueues ??
+        `/p2-work-orders/queues/all?projectId=${encodedProjectId}`,
+    },
+  ];
+  const navigation = (
+    <div
+      className="flex flex-wrap gap-2"
+      data-testid="p2-v2-context-navigation"
+    >
+      {navigationLinks.map((link, index) => (
+        <Button
+          key={link.label}
+          asChild
+          variant={index === 0 ? 'default' : 'outline'}
+        >
+          <a href={link.href}>
+            <ExternalLink className="mr-2 h-4 w-4" />
+            {link.label}
+          </a>
+        </Button>
+      ))}
+    </div>
+  );
   if (mode === 'handoff')
     return (
       <Card data-testid="p2-v2-handoff-actions">
@@ -180,6 +246,7 @@ export default function P2V2HandoffExecution({
             </Button>
           </div>
           {errorText && <p className="text-sm text-red-700">{errorText}</p>}
+          {navigation}
         </CardContent>
       </Card>
     );
@@ -261,12 +328,7 @@ export default function P2V2HandoffExecution({
             </ul>
           </div>
         )}
-        <Button asChild>
-          <a href={controlCenterLink}>
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Open P2 Control Center
-          </a>
-        </Button>
+        {navigation}
       </CardContent>
     </Card>
   );

@@ -4640,22 +4640,46 @@ router.get('/:id/p2-hub', async (req, res) => {
           `SELECT pl.id, pl.preview_digest AS "previewDigest", pl.status,
              baseline.id AS "baselineId",
              baseline.baseline_checksum AS "baselineChecksum",
-             EXISTS (
-               SELECT 1 FROM p2_manufacturing_work_order_authorities authority
-               WHERE authority.frozen_demand_baseline_id = baseline.id
-             ) AS completed
+             COALESCE(materialization.expected_count, 0)::int AS "expectedWorkOrderCount",
+             COALESCE(materialization.materialized_count, 0)::int AS "materializedWorkOrderCount",
+             COALESCE(materialization.expected_count, 0) > 0
+               AND materialization.expected_count = materialization.materialized_count
+               AS completed
            FROM project_production_launches pl
+           JOIN project_production_releases release
+             ON release.id = pl.production_release_id
+            AND release.project_id = pl.project_id
+            AND release.status = 'APPROVED'
+           JOIN project_wad_authorizations wad
+             ON wad.id = release.wad_authorization_id
+            AND wad.id = pl.wad_authorization_id
+            AND wad.project_id = pl.project_id
+            AND wad.status = 'RELEASED'
+           JOIN production_work_orders wad_work_order
+             ON wad_work_order.id = wad.wad_work_order_id
+            AND wad_work_order.project_id = pl.project_id
+            AND wad_work_order.wad_status = 'APPROVED'
            LEFT JOIN LATERAL (
              SELECT id, baseline_checksum
              FROM p2_frozen_production_demand_baselines
              WHERE project_id = pl.project_id
-               AND wad_authorization_id = pl.wad_authorization_id
+               AND wad_authorization_id = wad.id
                AND status = 'RELEASED'
              ORDER BY revision_number DESC
              LIMIT 1
            ) baseline ON true
+           LEFT JOIN LATERAL (
+             SELECT COUNT(*)::int AS expected_count,
+               COUNT(authority.id)::int AS materialized_count
+             FROM p2_frozen_production_demand_nodes node
+             LEFT JOIN p2_manufacturing_work_order_authorities authority
+               ON authority.frozen_demand_baseline_id = baseline.id
+              AND authority.frozen_demand_node_id = node.id
+             WHERE node.baseline_id = baseline.id
+               AND node.make_buy_disposition = 'MAKE'
+           ) materialization ON true
            WHERE pl.project_id = $1 AND pl.status = 'COMPLETE'
-          ORDER BY pl.launched_at DESC
+           ORDER BY pl.launched_at DESC
           LIMIT 1`,
           [id]
         )
@@ -4666,6 +4690,12 @@ router.get('/:id/p2-hub', async (req, res) => {
       baselineId: manufacturingWorkOrderLaunch?.baselineId ?? null,
       expectedBaselineChecksum:
         manufacturingWorkOrderLaunch?.baselineChecksum ?? null,
+      expectedWorkOrderCount: Number(
+        manufacturingWorkOrderLaunch?.expectedWorkOrderCount ?? 0
+      ),
+      materializedWorkOrderCount: Number(
+        manufacturingWorkOrderLaunch?.materializedWorkOrderCount ?? 0
+      ),
       completed: Boolean(manufacturingWorkOrderLaunch?.completed),
       enabled: areP2ManufacturingWorkOrderMaterializationEnabled(),
     };

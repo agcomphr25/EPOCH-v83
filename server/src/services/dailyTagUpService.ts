@@ -246,9 +246,9 @@ export async function getDailyTagUp(filters: DailyTagUpFilters = {}) {
       assemblyTree: buildTree(nodes),
       materials: nodes.filter((node) => node.source === 'purchasing'),
       issues: [
-        ...workOrders.filter((row) => upper(row.readiness.state).includes('BLOCKED') || upper(row.readiness.state).includes('NOT READY')).map((row) => ({ type: 'WORK ORDER', message: row.readiness.reason, href: `/p2-work-orders/${row.authorityId}`, record: row.workOrderNumber })),
-        ...nodes.filter((node) => node.source === 'purchasing' && node.short > 0).map((node) => ({ type: 'MATERIAL SHORTAGE', message: `${node.short} ${node.unitOfMeasure} short`, href: `/inventory/items/${node.inventoryItemId}`, record: node.partNumber })),
-        ...(!project.baseline_id ? [{ type: 'CONFIGURATION', message: 'No released Frozen Production Demand baseline', href: `/projects/${project.id}`, record: project.project_code }] : []),
+        ...workOrders.filter((row) => upper(row.readiness.state).includes('BLOCKED') || upper(row.readiness.state).includes('NOT READY')).map((row) => ({ type: 'WORK ORDER', message: row.readiness.reason, href: `/p2-work-orders/queues/${encodeURIComponent(String(row.departmentId ?? 'all'))}?projectId=${encodeURIComponent(String(project.id))}`, record: row.workOrderNumber })),
+        ...nodes.filter((node) => node.source === 'purchasing' && node.short > 0).map((node) => ({ type: 'MATERIAL SHORTAGE', message: `${node.short} ${node.unitOfMeasure} short`, href: `/inventory/enhanced-mrp?search=${encodeURIComponent(String(node.partNumber ?? ''))}`, record: node.partNumber })),
+        ...(!project.baseline_id ? [{ type: 'CONFIGURATION', message: 'No released Frozen Production Demand baseline', href: `/projects/${encodeURIComponent(String(project.id))}?tab=production`, record: project.project_code }] : []),
       ],
     };
   }).filter((project) => !search || project.workOrders.length > 0 || [project.projectCode, project.projectName, project.customerPo].some((value) => upper(value).includes(search)));

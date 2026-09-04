@@ -1954,6 +1954,23 @@ export default function ProjectDetailPage() {
     );
   }
 
+  const buildP2ControlCenterUrl = (
+    tab: 'status' | 'production' | 'production-map'
+  ) => {
+    const params = new URLSearchParams({ tab, projectId: project.id });
+    if (project.projectName) params.set('projectName', project.projectName);
+    if (project.poId != null) params.set('poId', String(project.poId));
+    if (currentPoNumber) params.set('po', String(currentPoNumber));
+    return `/p2-control-center?${params.toString()}`;
+  };
+  const dailyTagUpParams = new URLSearchParams({ projectId: project.id });
+  if (currentPoNumber) dailyTagUpParams.set('customerPo', String(currentPoNumber));
+  const p2WorkOrderQueueParams = new URLSearchParams({ projectId: project.id });
+  if (project.poId != null) p2WorkOrderQueueParams.set('poId', String(project.poId));
+  if (currentPoNumber) p2WorkOrderQueueParams.set('po', String(currentPoNumber));
+  const dailyTagUpUrl = `/daily-tag-up?${dailyTagUpParams.toString()}`;
+  const p2WorkOrderQueuesUrl = `/p2-work-orders/queues/all?${p2WorkOrderQueueParams.toString()}`;
+
   const getProgress = () => {
     if (!projectSteps.length) return 0;
     const completed = projectSteps.filter(s => s.status === 'completed').length;
@@ -4071,17 +4088,52 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setLocation('/p2-control-center')}>
+                <Button
+                  onClick={() => setLocation(buildP2ControlCenterUrl('status'))}
+                  data-testid="button-open-project-p2-control-center"
+                >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Open P2 Control Center
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setLocation(`/p2-control-center?tab=production&projectId=${encodeURIComponent(project.id)}`)}
+                  onClick={() => setLocation(buildP2ControlCenterUrl('production'))}
                   data-testid="button-open-project-production-orders"
                 >
                   <Layers className="h-4 w-4 mr-2" />
                   Production Orders
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(buildP2ControlCenterUrl('production-map'))}
+                  data-testid="button-open-project-production-map"
+                >
+                  <BarChart2 className="h-4 w-4 mr-2" />
+                  Production Map
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(`/pm-control-center?project=${encodeURIComponent(project.id)}`)}
+                  data-testid="button-open-project-pm-dashboard"
+                >
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  PM Dashboard
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(dailyTagUpUrl)}
+                  data-testid="button-open-project-daily-tag-up"
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Daily Tag Up
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(p2WorkOrderQueuesUrl)}
+                  data-testid="button-open-project-p2-work-order-queues"
+                >
+                  <ClipboardList className="h-4 w-4 mr-2" />
+                  P2 Work Order Queues
                 </Button>
                 <Button
                   variant="outline"

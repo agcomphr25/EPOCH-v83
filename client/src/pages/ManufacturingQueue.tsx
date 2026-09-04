@@ -69,7 +69,11 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
-import type { ManufacturingQueue } from '@shared/schema';
+import type { ManufacturingQueue as ManufacturingQueueRecord } from '@shared/schema';
+import {
+  getManufacturingDepartmentIdentities,
+  MANUFACTURING_ROUTE_DEFINITIONS,
+} from '@shared/utils/manufacturingRouting';
 
 type StockBuildPart = {
   id: number;
@@ -97,14 +101,15 @@ type SharedManufacturingDepartment = {
 };
 
 const ALL_MANUFACTURING_QUEUES = '__ALL__';
-const LEGACY_MANUFACTURING_QUEUES = [
-  'Cutting Table',
-  'CNC',
-  'Cores',
-  'Assembly',
-];
+const CANONICAL_MANUFACTURING_QUEUES = Array.from(
+  new Set(
+    Object.values(MANUFACTURING_ROUTE_DEFINITIONS)
+      .filter((route) => route.canRelease && route.department)
+      .map((route) => route.department as string)
+  )
+);
 
-type QueueItemWithInventory = ManufacturingQueue & {
+type QueueItemWithInventory = ManufacturingQueueRecord & {
   inventoryItem: {
     id: number;
     agPartNumber: string | null;
@@ -127,9 +132,16 @@ export default function ManufacturingQueue() {
     SharedManufacturingDepartment[]
   >({
     queryKey: ['/api/shared-departments', 'manufacturing-queue-filter'],
-    queryFn: () => apiRequest('/api/shared-departments'),
+    queryFn: () => apiRequest('/api/shared-departments?includeInactive=true'),
   });
   const manufacturingQueues = useMemo(() => {
+    const configuredIdentities = new Set(
+      sharedDepartments
+        .filter((department) => department.name.trim().length > 0)
+        .flatMap((department) =>
+          getManufacturingDepartmentIdentities(department.name)
+        )
+    );
     const departments = sharedDepartments
       .filter(
         (department) =>
@@ -143,9 +155,13 @@ export default function ManufacturingQueue() {
           left.name.localeCompare(right.name)
       )
       .map((department) => department.name.trim());
-    return Array.from(
-      new Set([...LEGACY_MANUFACTURING_QUEUES, ...departments])
+    const missingCanonicalQueues = CANONICAL_MANUFACTURING_QUEUES.filter(
+      (department) => {
+        const aliases = getManufacturingDepartmentIdentities(department);
+        return !aliases.some((alias) => configuredIdentities.has(alias));
+      }
     );
+    return Array.from(new Set([...missingCanonicalQueues, ...departments]));
   }, [sharedDepartments]);
 
   // Fetch queue items

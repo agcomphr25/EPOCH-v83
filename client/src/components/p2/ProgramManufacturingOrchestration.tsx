@@ -9,6 +9,7 @@ import {
   Route,
   Truck,
 } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -24,6 +25,9 @@ interface QueueLink {
   manufacturingQueueId: number | null;
   productionWorkOrderId: string | null;
   travelerId: string | null;
+  p2WorkOrderAuthorityId?: string | null;
+  departmentId?: number | null;
+  projectId?: string | null;
 }
 
 export interface ProgramAssembly {
@@ -104,6 +108,22 @@ function statusLabel(status: AssemblyStatus) {
   return status.replace(/_/g, ' ');
 }
 
+function queueLinkHref(link: QueueLink) {
+  if (link.p2WorkOrderAuthorityId && link.departmentId != null) {
+    const projectQuery = link.projectId ? `?projectId=${encodeURIComponent(link.projectId)}` : '';
+    return `/p2-work-orders/queues/${link.departmentId}${projectQuery}`;
+  }
+  if (link.travelerId) return `/travelers/${encodeURIComponent(link.travelerId)}`;
+  if (link.manufacturingQueueId != null) return '/manufacturing-queue';
+  return null;
+}
+
+function QueueLinkBadge({ link }: { link: QueueLink }) {
+  const href = queueLinkHref(link);
+  const badge = <Badge variant="outline" className={`text-[11px] ${href ? 'hover:bg-muted' : ''}`}>{link.label}{link.department ? ` - ${link.department}` : ''}</Badge>;
+  return href ? <Link href={href} aria-label={`Open ${link.label}`}>{badge}</Link> : badge;
+}
+
 function buildStatusUrl(projectId?: string) {
   const params = new URLSearchParams();
   if (projectId) params.set('projectId', projectId);
@@ -124,7 +144,7 @@ function EmptyProgramState({ compact = false }: { compact?: boolean }) {
         <PackageCheck className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
         <p className="text-sm font-medium">No program build is active</p>
         <p className="text-xs text-muted-foreground mt-1">
-          Existing P2 queues remain available; program orchestration appears once a build is seeded or linked.
+          Production Map appears once the project has released Frozen Production Demand.
         </p>
       </CardContent>
     </Card>
@@ -158,9 +178,7 @@ function AssemblyRow({ assembly }: { assembly: ProgramAssembly }) {
       {assembly.links.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {assembly.links.map((link) => (
-            <Badge key={link.id} variant="outline" className="text-[11px]">
-              {link.label}{link.department ? ` - ${link.department}` : ''}
-            </Badge>
+            <QueueLinkBadge key={link.id} link={link} />
           ))}
         </div>
       )}

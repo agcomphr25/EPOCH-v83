@@ -353,6 +353,9 @@ export default function P2FrozenProductionDemand({
           `/api/configuration-control/projects/${projectId}/frozen-production-demand/${current?.id}`,
         ],
       });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2-work-orders/queues'],
+      });
       toast({ title: 'Manufacturing work order created' });
     },
     onError: (error: Error) =>
@@ -546,7 +549,6 @@ export default function P2FrozenProductionDemand({
                       !nodes.some(
                         (node) =>
                           node.make_buy_disposition === 'MAKE' &&
-                          node.depth > 0 &&
                           !node.materialized_authority_id
                       )
                     }
@@ -554,6 +556,11 @@ export default function P2FrozenProductionDemand({
                   >
                     Create All Remaining Work Orders
                   </Button>
+                  <p className="max-w-xl text-xs text-muted-foreground">
+                    Includes the released parent WAD as the root P2 authority;
+                    remaining manufactured children receive separate work
+                    orders.
+                  </p>
                 </div>
               )}
             {nodes.map((n) => (
@@ -588,15 +595,17 @@ export default function P2FrozenProductionDemand({
                     </span>
                   </button>
                   {n.make_buy_disposition === 'MAKE' &&
+                    n.materialized_authority_id && (
+                      <Badge variant="secondary">
+                        {n.work_order_number ?? 'Work-order authority created'}
+                      </Badge>
+                    )}
+                  {n.make_buy_disposition === 'MAKE' &&
                     n.depth > 0 &&
+                    !n.materialized_authority_id &&
                     current?.status === 'RELEASED' &&
                     workOrderMaterialization &&
-                    can('p2.work_orders.materialize') &&
-                    (n.materialized_authority_id ? (
-                      <Badge variant="secondary">
-                        {n.work_order_number ?? 'Work order created'}
-                      </Badge>
-                    ) : (
+                    can('p2.work_orders.materialize') && (
                       <Button
                         size="sm"
                         disabled={materializeNode.isPending}
@@ -604,12 +613,13 @@ export default function P2FrozenProductionDemand({
                       >
                         Create this work order
                       </Button>
-                    ))}
+                    )}
                 </div>
                 {n.depth === 0 && n.make_buy_disposition === 'MAKE' && (
                   <p className="mt-1 pl-6 text-xs text-muted-foreground">
-                    Parent PO item authority — child work orders inherit this
-                    released baseline.
+                    {n.materialized_authority_id
+                      ? 'Released parent WAD registered as the root P2 manufacturing authority.'
+                      : 'Released parent WAD — use Create All Remaining Work Orders to register its root P2 authority before individual child creation.'}
                   </p>
                 )}
                 {open.has(n.id) && (

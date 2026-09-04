@@ -175,6 +175,17 @@ async function requireCapability(req: Request, key: string) {
     );
   return value;
 }
+async function requireAnyCapability(req: Request, keys: string[]) {
+  const value = actor(req);
+  const { permissionSet } = await getUserPermissions(value.userId, value.role);
+  if (!keys.some((key) => permissionSet.has(key)))
+    throw new ProjectProductionPlanningError(
+      'FORBIDDEN',
+      `One of these capabilities is required: ${keys.join(', ')}.`,
+      403
+    );
+  return value;
+}
 function fail(res: Response, error: unknown) {
   if (error instanceof z.ZodError)
     return res
@@ -225,7 +236,10 @@ router.get('/', async (req, res) => {
 });
 router.get('/launch-preview', async (req, res) => {
   try {
-    await requireCapability(req, 'projects.production_planning.manage');
+    await requireAnyCapability(req, [
+      'projects.production_planning.manage',
+      'projects.production_launch.launch',
+    ]);
     res.json(await getProductionLaunchPreview(projectId(req)));
   } catch (error) {
     fail(res, error);

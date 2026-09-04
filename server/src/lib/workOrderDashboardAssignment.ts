@@ -26,11 +26,19 @@ const DASHBOARD_ROUTES = new Set([
   '/assembly-queue',
   '/manufacturing-queue',
   '/cnc-dashboard',
-  '/cnc-queue',
-  '/finish-queue',
-  '/qc-shipping-queue',
-  '/shipping-queue',
+  '/department-queue/finish',
+  '/department-queue/finish-qc',
+  '/department-queue/paint',
+  '/department-queue/qc-shipping',
+  '/department-queue/shipping',
 ]);
+
+const LEGACY_DASHBOARD_ROUTE_ALIASES: Record<string, string> = {
+  '/finish-queue': '/department-queue/finish',
+  '/qc-shipping-queue': '/department-queue/qc-shipping',
+  '/shipping-queue': '/department-queue/shipping',
+  '/cnc-queue': '/cnc-dashboard',
+};
 
 function normalizeKey(value: string | null | undefined): string {
   return (value ?? '')
@@ -175,12 +183,42 @@ function assignmentForDepartment(rawDepartment: string | null | undefined): Work
     };
   }
 
-  if (normalized.includes('finish') || normalized.includes('paint') || normalized.includes('coating')) {
+  if (normalized.includes('finishqc')) {
+    return {
+      dashboardType: 'QC',
+      queueType: 'QC',
+      assignedDepartment: 'Finish QC',
+      assignedDashboardRoute: '/department-queue/finish-qc',
+      dashboardLabel: 'Finish QC Queue',
+    };
+  }
+
+  if (normalized.includes('qc') || normalized.includes('quality') || normalized.includes('inspection')) {
+    return {
+      dashboardType: 'QC',
+      queueType: 'QC',
+      assignedDepartment: 'QC',
+      assignedDashboardRoute: '/department-queue/qc-shipping',
+      dashboardLabel: 'QC / Shipping Queue',
+    };
+  }
+
+  if (normalized.includes('paint') || normalized.includes('coating')) {
+    return {
+      dashboardType: 'PAINT',
+      queueType: 'PAINT',
+      assignedDepartment: 'Paint',
+      assignedDashboardRoute: '/department-queue/paint',
+      dashboardLabel: 'Paint Queue',
+    };
+  }
+
+  if (normalized.includes('finish')) {
     return {
       dashboardType: 'FINISH',
       queueType: 'FINISH',
       assignedDepartment: 'Finish',
-      assignedDashboardRoute: '/finish-queue',
+      assignedDashboardRoute: '/department-queue/finish',
       dashboardLabel: 'Finish Queue',
     };
   }
@@ -190,18 +228,8 @@ function assignmentForDepartment(rawDepartment: string | null | undefined): Work
       dashboardType: 'SHIPPING',
       queueType: 'SHIPPING',
       assignedDepartment: 'Shipping',
-      assignedDashboardRoute: '/shipping-queue',
+      assignedDashboardRoute: '/department-queue/shipping',
       dashboardLabel: 'Shipping Queue',
-    };
-  }
-
-  if (normalized.includes('qc') || normalized.includes('quality') || normalized.includes('inspection')) {
-    return {
-      dashboardType: 'QC',
-      queueType: 'QC',
-      assignedDepartment: 'QC',
-      assignedDashboardRoute: '/qc-shipping-queue',
-      dashboardLabel: 'QC / Shipping Queue',
     };
   }
 
@@ -215,14 +243,17 @@ function assignmentForDepartment(rawDepartment: string | null | undefined): Work
 }
 
 export function assignDashboardForWorkOrder(input: WorkOrderDashboardAssignmentInput): WorkOrderDashboardAssignment {
-  if (input.assignedDashboardRoute && DASHBOARD_ROUTES.has(input.assignedDashboardRoute)) {
+  const assignedDashboardRoute = input.assignedDashboardRoute
+    ? LEGACY_DASHBOARD_ROUTE_ALIASES[input.assignedDashboardRoute] ?? input.assignedDashboardRoute
+    : null;
+  if (assignedDashboardRoute && DASHBOARD_ROUTES.has(assignedDashboardRoute)) {
     const stored = assignmentForDepartment(input.assignedDepartment ?? input.queueType ?? input.dashboardType);
     return {
       ...stored,
       dashboardType: input.dashboardType?.trim() || stored.dashboardType,
       queueType: input.queueType?.trim() || stored.queueType,
       assignedDepartment: input.assignedDepartment?.trim() || stored.assignedDepartment,
-      assignedDashboardRoute: input.assignedDashboardRoute,
+      assignedDashboardRoute,
     };
   }
 

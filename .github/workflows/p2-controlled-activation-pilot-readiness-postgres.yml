@@ -8,9 +8,13 @@ on:
   pull_request:
     paths:
       - 'server/src/services/p2ControlledActivationService.ts'
+      - 'server/src/services/projectPreproductionReadinessService.ts'
       - 'server/src/lib/featureFlags.ts'
       - 'server/src/routes/p2ManufacturingWorkOrders.ts'
       - 'server/__tests__/p2ControlledActivationPilotReadiness.test.ts'
+      - 'server/__tests__/p2V2PostgresCertification.test.ts'
+      - 'server/__tests__/p2V2PilotPostgresCertification.test.ts'
+      - 'server/__tests__/projectProductionExecution.test.ts'
       - 'client/src/components/p2/P2ActivationReadiness.tsx'
       - 'client/src/pages/P2ControlCenter.tsx'
       - 'docs/p2-phase14-controlled-pilot-readiness.md'

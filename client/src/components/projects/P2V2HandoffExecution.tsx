@@ -50,9 +50,11 @@ type Model = {
 export default function P2V2HandoffExecution({
   projectId,
   mode,
+  showNavigation = true,
 }: {
   projectId: string;
   mode: 'handoff' | 'execution';
+  showNavigation?: boolean;
 }) {
   const key = ['/api/projects', projectId, 'workflow-v2', 'p2-handoff'];
   const queryClient = useQueryClient();
@@ -246,7 +248,7 @@ export default function P2V2HandoffExecution({
             </Button>
           </div>
           {errorText && <p className="text-sm text-red-700">{errorText}</p>}
-          {navigation}
+          {showNavigation && navigation}
         </CardContent>
       </Card>
     );
@@ -328,7 +330,7 @@ export default function P2V2HandoffExecution({
             </ul>
           </div>
         )}
-        {navigation}
+        {showNavigation && navigation}
       </CardContent>
     </Card>
   );

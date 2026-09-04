@@ -360,6 +360,7 @@ describe('P2V2ProjectWorkflow', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('B. P2 Handoff and Execution')).toBeInTheDocument();
     expect(screen.getByText('C. Completion')).toBeInTheDocument();
+    expect(screen.getAllByTestId('p2-v2-context-navigation')).toHaveLength(1);
     expect(
       await screen.findByRole('link', { name: /Open P2 Control Center/i })
     ).toHaveAttribute('href', '/p2-control-center');

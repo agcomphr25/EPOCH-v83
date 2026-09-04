@@ -235,7 +235,13 @@ function StageWorkspace({
     case 'p2_release_handoff':
       return <P2V2HandoffExecution projectId={projectId} mode="handoff" />;
     case 'p2_execution_summary':
-      return <P2V2HandoffExecution projectId={projectId} mode="execution" />;
+      return (
+        <P2V2HandoffExecution
+          projectId={projectId}
+          mode="execution"
+          showNavigation={false}
+        />
+      );
     case 'production_execution':
       return <P2V2ProductionExecution projectId={projectId} />;
     case 'quality_product_release':

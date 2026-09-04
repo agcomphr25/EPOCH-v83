@@ -1238,26 +1238,26 @@ async function launchProductionWithDependencies(
         canonicalLaunch = resumableCanonicalLaunch
           ? { replayed: true, launch: resumableCanonicalLaunch }
           : authorityInput
-          ? await persistProductionLaunchInTransaction(
-              projectId,
-              {
-                idempotencyKey,
-                expectedPreviewDigest: authorityInput.expectedPreviewDigest,
-                signatureMeaning: authorityInput.signatureMeaning,
-              },
-              actor,
-              tx
-            )
-          : await persistCurrentProductionLaunchInTransaction(
-              projectId,
-              {
-                idempotencyKey,
-                signatureMeaning:
-                  'Create the authoritative recursive demand graph and launch P2 production.',
-              },
-              actor,
-              tx
-            );
+            ? await persistProductionLaunchInTransaction(
+                projectId,
+                {
+                  idempotencyKey,
+                  expectedPreviewDigest: authorityInput.expectedPreviewDigest,
+                  signatureMeaning: authorityInput.signatureMeaning,
+                },
+                actor,
+                tx
+              )
+            : await persistCurrentProductionLaunchInTransaction(
+                projectId,
+                {
+                  idempotencyKey,
+                  signatureMeaning:
+                    'Create the authoritative recursive demand graph and launch P2 production.',
+                },
+                actor,
+                tx
+              );
       } catch (error) {
         if (error instanceof ProjectProductionPlanningError)
           throw new ProjectPreproductionError(
@@ -1538,6 +1538,13 @@ export const launchProductionForCertification = (
   projectId: string,
   idempotencyKey: string,
   actor: PreproductionActor,
-  fault: NonNullable<ProductionLaunchDependencies['fault']>
+  fault: NonNullable<ProductionLaunchDependencies['fault']>,
+  authorityInput?: ProductionLaunchAuthorityInput
 ) =>
-  launchProductionWithDependencies(projectId, idempotencyKey, actor, { fault });
+  launchProductionWithDependencies(
+    projectId,
+    idempotencyKey,
+    actor,
+    { fault },
+    authorityInput
+  );

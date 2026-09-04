@@ -35,6 +35,7 @@ import {
   launchProductionForCertification,
   ProjectPreproductionError,
   submitPreproduction,
+  type ProductionLaunchAuthorityInput,
 } from '../src/services/projectPreproductionReadinessService';
 import {
   completeProductionStage,
@@ -127,6 +128,11 @@ type Fixture = {
   wadId: string;
   readinessId: string;
   releaseId: string;
+  preparedLaunchDigest?: string;
+};
+
+type FixtureOptions = {
+  prepareCanonicalLaunch?: boolean;
 };
 
 async function query<T extends Record<string, unknown>>(
@@ -188,7 +194,8 @@ async function certifyCommercialStage(
 
 async function createFixture(
   projectId = baseProjectId,
-  suffix = 'A'
+  suffix = 'A',
+  options: FixtureOptions = {}
 ): Promise<Fixture> {
   const client = await pool.connect();
   try {
@@ -683,6 +690,12 @@ async function createFixture(
         ]
       );
     }
+    const canonicalPreview = options.prepareCanonicalLaunch
+      ? await prepareRecursivePersistenceFixture(
+          { projectId, poId, planId },
+          { preserveManufacturedPlanOutputs: true }
+        )
+      : null;
     const wad = await query<{ id: string }>(
       `INSERT INTO production_work_orders
          (work_order_number,project_id,part_number,quantity,status,wad_status,
@@ -816,6 +829,7 @@ async function createFixture(
       wadId: authorization.rows[0].id,
       readinessId,
       releaseId: String(release.release.id),
+      preparedLaunchDigest: canonicalPreview?.resultChecksum,
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -833,11 +847,21 @@ async function cleanLaunchState(fixture: Fixture) {
     serials: number;
     orders: number;
     launches: number;
+    demands: number;
+    allocations: number;
+    dependencies: number;
+    launch_events: number;
+    execution_links: number;
   }>(
     `SELECT p.current_stage,po.status po_status,s.status production_status,
        (SELECT count(*)::int FROM p2_serialized_items WHERE po_id=po.id) serials,
        (SELECT count(*)::int FROM p2_production_orders WHERE p2_po_id=po.id) orders,
-       (SELECT count(*)::int FROM project_production_launches WHERE project_id=p.id) launches
+       (SELECT count(*)::int FROM project_production_launches WHERE project_id=p.id) launches,
+       (SELECT count(*)::int FROM project_production_demands WHERE project_id=p.id) demands,
+       (SELECT count(*)::int FROM project_production_demand_allocations WHERE project_id=p.id) allocations,
+       (SELECT count(*)::int FROM project_production_demand_dependencies WHERE project_id=p.id) dependencies,
+       (SELECT count(*)::int FROM project_production_launch_events WHERE project_id=p.id) launch_events,
+       (SELECT count(*)::int FROM project_production_demand_execution_links WHERE project_id=p.id) execution_links
      FROM projects p
      JOIN p2_purchase_orders po ON po.id=p.po_id
      JOIN project_workflow_step_instances s
@@ -850,6 +874,7 @@ async function cleanLaunchState(fixture: Fixture) {
 
 type PreviewNode = {
   partNumber: string;
+  parentPartNumber: string | null;
   productionPlanAssemblyPath: string;
   extendedProjectQuantity: number;
   children: PreviewNode[];
@@ -858,7 +883,12 @@ type PreviewNode = {
 const flattenPreview = (nodes: PreviewNode[]): PreviewNode[] =>
   nodes.flatMap((node) => [node, ...flattenPreview(node.children)]);
 
-async function prepareRecursivePersistenceFixture(fixture: Fixture) {
+async function prepareRecursivePersistenceFixture(
+  fixture: Pick<Fixture, 'projectId' | 'poId' | 'planId'>,
+  options: { preserveManufacturedPlanOutputs?: boolean } = {}
+) {
+  const preserveManufacturedPlanOutputs =
+    options.preserveManufacturedPlanOutputs === true;
   await query(
     `UPDATE inventory_items SET order_url='https://synthetic.invalid/order'
      WHERE id IN (SELECT inventory_item_id FROM p2_purchase_order_items WHERE po_id=$1)
@@ -874,7 +904,13 @@ async function prepareRecursivePersistenceFixture(fixture: Fixture) {
         source_revision,change_reason,content_checksum,created_by,created_by_display_name,
         created_by_role,released_by,released_by_display_name,released_by_role,released_at)
      SELECT DISTINCT ii.id,1,
-       CASE WHEN ii.ag_part_number LIKE 'PARENT-%' THEN 'MANUFACTURED' ELSE 'PURCHASED' END,
+       CASE
+         WHEN $3::boolean AND ppi.make_buy='MAKE' AND ppi.is_manufactured=true
+           THEN 'MANUFACTURED'
+         WHEN NOT $3::boolean AND ii.ag_part_number LIKE 'PARENT-%'
+           THEN 'MANUFACTURED'
+         ELSE 'PURCHASED'
+       END,
        'A','RELEASED',now()-interval '1 day','SYNTHETIC_CERTIFICATION',
        'inventory_item',ii.id::text,'A','Seed recursive launch certification',
        repeat('a',64),$2::integer,'Phase 8 Certifier','ADMIN',$2::integer,'Phase 8 Certifier','ADMIN',now()
@@ -882,19 +918,45 @@ async function prepareRecursivePersistenceFixture(fixture: Fixture) {
      JOIN project_production_plan_items ppi ON ppi.part_number=ii.ag_part_number
      WHERE ppi.production_plan_id=$1
      ON CONFLICT (inventory_item_id,revision_number) DO NOTHING`,
-    [fixture.planId, actor.userId]
+    [fixture.planId, actor.userId, preserveManufacturedPlanOutputs]
   );
+  if (preserveManufacturedPlanOutputs)
+    await query(
+      `INSERT INTO bom_lines(revision_id,child_part_ag_number,qty_per)
+       SELECT DISTINCT ppi.bom_revision_id,purchased.part_number,1
+       FROM project_production_plan_items ppi
+       CROSS JOIN LATERAL (
+         SELECT buy.part_number
+         FROM project_production_plan_items buy
+         WHERE buy.production_plan_id=ppi.production_plan_id
+           AND buy.make_buy='BUY'
+         ORDER BY buy.id LIMIT 1
+       ) purchased
+       WHERE ppi.production_plan_id=$1
+         AND ppi.make_buy='MAKE'
+         AND ppi.is_manufactured=true
+         AND ppi.bom_revision_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM bom_lines existing
+           WHERE existing.revision_id=ppi.bom_revision_id
+         )`,
+      [fixture.planId]
+    );
   await query(
     `INSERT INTO routing_operations
        (part_routing_id,step_number,department_name,operation_name,operation_type,
         estimated_minutes,requires_signature,requires_certification,instruction_pack)
-     SELECT DISTINCT ppi.routing_id,10,'Assembly','Synthetic launch assembly','RUN',30,true,false,
+     SELECT DISTINCT ppi.routing_id,10,
+       COALESCE(NULLIF(pr.department_sequence->>0,''),'Assembly'),
+       'Synthetic launch operation','RUN',30,true,false,
        '{"instruction":"SYNTHETIC-LAUNCH-CERT"}'::jsonb
      FROM project_production_plan_items ppi
-     WHERE ppi.production_plan_id=$1 AND ppi.part_number LIKE 'PARENT-%'
+     JOIN part_routings pr ON pr.id=ppi.routing_id
+     WHERE ppi.production_plan_id=$1
+       AND ($2::boolean OR ppi.part_number LIKE 'PARENT-%')
        AND ppi.routing_id IS NOT NULL
        AND NOT EXISTS (SELECT 1 FROM routing_operations ro WHERE ro.part_routing_id=ppi.routing_id)`,
-    [fixture.planId]
+    [fixture.planId, preserveManufacturedPlanOutputs]
   );
 
   process.env.P2_V2_PRODUCTION_LAUNCH_PREVIEW_ENABLED = 'true';
@@ -926,12 +988,14 @@ async function prepareRecursivePersistenceFixture(fixture: Fixture) {
        SELECT (jsonb_populate_record(NULL::project_production_plan_items,
          $1::jsonb || jsonb_build_object(
            'id',gen_random_uuid(),'assembly_path',$2::text,
-           'extended_project_quantity',$3::numeric,'created_at',now(),'updated_at',now()
+           'extended_project_quantity',$3::numeric,'parent_part_number',$4::text,
+           'created_at',now(),'updated_at',now()
          ))).*`,
       [
         JSON.stringify(template),
         node.productionPlanAssemblyPath,
         node.extendedProjectQuantity,
+        node.parentPartNumber,
       ]
     );
   }
@@ -1427,9 +1491,20 @@ describe('recursive Production Launch persistence against PostgreSQL', () => {
 
 describe('actual production launch service against PostgreSQL', () => {
   let fixture: Fixture;
+  let launchAuthority: ProductionLaunchAuthorityInput;
   beforeAll(async () => {
     process.env.P2_V2_PRODUCTION_LAUNCH_ENABLED = 'true';
-    fixture = await createFixture();
+    fixture = await createFixture(baseProjectId, 'A', {
+      prepareCanonicalLaunch: true,
+    });
+    const preview = await getProductionLaunchPreview(fixture.projectId);
+    expect(preview.blockers).toEqual([]);
+    expect(preview.resultChecksum).toBe(fixture.preparedLaunchDigest);
+    launchAuthority = {
+      expectedPreviewDigest: preview.resultChecksum,
+      signatureMeaning:
+        'Certify the integrated recursive authority and production execution launch.',
+    };
   });
 
   it('keeps readiness and release current after PostgreSQL jsonb key normalization', async () => {
@@ -1476,6 +1551,11 @@ describe('actual production launch service against PostgreSQL', () => {
       serials: 0,
       orders: 0,
       launches: 0,
+      demands: 0,
+      allocations: 0,
+      dependencies: 0,
+      launch_events: 0,
+      execution_links: 0,
     });
   });
 
@@ -1493,7 +1573,8 @@ describe('actual production launch service against PostgreSQL', () => {
         actor,
         (current) => {
           if (current === point) throw new Error(`CERTIFICATION_${point}`);
-        }
+        },
+        launchAuthority
       )
     ).rejects.toThrow(`CERTIFICATION_${point}`);
     expect(await cleanLaunchState(fixture)).toMatchObject({
@@ -1503,6 +1584,11 @@ describe('actual production launch service against PostgreSQL', () => {
       serials: 0,
       orders: 0,
       launches: 0,
+      demands: 0,
+      allocations: 0,
+      dependencies: 0,
+      launch_events: 0,
+      execution_links: 0,
     });
     const audits = await query<{ action: string }>(
       `SELECT action FROM audit_events
@@ -1519,8 +1605,18 @@ describe('actual production launch service against PostgreSQL', () => {
 
   it('serializes concurrent keys, permits same-key retry, and rejects a conflict', async () => {
     const results = await Promise.allSettled([
-      launchProduction(fixture.projectId, 'concurrent-key-a', actor),
-      launchProduction(fixture.projectId, 'concurrent-key-b', actor),
+      launchProduction(
+        fixture.projectId,
+        'concurrent-key-a',
+        actor,
+        launchAuthority
+      ),
+      launchProduction(
+        fixture.projectId,
+        'concurrent-key-b',
+        actor,
+        launchAuthority
+      ),
     ]);
     expect(
       results.filter((result) => result.status === 'fulfilled')
@@ -1534,10 +1630,20 @@ describe('actual production launch service against PostgreSQL', () => {
       [fixture.projectId]
     );
     await expect(
-      launchProduction(fixture.projectId, launch.rows[0].idempotency_key, actor)
+      launchProduction(
+        fixture.projectId,
+        launch.rows[0].idempotency_key,
+        actor,
+        launchAuthority
+      )
     ).resolves.toMatchObject({ projectStatus: 'IN_PRODUCTION' });
     await expect(
-      launchProduction(fixture.projectId, 'conflicting-key', actor)
+      launchProduction(
+        fixture.projectId,
+        'conflicting-key',
+        actor,
+        launchAuthority
+      )
     ).rejects.toBeInstanceOf(ProjectPreproductionError);
   });
 
@@ -1567,6 +1673,27 @@ describe('actual production launch service against PostgreSQL', () => {
       { sku: 'PARENT-A', department: 'Assembly', count: 2 },
     ]);
     expect(orders.rows.some((entry) => entry.sku === 'BUY-A')).toBe(false);
+    const canonicalMakeDemands = await query<{
+      part_number: string;
+      gross_required_quantity: string;
+    }>(
+      `SELECT part_number,SUM(gross_required_quantity)::text gross_required_quantity
+       FROM project_production_demands
+       WHERE project_id=$1 AND disposition='MAKE'
+       GROUP BY part_number ORDER BY part_number`,
+      [fixture.projectId]
+    );
+    expect(
+      canonicalMakeDemands.rows.map((entry) => ({
+        partNumber: entry.part_number,
+        quantity: Number(entry.gross_required_quantity),
+      }))
+    ).toEqual([
+      { partNumber: 'CHILD-A', quantity: 4 },
+      { partNumber: 'CUT-A', quantity: 2 },
+      { partNumber: 'LAYUP-A', quantity: 2 },
+      { partNumber: 'PARENT-A', quantity: 2 },
+    ]);
     const lifecycle = await query<{
       step_type: string;
       step_order: number;

@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 
+import { AuthService } from '../../auth';
 import { getUserPermissions } from '../services/permissionService';
 import {
   areP2WadTravelerDecisionReadsEnabled,
@@ -80,29 +81,43 @@ const exceptionApprovalSchema = z.object({
   signatureMeaning: z.string().min(1),
 });
 
-function actor(req: Request): WadAuthorizationActor {
-  if (!req.user?.id || !req.user?.username || !req.user?.role)
+async function actor(req: Request): Promise<WadAuthorizationActor> {
+  if (!req.user?.id)
     throw new ProjectWadAuthorizationError(
       'ACTOR_REQUIRED',
       'Authenticated actor identity is required.',
       401
     );
-  if (!req.user.employeeId)
+
+  // Resolve the actor from the authoritative users row for every controlled
+  // request. Long-lived Express sessions and browser tokens may predate an
+  // employee-link repair; trusting only the serialized session payload would
+  // continue to reject an otherwise valid employee until the next login.
+  const currentUser = await AuthService.getUserById(req.user.id);
+  if (!currentUser?.username || !currentUser.role)
+    throw new ProjectWadAuthorizationError(
+      'ACTOR_REQUIRED',
+      'Authenticated actor identity is required.',
+      401
+    );
+  req.user = currentUser;
+
+  if (!currentUser.employeeId)
     throw new ProjectWadAuthorizationError(
       'ACTOR_EMPLOYEE_REQUIRED',
       'An authenticated employee identity is required for controlled WAD actions.',
       403
     );
   return {
-    userId: req.user.id,
-    employeeId: req.user.employeeId ?? null,
-    username: req.user.username,
-    displayName: req.user.username,
-    role: req.user.role,
+    userId: currentUser.id,
+    employeeId: currentUser.employeeId,
+    username: currentUser.username,
+    displayName: currentUser.username,
+    role: currentUser.role,
   };
 }
 async function requireCapability(req: Request, capability: string) {
-  const value = actor(req);
+  const value = await actor(req);
   const { permissionSet } = await getUserPermissions(value.userId, value.role);
   if (!permissionSet.has(capability))
     throw new ProjectWadAuthorizationError(
@@ -141,7 +156,7 @@ router.get('/:authorizationId/traveler-decisions', async (req, res) => {
         'WAD traveler-decision reads are disabled.',
         404
       );
-    actor(req);
+    await actor(req);
     res.json(
       await listWadTravelerDecisions(projectId(req), req.params.authorizationId)
     );

@@ -54,6 +54,15 @@ import {
   type ApprovedTemplateSummary,
 } from '../services/productionControl/productionControlAI.service';
 import { getProjectProductionExecutionGate } from '../services/projectProductionExecutionService';
+import {
+  HistoricP2ManufacturingReleaseError,
+  listHistoricP2ManufacturingReleaseReadiness,
+  releaseHistoricP2ManufacturingWorkOrder,
+  releaseUnrelatedLegacyManufacturingWorkOrder,
+  resolveManufacturingOrderReleaseAuthority,
+  type HistoricP2ReleaseActor,
+  type ManufacturingOrderReleaseAuthority,
+} from '../services/historicP2ManufacturingReleaseService';
 
 type RouteError = Error & {
   code?: string;
@@ -2359,12 +2368,136 @@ router.patch(
 
 // ==================== WAD RELEASE GATE ====================
 
+function historicP2ReleaseActor(req: Request): HistoricP2ReleaseActor {
+  if (!req.user?.id || !req.user.username || !req.user.role) {
+    throw new HistoricP2ManufacturingReleaseError(
+      'AUTHENTICATED_ACTOR_REQUIRED',
+      'An authenticated user is required to release a manufacturing order.',
+      401
+    );
+  }
+  return {
+    userId: req.user.id,
+    employeeId: req.user.employeeId ?? null,
+    displayName: req.user.username,
+    role: req.user.role,
+  };
+}
+
+function sendHistoricP2ReleaseError(res: Response, error: unknown) {
+  if (error instanceof ScopedForbiddenError) {
+    return res.status(403).json(error.payload);
+  }
+  if (error instanceof HistoricP2ManufacturingReleaseError) {
+    return res.status(error.status).json({
+      error: error.code,
+      message: error.message,
+      ...error.details,
+    });
+  }
+  const routeError = error as RouteError;
+  console.error('[HistoricP2ManufacturingRelease] Request failed:', routeError);
+  return res.status(500).json({
+    error: 'HISTORIC_P2_RELEASE_FAILED',
+    message: 'Historic P2 release evidence could not be verified.',
+  });
+}
+
+// GET /api/work-orders/project/:projectId/historic-p2-release-readiness
+// Read-only projection of the exact evidence that the compatibility release will lock and re-check.
+router.get(
+  '/project/:projectId/historic-p2-release-readiness',
+  authenticateToken,
+  requirePermission('work_orders.release'),
+  async (req: Request, res: Response) => {
+    try {
+      const { projectId } = req.params;
+      if (!validateUuid(projectId)) {
+        return res.status(400).json({
+          error: 'INVALID_PROJECT_ID',
+          message: 'Invalid project ID format.',
+        });
+      }
+      await requireScopedCapability(req.user, 'work_orders.release', {
+        projectId,
+      });
+      return res.json(
+        await listHistoricP2ManufacturingReleaseReadiness(projectId)
+      );
+    } catch (error: unknown) {
+      return sendHistoricP2ReleaseError(res, error);
+    }
+  }
+);
+
+// POST /api/work-orders/:id/historic-p2-release
+// Explicit compatibility authority for an existing manufacturing order. It never creates V2 records.
+router.post(
+  '/:id/historic-p2-release',
+  authenticateToken,
+  requirePermission('work_orders.release'),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const expectedProjectId =
+        typeof req.body?.projectId === 'string'
+          ? req.body.projectId.trim()
+          : '';
+      if (!validateUuid(id)) {
+        return res.status(400).json({
+          error: 'INVALID_WORK_ORDER_ID',
+          message: 'Invalid production work order ID format.',
+        });
+      }
+      if (!validateUuid(expectedProjectId)) {
+        return res.status(400).json({
+          error: 'INVALID_PROJECT_ID',
+          message: 'A valid project ID is required.',
+        });
+      }
+
+      const [workOrder] = await db
+        .select({ projectId: productionWorkOrders.projectId })
+        .from(productionWorkOrders)
+        .where(eq(productionWorkOrders.id, id))
+        .limit(1);
+      if (!workOrder) {
+        return res.status(404).json({
+          error: 'WORK_ORDER_NOT_FOUND',
+          message: 'The manufacturing order was not found.',
+        });
+      }
+      await requireScopedCapability(req.user, 'work_orders.release', {
+        projectId: workOrder.projectId,
+      });
+      if (expectedProjectId !== workOrder.projectId) {
+        return res.status(409).json({
+          error: 'WORK_ORDER_PROJECT_MISMATCH',
+          message:
+            'The manufacturing order does not belong to the requested project.',
+        });
+      }
+
+      return res.json(
+        await releaseHistoricP2ManufacturingWorkOrder({
+          workOrderId: id,
+          expectedProjectId: workOrder.projectId,
+          actor: historicP2ReleaseActor(req),
+        })
+      );
+    } catch (error: unknown) {
+      return sendHistoricP2ReleaseError(res, error);
+    }
+  }
+);
+
 // POST /api/work-orders/:id/release — evaluate readiness and flip WAD to RELEASED
 router.post(
   '/:id/release',
   authenticateToken,
   requirePermission('work_orders.release'),
   async (req: Request, res: Response) => {
+    let releaseAuthority: ManufacturingOrderReleaseAuthority | null = null;
     try {
       const { id } = req.params;
 
@@ -2392,6 +2525,24 @@ router.post(
       await requireScopedCapability(releasingUser, 'work_orders.release', {
         projectId: wad.projectId,
       });
+
+      releaseAuthority = await resolveManufacturingOrderReleaseAuthority(id);
+      if (releaseAuthority === 'P2_V2') {
+        return res.status(409).json({
+          error: 'P2_V2_PRODUCTION_RELEASE_READ_ONLY',
+          message:
+            'P2 V2 production release is read-only in this phase and cannot be performed from this endpoint.',
+        });
+      }
+      if (releaseAuthority === 'HISTORIC_P2') {
+        return res.json(
+          await releaseHistoricP2ManufacturingWorkOrder({
+            workOrderId: id,
+            expectedProjectId: wad.projectId,
+            actor: historicP2ReleaseActor(req),
+          })
+        );
+      }
 
       if (wad.status === 'RELEASED') {
         return res
@@ -2423,7 +2574,11 @@ router.post(
         });
       }
 
-      const updated = await storage.updateWorkOrderStatus(id, 'RELEASED');
+      const updated = await releaseUnrelatedLegacyManufacturingWorkOrder({
+        workOrderId: id,
+        expectedProjectId: wad.projectId,
+        expectedStatus: wad.status,
+      });
       console.log(`[WorkOrders] WAD ${id} released to floor`);
 
       const releasingActor = (req as LegacyWorkOrderValue).user;
@@ -2455,8 +2610,12 @@ router.post(
       return res.json(updated);
     } catch (caughtErr: unknown) {
       const err = caughtErr as RouteError;
+      if (err instanceof HistoricP2ManufacturingReleaseError)
+        return sendHistoricP2ReleaseError(res, err);
       if (err instanceof ScopedForbiddenError)
         return res.status(403).json(err.payload);
+      if (releaseAuthority === 'HISTORIC_P2')
+        return sendHistoricP2ReleaseError(res, err);
       console.error('[WorkOrders] Error releasing work order:', err);
       return res
         .status(500)

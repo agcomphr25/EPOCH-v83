@@ -285,7 +285,9 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
  *
  * work_orders.release
  *   Governance: Release a WAD to the production floor and create traveler packages
- *   Routes:     POST /api/work-orders/:id/release
+ *   Routes:     GET  /api/work-orders/project/:projectId/historic-p2-release-readiness
+ *               POST /api/work-orders/:id/release
+ *               POST /api/work-orders/:id/historic-p2-release
  *   Seeded to:  ADMIN, OWNER
  *
  * work_orders.approve_overrun

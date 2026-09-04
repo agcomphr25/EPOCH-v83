@@ -49,7 +49,10 @@ on:
       - 'server/src/services/controlledDocumentPhase2Gate.ts'
       - 'server/src/services/controlledDocumentSchemaReadiness.ts'
       - 'server/src/routes/workOrders.ts'
+      - 'server/src/services/historicP2ManufacturingReleaseService.ts'
       - 'server/storage.ts'
+      - 'server/__tests__/historicP2ManufacturingReleasePostgres.test.ts'
+      - 'server/__tests__/historicP2ManufacturingReleaseRoutes.test.ts'
       - 'server/__tests__/p2V2PostgresCertification.test.ts'
       - 'server/__tests__/controlledDocumentPhase2ApproveRelease.test.ts'
       - 'server/__tests__/controlledDocumentPhase2Postgres.test.ts'
@@ -61,6 +64,9 @@ on:
       - 'server/__tests__/projectWorkflowV2ReadModel.test.ts'
       - 'server/__tests__/projectClosingGate.test.ts'
       - 'client/src/__tests__/P2V2*.component.test.tsx'
+      - 'client/src/components/projects/HistoricP2ManufacturingReleaseCard.tsx'
+      - 'client/src/pages/ProjectDetailPage.tsx'
+      - 'client/src/__tests__/HistoricP2ManufacturingReleaseCard.component.test.tsx'
       - 'scripts/validate-phase10a-static-manifest.js'
       - 'scripts/compare-eslint-baseline.mjs'
       - 'scripts/compare-eslint-baseline.test.mjs'
@@ -427,6 +433,22 @@ jobs:
           npx vitest run
           --config vitest.config.server.ts
           server/__tests__/p2V2LegacyContinuationPostgres.test.ts
+          --reporter=verbose
+
+      - name: Run historic P2 manufacturing release PostgreSQL certification
+        run: >-
+          npx vitest run
+          --config vitest.config.server.ts
+          --no-file-parallelism
+          server/__tests__/historicP2ManufacturingReleasePostgres.test.ts
+          server/__tests__/historicP2ManufacturingReleaseRoutes.test.ts
+          --reporter=verbose
+
+      - name: Run historic P2 manufacturing release component regression
+        run: >-
+          npx vitest run
+          --config vitest.config.client.ts
+          client/src/__tests__/HistoricP2ManufacturingReleaseCard.component.test.tsx
           --reporter=verbose
 
       - name: Run safe snapshot mismatch reporting certification

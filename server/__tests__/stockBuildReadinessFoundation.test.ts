@@ -24,12 +24,15 @@ describe('stock-build readiness foundation', () => {
 
   it('selects UUID readiness authorities without unsupported UUID aggregates', () => {
     const service = read('server/src/services/stockBuildReadinessService.ts');
-    expect(service).not.toMatch(/max\((br|tp)\.id\)/i);
+    expect(service).not.toMatch(/max\((br|pr|tp)\.id\)/i);
     expect(service).toContain(
       'ORDER BY br.effective_from DESC NULLS LAST,br.created_at DESC,br.id::text DESC'
     );
     expect(service).toContain(
       'ORDER BY tp.effective_from DESC NULLS LAST,tp.created_at DESC,tp.id::text DESC'
+    );
+    expect(service).toContain(
+      'ORDER BY pr.updated_at DESC NULLS LAST,pr.created_at DESC,pr.id::text DESC'
     );
   });
 

@@ -50,9 +50,11 @@ async function loadActiveManufacturedStockBuildParts(tx: Queryable) {
             COALESCE((SELECT count(*) FROM part_routings pr WHERE pr.is_active=true AND pr.project_id IS NULL
                         AND (pr.inventory_item_fk=i.id OR pr.inventory_item_id=i.id::text
                              OR lower(pr.part_number)=lower(i.ag_part_number))),0)::int AS active_routing_count,
-            (SELECT max(pr.id) FROM part_routings pr WHERE pr.is_active=true AND pr.project_id IS NULL
+            (SELECT pr.id FROM part_routings pr WHERE pr.is_active=true AND pr.project_id IS NULL
               AND (pr.inventory_item_fk=i.id OR pr.inventory_item_id=i.id::text
-                   OR lower(pr.part_number)=lower(i.ag_part_number))) AS active_routing_id,
+                   OR lower(pr.part_number)=lower(i.ag_part_number))
+              ORDER BY pr.updated_at DESC NULLS LAST,pr.created_at DESC,pr.id::text DESC
+              LIMIT 1) AS active_routing_id,
             COALESCE((SELECT count(*) FROM inventory_item_traceability_policies tp
                       WHERE tp.inventory_item_id=i.id AND tp.status='RELEASED'
                         AND (tp.effective_from IS NULL OR tp.effective_from<=now())

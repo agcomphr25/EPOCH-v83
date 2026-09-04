@@ -868,7 +868,7 @@ export const inventoryItems = pgTable(
     ), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY | FINAL_ASSEMBLY | COMPOSITE | COMPONENT
     // Manufactured items only â€” production level independent of category
     manufacturingLevel: inventoryManufacturingLevelEnum('manufacturing_level'), // COMPONENT | INTERMEDIATE | FINAL
-    // Machined parts only â€” type of machine required to produce the part
+    // Machine-produced parts â€” selected machine name and expected run time
     machineType: text('machine_type'),
     machiningTimeMinutes: integer('machining_time_minutes'),
     // Required receiving documents â€” enforced on acceptance in Receiving Control Center

@@ -26,6 +26,11 @@ import toast from 'react-hot-toast';
 import { Link } from 'wouter';
 import type { InventoryItem, ItemGroup, ManufacturedCategory } from '@shared/schema';
 import { getSupplySourceDashboard, supplySourceDashboardToLegacyDept } from '@shared/schema';
+import {
+  getInventoryMachineRequirementIssues,
+  inventoryCategoryUsesMachineDetails,
+  THREE_D_PRINTING_CUTTING_CATEGORY,
+} from '@shared/utils/inventoryMachineRequirements';
 import { MANUFACTURED_CATEGORY_ORDER, CATEGORY_DISPLAY_NAMES, DASHBOARD_DISPLAY_NAMES } from '@/lib/inventoryConstants';
 import {
   Accordion,
@@ -512,6 +517,11 @@ const InventoryForm = ({
     !selectedInactiveMachine
       ? formData.machineType
       : undefined;
+  const usesMachineDetails = inventoryCategoryUsesMachineDetails(
+    formData.manufacturedCategory
+  );
+  const requiresMachineDetails =
+    formData.manufacturedCategory === THREE_D_PRINTING_CUTTING_CATEGORY;
   const sortedDepartments = React.useMemo(
     () =>
       Array.isArray(departments)
@@ -732,7 +742,7 @@ const InventoryForm = ({
                 value={formData.manufacturedCategory || ''}
                 onValueChange={(value) => {
                   onSelectChange('manufacturedCategory', value);
-                  if (value !== 'MACHINED_PART') {
+                  if (!inventoryCategoryUsesMachineDetails(value)) {
                     onSelectChange('machineType', '');
                     onSelectChange('machiningTimeMinutes', '');
                   }
@@ -756,19 +766,36 @@ const InventoryForm = ({
                 </SelectContent>
               </Select>
             </div>
-            {formData.manufacturedCategory === 'MACHINED_PART' && (
+            {usesMachineDetails && (
               <>
                 <div>
-                  <Label htmlFor="machineType">Machine</Label>
+                  <Label htmlFor="machineType">
+                    Machine{requiresMachineDetails ? ' *' : ''}
+                  </Label>
                   <Select
-                    value={formData.machineType || '_none'}
+                    value={
+                      formData.machineType ||
+                      (requiresMachineDetails ? undefined : '_none')
+                    }
                     onValueChange={(value) => onSelectChange('machineType', value === '_none' ? '' : value)}
                   >
-                    <SelectTrigger id="machineType" data-testid="select-machineType">
-                      <SelectValue placeholder="Select CNC machine" />
+                    <SelectTrigger
+                      id="machineType"
+                      data-testid="select-machineType"
+                      aria-required={requiresMachineDetails}
+                    >
+                      <SelectValue
+                        placeholder={
+                          requiresMachineDetails
+                            ? 'Select a machine'
+                            : 'Select CNC machine'
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="_none">None / Not specified</SelectItem>
+                      {!requiresMachineDetails && (
+                        <SelectItem value="_none">None / Not specified</SelectItem>
+                      )}
                       {selectedInactiveMachine && (
                         <SelectItem value={selectedInactiveMachine.machineName}>
                           {selectedInactiveMachine.machineName}
@@ -790,18 +817,32 @@ const InventoryForm = ({
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="machiningTimeMinutes">Machining Time (minutes)</Label>
+                  <Label htmlFor="machiningTimeMinutes">
+                    {requiresMachineDetails
+                      ? 'Machine Time (minutes) *'
+                      : 'Machining Time (minutes)'}
+                  </Label>
                   <Input
                     id="machiningTimeMinutes"
                     name="machiningTimeMinutes"
                     type="number"
-                    min="0"
+                    min={requiresMachineDetails ? '1' : '0'}
                     step="1"
                     value={formData.machiningTimeMinutes}
                     onChange={onChange}
-                    placeholder="Enter machining time"
+                    placeholder={
+                      requiresMachineDetails
+                        ? 'Enter machine time'
+                        : 'Enter machining time'
+                    }
+                    required={requiresMachineDetails}
                     data-testid="input-machiningTimeMinutes"
                   />
+                  {requiresMachineDetails && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Machine and machine time are required for 3d Printing/Cutting items.
+                    </p>
+                  )}
                 </div>
               </>
             )}
@@ -1769,6 +1810,8 @@ const inventoryFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
   manufacturedCategory: z.enum(['PACKET', 'FOAM_CUTTING', 'THREE_D_PRINTING_CUTTING', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
+  machineType: z.string().optional().nullable(),
+  machiningTimeMinutes: z.string().optional().nullable(),
 }).refine(
   (data) => {
     if (data.itemType === 'MANUFACTURED') return !!data.manufacturedCategory;
@@ -1781,7 +1824,15 @@ const inventoryFormSchema = z.object({
     return true;
   },
   { message: 'Purchased items must not have a manufactured category.', path: ['manufacturedCategory'] }
-);
+).superRefine((data, context) => {
+  for (const issue of getInventoryMachineRequirementIssues(data)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: issue.message,
+      path: [issue.field],
+    });
+  }
+});
 
 function inventoryItemMatchesSearch(item: InventoryItem, searchTerm: string) {
   const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -2803,6 +2854,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         name: formData.name,
         itemType: formData.itemType || (formData.type === 'Manufactured' ? 'MANUFACTURED' : null),
         manufacturedCategory: formData.manufacturedCategory || null,
+        machineType: formData.machineType,
+        machiningTimeMinutes: formData.machiningTimeMinutes,
       });
 
       if (!validation.success) {
@@ -2811,6 +2864,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         return;
       }
 
+      const storesMachineDetails = inventoryCategoryUsesMachineDetails(
+        formData.manufacturedCategory
+      );
       const submitData = {
         agPartNumber: formData.agPartNumber,
         sku: formData.sku || null,
@@ -2876,11 +2932,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         hasOtherDocs: formData.hasOtherDocs,
         assignedToAsset: formData.assignedToAsset || null,
         defaultOrderMethod: formData.defaultOrderMethod || null,
-        machineType: formData.manufacturedCategory === 'MACHINED_PART' && formData.machineType
+        machineType: storesMachineDetails && formData.machineType
           ? formData.machineType
           : null,
-        machiningTimeMinutes: formData.manufacturedCategory === 'MACHINED_PART' && formData.machiningTimeMinutes !== ''
-          ? parseInt(formData.machiningTimeMinutes, 10)
+        machiningTimeMinutes: storesMachineDetails && formData.machiningTimeMinutes !== ''
+          ? Number(formData.machiningTimeMinutes)
           : null,
         shelfLifeControlled: formData.shelfLifeControlled,
         frozenShelfLifeDays: formData.frozenShelfLifeDays !== '' ? parseInt(formData.frozenShelfLifeDays, 10) : null,

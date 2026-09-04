@@ -42,10 +42,18 @@ router.post('/:id/email-preview', requirePermission('purchasing.approve_po'), as
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid vendor PO ID' });
-    const purpose: VendorPoEmailPurpose = req.body?.purpose === 'resend' ? 'resend' : 'issue';
+    const purpose: VendorPoEmailPurpose = req.body?.purpose === 'resend'
+      ? 'resend'
+      : req.body?.purpose === 'rfq'
+        ? 'rfq'
+        : 'issue';
     let vendorPO = await storage.getVendorPO(id);
     if (!vendorPO) return res.status(404).json({ error: 'Vendor PO not found' });
-    const allowedStatuses = purpose === 'issue' ? ['Draft', 'RFQ Sent', 'Quote Received'] : ['Sent', 'Partially Received'];
+    const allowedStatuses = purpose === 'issue'
+      ? ['Draft', 'RFQ Sent', 'Quote Received']
+      : purpose === 'rfq'
+        ? ['Draft', 'RFQ Sent']
+        : ['Sent', 'Partially Received'];
     if (!allowedStatuses.includes(vendorPO.status ?? '')) {
       return res.status(409).json({ error: `Cannot preview a ${purpose} email with status ${vendorPO.status}` });
     }
@@ -2489,7 +2497,13 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       });
     }
 
-    const { recipients: rawRecipients, printOnly } = req.body ?? {};
+    const {
+      recipients: rawRecipients,
+      printOnly,
+      message: emailMessage,
+      attachmentIds: selectedAttachmentIds,
+      previewFingerprint,
+    } = req.body ?? {};
     const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
     const { returnEmail: rfqReplyTo, cc: rfqStandardCc } = await getVendorPoEmailRouting((req as any).user?.email);
     const { to: rfqTo, cc: rfqCc } = deriveToAndCc(
@@ -2525,60 +2539,25 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       });
     }
 
-    // Fetch line items for the RFQ
-    const items = await storage.getVendorPOItems(id);
-
-    // Build items context variables (HTML table for body_html, text list for body_text)
-    const itemsTableRows = items.map((item: any) =>
-      `<tr>
-        <td style="border: 1px solid #ddd; padding: 8px;">${item.lineNumber}</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${item.supplierPartNumber || '-'}</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${item.description || '-'}</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${item.quantity != null ? Number(item.quantity).toFixed(2) : '0.00'}</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${item.vendorUnit || item.uom || '-'}</td>
-      </tr>`
-    ).join('');
-
-    const items_table = items.length > 0
-      ? `<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-        <thead>
-          <tr style="background-color: #f5f5f5;">
-            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Line</th>
-            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Part #</th>
-            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Description</th>
-            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Qty</th>
-            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Unit</th>
-          </tr>
-        </thead>
-        <tbody>${itemsTableRows}</tbody>
-      </table>`
-      : '<p><em>No specific items listed. Please contact us for details.</em></p>';
-
-    const items_list = items.length > 0
-      ? items.map((item: any) => `- ${item.description || 'Item'}: Qty ${item.quantity || 0} ${item.vendorUnit || item.uom || ''}`.trimEnd()).join('\n')
-      : 'No specific items listed. Please contact us for details.';
-
-    const rfqContext = {
-      po_number: vendorPO.poNumber || `RFQ-${id}`,
-      vendor_name: vendor.name,
-      vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
-      desired_delivery_date: vendorPO.expectedDeliveryDate
-        ? new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()
-        : '',
-      items_table,
-      items_list,
-    };
-
-    const emailResult = await sendCommunication({
-      templateKey: 'vendor_rfq',
-      context: rfqContext,
-      to: rfqTo,
-      cc: rfqCc,
-      replyTo: rfqReplyTo,
+    const attachmentIds = await validateSelectedVendorPoPdfIds(id, selectedAttachmentIds);
+    const preparedRfqEmail = await prepareVendorPoEmail({
+      vendorPo: vendorPO,
+      vendor,
+      purpose: 'rfq',
+      recipients: rawRecipients,
+      message: emailMessage,
+      attachmentIds,
+      userEmail: (req as any).user?.email,
       triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
-      capabilityRequired: 'send_vendor_rfq',
-      orderId: String(id),
     });
+    if (typeof previewFingerprint !== 'string' || previewFingerprint !== preparedRfqEmail.preview.fingerprint) {
+      return res.status(409).json({
+        error: 'Email preview is out of date',
+        message: 'The RFQ email changed after it was previewed. Review the refreshed preview before sending.',
+      });
+    }
+
+    const emailResult = await sendCommunication(preparedRfqEmail.sendOptions);
 
     if (!emailResult.success) {
       console.error('Failed to send RFQ email:', emailResult.error);

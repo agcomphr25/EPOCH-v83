@@ -25,12 +25,18 @@ const upload = multer({
       file.mimetype === 'application/pdf' ||
       file.mimetype.includes('csv');
     if (supported) callback(null, true);
-    else callback(new Error('Only Midway PDF and CSV files are supported'));
+    else
+      callback(
+        new Error(
+          'Only supported customer PO PDFs and Midway CSV files are accepted'
+        )
+      );
   },
 });
 
 function importFile(req: Request): P1ImportFile {
-  if (!req.file) throw new Error('Choose a Midway PDF or cancellation CSV');
+  if (!req.file)
+    throw new Error('Choose a customer PO PDF or Midway cancellation CSV');
   return {
     buffer: req.file.buffer,
     originalname: req.file.originalname,
@@ -91,6 +97,7 @@ router.post(
       const result = await applyP1CustomerPoImport({
         file: importFile(req),
         selectedPoNumbers,
+        dueDate: String(req.body.dueDate ?? '').trim() || null,
         reason,
         actor: {
           ...snapshot,

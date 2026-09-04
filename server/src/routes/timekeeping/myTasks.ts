@@ -23,6 +23,9 @@ const INCOMPLETE_HOURLY_ISSUES = new Set([
 const BILLING_TASK_OWNER_USERNAME = "glennj";
 const BILLING_GRACE_DAYS = 2;
 const BILLING_OVERDUE_DAYS = 3;
+// Historical P1 invoices were handled outside this reminder workflow. Preserve
+// those records while starting reminders with the agreed operational cutover.
+const P1_BILLING_REMINDER_CUTOVER_DATE = "2026-09-03";
 
 function emptyPayrollReviewBatch(): PayrollReviewBatch {
   return {
@@ -269,16 +272,7 @@ async function getP1BillingTasksForUser(user: any) {
               FILTER (WHERE COALESCE(inv.status, '') <> 'VOID'))[1] AS invoice_status,
             COALESCE(BOOL_OR(
               COALESCE(inv.status, '') <> 'VOID'
-              AND (
-                inv.status = 'POSTED'
-                OR EXISTS (
-                  SELECT 1 FROM journal_entries je
-                  WHERE je.reference_uuid = inv.id
-                    AND je.transaction_type = 'AR_INVOICE'
-                    AND COALESCE(je.status, 'POSTED') = 'POSTED'
-                )
-              )
-            ), false) AS has_posted_invoice
+            ), false) AS has_non_void_invoice
           FROM ar_invoices inv
           WHERE EXISTS (
             SELECT 1
@@ -305,7 +299,8 @@ async function getP1BillingTasksForUser(user: any) {
             AND inv.invoice_number = spg.shipment_invoice_number
           )
         ) invoice_match ON true
-        WHERE NOT invoice_match.has_posted_invoice
+        WHERE NOT invoice_match.has_non_void_invoice
+          AND spg.shipped_at >= $3::date
           AND spg.shipped_at <= NOW() - ($1::int * INTERVAL '1 day')
       ),
       unsnoozed_groups AS (
@@ -342,7 +337,7 @@ async function getP1BillingTasksForUser(user: any) {
       ORDER BY MIN(shipped_at) ASC
       LIMIT 25
     `,
-    [BILLING_GRACE_DAYS, BILLING_TASK_OWNER_USERNAME],
+    [BILLING_GRACE_DAYS, BILLING_TASK_OWNER_USERNAME, P1_BILLING_REMINDER_CUTOVER_DATE],
   );
 
   return rows.map((row: any) => {
@@ -353,8 +348,8 @@ async function getP1BillingTasksForUser(user: any) {
     return {
       id: `p1-billing-${row.customer_id}`,
       type: "p1_invoice_posting_group",
-      title: `Post P1 PO invoices: ${row.customer_name}`,
-      description: `${count} ${label} past the ${BILLING_GRACE_DAYS}-day grace period without a posted invoice`,
+      title: `Create P1 PO invoices: ${row.customer_name}`,
+      description: `${count} ${label} past the ${BILLING_GRACE_DAYS}-day grace period without an invoice`,
       employeeName: BILLING_TASK_OWNER_USERNAME,
       createdAt: row.oldest_shipped_at,
       priority: ageDays >= BILLING_OVERDUE_DAYS ? "overdue" : "normal",

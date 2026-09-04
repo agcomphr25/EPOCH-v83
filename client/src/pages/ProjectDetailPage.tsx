@@ -20,6 +20,9 @@ import { useToast } from '@/hooks/use-toast';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
 import P2ProjectDepositsCard from '@/components/p2/P2ProjectDepositsCard';
 import P2V2ProjectWorkflow from '@/components/projects/P2V2ProjectWorkflow';
+import HistoricP2ManufacturingReleaseCard, {
+  isHistoricP2ManufacturingReleaseProject,
+} from '@/components/projects/HistoricP2ManufacturingReleaseCard';
 import { 
   ArrowLeft, 
   CheckCircle2, 
@@ -992,6 +995,15 @@ export default function ProjectDetailPage() {
     enabled: !!id && !!project && isLegacyWorkflow && ['po_received', 'p2_release', 'purchase_review'].includes(project.currentStage || ''),
   });
   const projectSteps = Array.isArray(project?.steps) ? project.steps : [];
+  const linkedHistoricP2PoId =
+    project?.poId ??
+    projectSteps.find((step) => step.stepType === 'p2_order')
+      ?.linkedP2OrderId ??
+    null;
+  const isHistoricP2Workflow = isHistoricP2ManufacturingReleaseProject(
+    effectiveWorkflowVersion,
+    linkedHistoricP2PoId
+  );
   const allProjectStepAttachments = Array.isArray(allStepAttachments) ? allStepAttachments : [];
   const gateStatusGates = Array.isArray(gateStatus?.gates) ? gateStatus.gates : [];
   const traceabilitySerials = Array.isArray(traceability?.serials) ? traceability.serials : [];
@@ -4043,6 +4055,11 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         <TabsContent value="production" className="space-y-4">
+          <HistoricP2ManufacturingReleaseCard
+            projectId={project.id}
+            workflowVersion={effectiveWorkflowVersion}
+            linkedP2PoId={linkedHistoricP2PoId}
+          />
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -4307,7 +4324,7 @@ export default function ProjectDetailPage() {
                             <p className="text-sm font-medium">Manufacturing Structure</p>
                             <div className="flex items-center gap-2">
                               <Badge variant="secondary">BOM driven</Badge>
-                              {!hubProduction.manufacturingWorkOrderAction?.completed &&
+                              {!isHistoricP2Workflow && !hubProduction.manufacturingWorkOrderAction?.completed &&
                                 (hasMissingManufacturingWorkOrder(line.manufacturingHierarchy) ||
                                   Boolean(line.manufacturingHierarchy)) && (
                                 <Button
@@ -4340,7 +4357,7 @@ export default function ProjectDetailPage() {
                           </div>
                           {line.manufacturingHierarchy ? (
                             <>
-                              {!hubProduction.manufacturingWorkOrderAction?.completed &&
+                              {!isHistoricP2Workflow && !hubProduction.manufacturingWorkOrderAction?.completed &&
                                 (!hubProduction.manufacturingWorkOrderAction?.launchId ||
                                   !hubProduction.manufacturingWorkOrderAction?.expectedLaunchDigest ||
                                   !hubProduction.manufacturingWorkOrderAction?.baselineId ||

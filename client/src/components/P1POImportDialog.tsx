@@ -51,6 +51,8 @@ type PreviewGroup = {
 
 type ImportPreview = {
   documentType: 'NEW_PO_PDF' | 'CANCELLATION_CSV';
+  customerCode: 'MIDWAY' | 'RED_HAWK';
+  customerName: string;
   fileName: string;
   duplicateImport: { id: string; status: string; createdAt: string } | null;
   groups: PreviewGroup[];
@@ -64,6 +66,7 @@ type ImportPreview = {
     targetCanceledQuantity: number;
     cancellationDelta: number;
     documentTotal: number | null;
+    requiresDueDate: boolean;
   };
 };
 
@@ -116,7 +119,8 @@ export default function P1POImportDialog({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [selectedPos, setSelectedPos] = useState<Set<string>>(new Set());
-  const [reason, setReason] = useState('MidwayUSA customer document import');
+  const [reason, setReason] = useState('Customer PO document import');
+  const [dueDate, setDueDate] = useState('');
   const [previewing, setPreviewing] = useState(false);
   const [applying, setApplying] = useState(false);
 
@@ -155,11 +159,13 @@ export default function P1POImportDialog({
     setFile(null);
     setPreview(null);
     setSelectedPos(new Set());
-    setReason('MidwayUSA customer document import');
+    setReason('Customer PO document import');
+    setDueDate('');
   };
 
   const handlePreview = async () => {
-    if (!file) return toast.error('Choose a Midway PDF or CSV first');
+    if (!file)
+      return toast.error('Choose a customer PO PDF or Midway CSV first');
     setPreviewing(true);
     try {
       setPreview(await postFile('/api/p1-customer-po-imports/preview', file));
@@ -177,6 +183,9 @@ export default function P1POImportDialog({
   const handleApply = async () => {
     if (!file || !preview) return;
     if (!reason.trim()) return toast.error('Enter an audit reason');
+    if (preview.summary.requiresDueDate && !dueDate) {
+      return toast.error('Enter a due date for this PO');
+    }
     if (
       preview.documentType === 'CANCELLATION_CSV' &&
       selectedReadyCount === 0
@@ -187,6 +196,7 @@ export default function P1POImportDialog({
     try {
       const result = await postFile('/api/p1-customer-po-imports/apply', file, {
         reason: reason.trim(),
+        dueDate: preview.summary.requiresDueDate ? dueDate : '',
         selectedPoNumbers: JSON.stringify(Array.from(selectedPos)),
       });
       if (result.duplicate) {
@@ -224,29 +234,32 @@ export default function P1POImportDialog({
       <DialogTrigger asChild>
         <Button variant="outline" data-testid="button-import-p1-po-document">
           <Upload className="mr-2 h-4 w-4" />
-          Import Midway Document
+          Import Customer PO
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Import Midway P1 PO Document</DialogTitle>
+          <DialogTitle>Import P1 Customer PO Document</DialogTitle>
           <DialogDescription>
-            Upload a new-PO PDF or a cumulative cancellation CSV. Nothing
-            changes until you verify and apply it.
+            Upload a supported customer PO PDF or a Midway cumulative
+            cancellation CSV. Nothing changes until you verify and apply it.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
             <div className="space-y-2">
-              <Label htmlFor="p1-midway-import-file">Midway PDF or CSV</Label>
+              <Label htmlFor="p1-customer-import-file">
+                Customer PO PDF or Midway CSV
+              </Label>
               <Input
-                id="p1-midway-import-file"
+                id="p1-customer-import-file"
                 type="file"
                 accept=".pdf,.csv,application/pdf,text/csv"
                 onChange={(event) => {
                   setFile(event.target.files?.[0] ?? null);
                   setPreview(null);
+                  setDueDate('');
                 }}
               />
             </div>
@@ -307,6 +320,30 @@ export default function P1POImportDialog({
                 </div>
               </div>
 
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground">
+                  Detected customer
+                </div>
+                <div className="font-semibold">{preview.customerName}</div>
+              </div>
+
+              {preview.summary.requiresDueDate && (
+                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <Label htmlFor="p1-import-due-date">EPOCH due date *</Label>
+                  <Input
+                    id="p1-import-due-date"
+                    type="date"
+                    value={dueDate}
+                    onChange={(event) => setDueDate(event.target.value)}
+                  />
+                  <p className="text-xs text-amber-900">
+                    This customer document does not include a requested delivery
+                    date. Enter the date EPOCH should use before creating the
+                    PO.
+                  </p>
+                </div>
+              )}
+
               {preview.duplicateImport && (
                 <div className="flex gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
@@ -361,7 +398,11 @@ export default function P1POImportDialog({
                         <thead className="border-y bg-muted/30 text-left text-xs text-muted-foreground">
                           <tr>
                             <th className="p-3">AG product</th>
-                            <th className="p-3">Midway #</th>
+                            <th className="p-3">
+                              {preview.customerCode === 'MIDWAY'
+                                ? 'Midway #'
+                                : 'Customer item #'}
+                            </th>
                             <th className="p-3">Original</th>
                             {preview.documentType === 'CANCELLATION_CSV' && (
                               <>
@@ -495,6 +536,7 @@ export default function P1POImportDialog({
                 applying ||
                 !!preview.duplicateImport ||
                 preview.summary.readyPoCount === 0 ||
+                (preview.summary.requiresDueDate && !dueDate) ||
                 (preview.documentType === 'CANCELLATION_CSV' &&
                   selectedReadyCount === 0)
               }

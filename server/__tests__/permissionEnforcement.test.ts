@@ -32,6 +32,7 @@ interface DbFromChain {
 
 vi.mock('../src/services/permissionService', () => ({
   getUserPermissions: vi.fn<(userId: number, role?: string) => Promise<ResolvedPermissions>>(),
+  userHasScopedCapability: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../middleware/auth', () => ({
@@ -69,7 +70,11 @@ vi.mock('../db', () => {
       insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue([]) }),
       update: vi.fn().mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([]) }) }),
     },
-    pool: { query: vi.fn<(sql: string, params?: unknown[]) => Promise<unknown[]>>().mockResolvedValue([]) },
+    pool: {
+      query: vi
+        .fn<(sql: string, params?: unknown[]) => Promise<unknown[]>>()
+        .mockResolvedValue(Object.assign([], { rows: [] })),
+    },
   };
 });
 
@@ -130,6 +135,18 @@ vi.mock('../src/lib/workOrderReadiness', () => ({
   evaluateWorkOrderReadiness: vi.fn<(id: string) => Promise<ReadinessResult>>(),
 }));
 
+vi.mock('../src/services/historicP2ManufacturingReleaseService', () => ({
+  HistoricP2ManufacturingReleaseError: class HistoricP2ManufacturingReleaseError extends Error {},
+  listHistoricP2ManufacturingReleaseReadiness: vi.fn(),
+  releaseHistoricP2ManufacturingWorkOrder: vi.fn(),
+  releaseUnrelatedLegacyManufacturingWorkOrder: vi.fn(),
+  resolveManufacturingOrderReleaseAuthority: vi.fn(),
+}));
+
+vi.mock('../src/services/auditService', () => ({
+  auditService: { logEvent: vi.fn().mockResolvedValue(undefined) },
+}));
+
 vi.mock('../src/lib/travelerGates', () => ({
   evaluateTravelerStartGates: vi.fn<() => Promise<GateResult>>().mockResolvedValue({ allowed: true }),
   evaluateTravelerFinishGates: vi.fn<() => Promise<GateResult>>().mockResolvedValue({ allowed: true }),
@@ -140,6 +157,10 @@ import { getUserPermissions } from '../src/services/permissionService';
 import { storage } from '../storage';
 import { evaluateWorkOrderReadiness } from '../src/lib/workOrderReadiness';
 import { evaluateTravelerFinishGates } from '../src/lib/travelerGates';
+import {
+  releaseUnrelatedLegacyManufacturingWorkOrder,
+  resolveManufacturingOrderReleaseAuthority,
+} from '../src/services/historicP2ManufacturingReleaseService';
 
 function makeTraveler(overrides: Partial<Traveler> = {}): Traveler {
   return {
@@ -334,18 +355,32 @@ describe('Permission enforcement — work_orders.release', () => {
 
     const readyResult: ReadinessResult = { status: 'READY' };
     vi.mocked(evaluateWorkOrderReadiness).mockResolvedValue(readyResult);
+    vi.mocked(resolveManufacturingOrderReleaseAuthority).mockResolvedValue(
+      'UNRELATED_LEGACY'
+    );
 
     const { db } = await import('../db');
-    vi.mocked(db.select).mockReturnValue(makeDbChain([{ id: WORK_ORDER_ID, status: 'DRAFT' }]));
+    vi.mocked(db.select).mockReturnValue(
+      makeDbChain([
+        { id: WORK_ORDER_ID, projectId: PROJECT_ID, status: 'DRAFT' },
+      ])
+    );
 
     const released = makeTraveler({ status: 'IN_PROGRESS' });
-    vi.mocked(storage.updateWorkOrderStatus).mockResolvedValue(released);
+    vi.mocked(releaseUnrelatedLegacyManufacturingWorkOrder).mockResolvedValue(
+      released as never
+    );
 
     const res = await request(app)
       .post(`/api/work-orders/${WORK_ORDER_ID}/release`)
       .send({});
 
     expect(res.status).toBe(200);
+    expect(releaseUnrelatedLegacyManufacturingWorkOrder).toHaveBeenCalledWith({
+      workOrderId: WORK_ORDER_ID,
+      expectedProjectId: PROJECT_ID,
+      expectedStatus: 'DRAFT',
+    });
   });
 });
 

@@ -250,11 +250,25 @@ router.post('/link-existing', async (req, res) => {
       'projects.wad_authorization.manage'
     );
     const body = draftSchema
-      .extend({ wadId: z.string().uuid() })
+      .extend({
+        wadReference: z.string().trim().min(1).optional(),
+        wadId: z.string().trim().min(1).optional(),
+      })
+      .refine((value) => value.wadReference || value.wadId, {
+        message: 'Existing WAD number or ID is required.',
+        path: ['wadReference'],
+      })
       .parse(req.body);
     res
       .status(201)
-      .json(await linkExistingWad(projectId(req), body.wadId, body, user));
+      .json(
+        await linkExistingWad(
+          projectId(req),
+          body.wadReference || body.wadId!,
+          body,
+          user
+        )
+      );
   } catch (error) {
     fail(res, error);
   }

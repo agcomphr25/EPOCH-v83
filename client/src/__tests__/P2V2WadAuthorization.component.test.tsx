@@ -1,6 +1,9 @@
+// @vitest-environment jsdom
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import P2V2WadAuthorization from '../components/projects/P2V2WadAuthorization';
 
@@ -86,6 +89,7 @@ const model = {
 
 describe('P2V2WadAuthorization', () => {
   beforeEach(() => vi.restoreAllMocks());
+  afterEach(cleanup);
   it('renders inherited requirements, budgets, approvals, blockers and history without Launch Production', async () => {
     vi.stubGlobal(
       'fetch',
@@ -118,5 +122,37 @@ describe('P2V2WadAuthorization', () => {
     expect(
       screen.queryByRole('button', { name: /launch production/i })
     ).not.toBeInTheDocument();
+  });
+
+  it('explains required draft fields without sending an invalid request', async () => {
+    const fetchMock = vi.fn(async (input: unknown) => ({
+      ok: true,
+      json: async () =>
+        String(input).includes('/api/permissions/me')
+          ? { permissions: ['projects.wad_authorization.manage'] }
+          : { ...model, authorization: null, wad: null },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <P2V2WadAuthorization projectId="p1" />
+      </QueryClientProvider>
+    );
+    fireEvent.click(screen.getByTestId('open-wad-authorization'));
+    const create = await screen.findByRole('button', {
+      name: 'Create WAD Draft',
+    });
+    const callsBeforeCreate = fetchMock.mock.calls.length;
+    fireEvent.click(create);
+    expect(
+      screen.getByText(/Complete the required WAD fields: department/)
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(callsBeforeCreate);
+    expect(
+      screen.getByLabelText('Existing WAD number or ID')
+    ).toBeInTheDocument();
   });
 });

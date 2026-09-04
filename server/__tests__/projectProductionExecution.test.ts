@@ -256,7 +256,8 @@ describe('Phase 9A Production execution controls', () => {
     expect(service).not.toContain('INSERT INTO shipment');
   });
   it('keeps Stages 9 and 10 read-only', () => {
-    expect(workflow).toContain("stage.stepType === 'production_quality'");
+    expect(workflow).toContain("case 'quality_product_release':");
+    expect(workflow).toContain("case 'shipping_project_closeout':");
     expect(service).not.toContain("step_type='final");
     expect(service).not.toContain("step_type='shipping");
   });

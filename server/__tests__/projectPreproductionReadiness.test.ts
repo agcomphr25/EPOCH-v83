@@ -270,7 +270,9 @@ describe('Phase 8C integration safety contract', () => {
     expect(transaction).toContain(
       'priorLaunch.idempotency_key === idempotencyKey'
     );
-    expect(transaction).toContain("production_evidence ? 'createdSerializedItemIds'");
+    expect(transaction).toContain(
+      "production_evidence ? 'createdSerializedItemIds'"
+    );
     expect(transaction).toContain('priorLaunch.execution_completed');
     expect(transaction).toContain(
       'CANONICAL_PRODUCTION_LAUNCH_REQUIRES_CONFIRMATION'

@@ -532,8 +532,24 @@ function AddQueueItemDialog({
     queryFn: () => apiRequest('/api/stock-build-readiness/parts'),
     enabled: isOpen,
   });
+  const { data: routingDepartments = [] } = useQuery<
+    SharedManufacturingDepartment[]
+  >({
+    queryKey: ['/api/shared-departments', 'stock-build-routing'],
+    queryFn: () => apiRequest('/api/shared-departments?routingOnly=true'),
+    enabled: isOpen,
+  });
   const parts = data?.parts ?? [];
   const selectedPart = parts.find((part) => part.id === selectedPartId);
+  const selectedRoutingDepartment = routingDepartments.find((department) => {
+    if (!selectedPart?.defaultDepartmentName) return false;
+    const configuredIdentities = getManufacturingDepartmentIdentities(
+      department.name
+    );
+    return getManufacturingDepartmentIdentities(
+      selectedPart.defaultDepartmentName
+    ).some((identity) => configuredIdentities.includes(identity));
+  });
   const createDraft = useMutation({
     mutationFn: () =>
       apiRequest('/api/stock-build-readiness/drafts', {
@@ -771,7 +787,9 @@ function AddQueueItemDialog({
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div>
-                  {selectedPart.defaultDepartmentName ?? 'No department'} · BOM{' '}
+                  {selectedRoutingDepartment?.name ??
+                    selectedPart.defaultDepartmentName ??
+                    'No active routing department'}{' · BOM '}
                   {selectedPart.releasedBomCount} · Routing{' '}
                   {selectedPart.activeRoutingCount} · Traceability policy{' '}
                   {selectedPart.releasedTraceabilityPolicyCount}

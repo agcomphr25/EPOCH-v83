@@ -270,6 +270,8 @@ const KNOWN_DUPLICATE_PREFIXES = new Set<string>([
   '0210', // Three merged migrations already share 0210; preserve them and put Phase 8C corrections in 0212
   '0222', // 0222_p2_v2_quality_product_release.sql vs 0222_vendor_scope_approved_for.sql — parallel development (P2 V2 quality release + vendor scope approval merged in the same window)
   '0301', // 0301_p2_manufacturing_work_order_queue_foundation.sql vs 0301_repair_0171_manufacturing_bypass.sql — parallel work order queue foundation + 0171 manufacturing bypass repair merged in the same window
+  '0324', // 0324_p2_work_order_management.sql vs 0324_project_step_off_system_evidence.sql — parallel P2 work-order management + off-system workflow evidence
+  '0325', // 0325_canonical_manufacturing_queue_departments.sql vs 0325_employee_machine_qualifications.sql — parallel manufacturing department + employee qualification work
 ]);
 
 describe('Migration file structure', () => {

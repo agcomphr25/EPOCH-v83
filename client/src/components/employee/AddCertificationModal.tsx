@@ -60,7 +60,7 @@ export default function AddCertificationModal({
 
   const createEmployeeCertificationMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const response = await fetch('/api/employee-certifications', {
+      const response = await fetch('/api/employees/certifications', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,7 +76,7 @@ export default function AddCertificationModal({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/employee-certifications', { employeeId }],
+        queryKey: ['/api/employees/certifications', { employeeId }],
       });
       setIsOpen(false);
       setFormData({

@@ -251,7 +251,7 @@ export default function TrainingManagement() {
   // Create evaluation mutation
   const createEvaluationMutation = useMutation({
     mutationFn: async (evaluationData: any) => {
-      return apiRequest('/api/evaluations', {
+      return apiRequest('/api/employees/evaluations', {
         method: 'POST',
         body: JSON.stringify(evaluationData),
       });

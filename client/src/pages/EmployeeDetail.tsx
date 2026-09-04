@@ -323,7 +323,7 @@ function CertificationCard({
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/employee-certifications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/employees/certifications'] });
       setSelectedFile(null);
       toast({
         title: 'Success',
@@ -356,7 +356,7 @@ function CertificationCard({
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/employee-certifications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/employees/certifications'] });
       toast({
         title: 'Success',
         description: 'File deleted successfully',
@@ -385,7 +385,7 @@ function CertificationCard({
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/employee-certifications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/employees/certifications'] });
       setShowDeleteConfirm(false);
       toast({
         title: 'Success',
@@ -683,10 +683,10 @@ export default function EmployeeDetail() {
   }, [employeeChargeCodes]);
 
   const { data: certifications = [] } = useQuery({
-    queryKey: ['/api/employee-certifications', { employeeId: id }],
+    queryKey: ['/api/employees/certifications', { employeeId: id }],
     queryFn: async () => {
       const response = await fetch(
-        `/api/employee-certifications?employeeId=${id}`
+        `/api/employees/certifications?employeeId=${id}`
       );
       if (!response.ok) throw new Error('Failed to fetch certifications');
       return response.json();
@@ -695,9 +695,9 @@ export default function EmployeeDetail() {
   });
 
   const { data: evaluations = [] } = useQuery({
-    queryKey: ['/api/evaluations', { employeeId: id }],
+    queryKey: ['/api/employees/evaluations', { employeeId: id }],
     queryFn: async () => {
-      const response = await fetch(`/api/evaluations?employeeId=${id}`);
+      const response = await fetch(`/api/employees/evaluations?employeeId=${id}`);
       if (!response.ok) throw new Error('Failed to fetch evaluations');
       return response.json();
     },

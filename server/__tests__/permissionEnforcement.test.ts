@@ -155,6 +155,7 @@ vi.mock('../src/lib/travelerGates', () => ({
 
 import { getUserPermissions } from '../src/services/permissionService';
 import { storage } from '../storage';
+import { evaluateWorkOrderLaborStatus } from '../src/helpers/laborBudgetHelper';
 import { evaluateWorkOrderReadiness } from '../src/lib/workOrderReadiness';
 import { evaluateTravelerFinishGates } from '../src/lib/travelerGates';
 import {
@@ -414,6 +415,15 @@ describe('Permission enforcement — work_orders.approve_overrun', () => {
 
   it('proceeds past permission gate when user has work_orders.approve_overrun', async () => {
     allow('work_orders.approve_overrun');
+    vi.mocked(evaluateWorkOrderLaborStatus).mockResolvedValue({
+      totalHours: 110,
+      departmentHours: null,
+      totalBudget: 100,
+      departmentBudget: null,
+      percentUsed: 110,
+      departmentPercentUsed: null,
+      status: 'BLOCKED',
+    });
 
     const supervisor = { id: 1, name: 'Admin User', employeeCode: 'SUP001', userRole: 'ADMIN' };
     const wad = { id: WORK_ORDER_ID, status: 'IN_PROGRESS' };

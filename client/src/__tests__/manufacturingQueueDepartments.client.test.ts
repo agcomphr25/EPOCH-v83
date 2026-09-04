@@ -22,16 +22,30 @@ const queueRoute = readFileSync(
 
 describe('Manufacturing Queue department selector', () => {
   it('loads all shared departments before applying production queue eligibility', () => {
-    expect(source).toContain(
+    const queueSelectorSource = source.slice(
+      0,
+      source.indexOf('function AddQueueItemDialog')
+    );
+    expect(queueSelectorSource).toContain(
       "apiRequest('/api/shared-departments?includeInactive=true')"
     );
-    expect(source).not.toContain(
+    expect(queueSelectorSource).not.toContain(
       "apiRequest('/api/shared-departments?routingOnly=true')"
     );
     expect(source).toContain('department.productionEnabled !== false');
     expect(source).toContain(
       'sharedDepartments\n        .filter((department) => department.name.trim().length > 0)'
     );
+  });
+
+  it('loads routing-enabled departments for stock-build readiness', () => {
+    const stockBuildSource = source.slice(
+      source.indexOf('function AddQueueItemDialog')
+    );
+    expect(stockBuildSource).toContain(
+      "apiRequest('/api/shared-departments?routingOnly=true')"
+    );
+    expect(stockBuildSource).toContain('selectedRoutingDepartment');
   });
 
   it('derives every canonical manufacturing fallback from the shared route definitions', () => {

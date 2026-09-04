@@ -1964,7 +1964,7 @@ const SUPERVISOR_ROLES = ['ADMIN', 'OWNER', 'SUPERVISOR'];
 router.post(
   '/:id/approve-overrun',
   authenticateToken,
-  requirePermission('work_orders.override_charges'),
+  requirePermission('work_orders.approve_overrun'),
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -2088,7 +2088,7 @@ router.post(
         | undefined;
       await requireScopedCapability(
         requestingUser,
-        'work_orders.override_charges',
+        'work_orders.approve_overrun',
         { department: canonicalDept, projectId: wad.projectId }
       );
 

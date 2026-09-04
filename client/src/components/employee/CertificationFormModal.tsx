@@ -119,7 +119,7 @@ export default function CertificationFormModal({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/employee-certifications', { employeeId }],
+        queryKey: ['/api/employees/certifications', { employeeId }],
       });
       queryClient.invalidateQueries({
         queryKey: ['/api/training/matrix'],

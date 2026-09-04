@@ -209,10 +209,10 @@ export default function EmployeePortal() {
   });
 
   const { data: certifications = [] } = useQuery({
-    queryKey: ['/api/employee-certifications', { employeeId: employee?.id }],
+    queryKey: ['/api/employees/certifications', { employeeId: employee?.id }],
     queryFn: async () => {
       const response = await fetch(
-        `/api/employee-certifications?employeeId=${employee.id}`
+        `/api/employees/certifications?employeeId=${employee.id}`
       );
       if (!response.ok) throw new Error('Failed to fetch certifications');
       return response.json();
@@ -221,10 +221,10 @@ export default function EmployeePortal() {
   });
 
   const { data: evaluations = [] } = useQuery({
-    queryKey: ['/api/evaluations', { employeeId: employee?.id }],
+    queryKey: ['/api/employees/evaluations', { employeeId: employee?.id }],
     queryFn: async () => {
       const response = await fetch(
-        `/api/evaluations?employeeId=${employee.id}`
+        `/api/employees/evaluations?employeeId=${employee.id}`
       );
       if (!response.ok) throw new Error('Failed to fetch evaluations');
       return response.json();

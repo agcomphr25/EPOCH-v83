@@ -43,7 +43,7 @@ export default function AddEvaluationModal({
 
   const createEvaluationMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const response = await fetch('/api/evaluations', {
+      const response = await fetch('/api/employees/evaluations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -62,7 +62,7 @@ export default function AddEvaluationModal({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/evaluations', { employeeId }],
+        queryKey: ['/api/employees/evaluations', { employeeId }],
       });
       setIsOpen(false);
       setFormData({

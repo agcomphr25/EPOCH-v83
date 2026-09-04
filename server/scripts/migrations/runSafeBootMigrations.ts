@@ -375,6 +375,7 @@ export const safeMigrationFiles = [
   '0323_reconcile_converted_project_history.sql',
   '0324_project_step_off_system_evidence.sql',
   '0324_p2_work_order_management.sql',
+  '0325_employee_machine_qualifications.sql',
   'investigation_308_order_duplication.sql',
 ];
 
@@ -499,6 +500,7 @@ export const criticalMigrationFiles = new Set([
   '0323_reconcile_converted_project_history.sql',
   '0324_project_step_off_system_evidence.sql',
   '0324_p2_work_order_management.sql',
+  '0325_employee_machine_qualifications.sql',
 ]);
 
 export async function runSafeBootMigrations() {

@@ -630,6 +630,10 @@ router.get('/certifications-matrix', async (req: Request, res: Response) => {
 // All Evaluations - Get all employees with their evaluations (MUST be before /:id)
 router.get('/evaluations', async (req: Request, res: Response) => {
   try {
+    const employeeId = req.query.employeeId ? Number(req.query.employeeId) : null;
+    if (employeeId !== null && !Number.isInteger(employeeId)) {
+      return res.status(400).json({ error: 'Invalid employeeId' });
+    }
     const result = await pool.query(`
       SELECT 
         e.id as "employeeId",
@@ -650,8 +654,9 @@ router.get('/evaluations', async (req: Request, res: Response) => {
       FROM employees e
       LEFT JOIN evaluations ev ON e.id = ev.employee_id
       WHERE e.is_active = true
+        AND ($1::integer IS NULL OR e.id = $1)
       ORDER BY e.name, ev.evaluation_period_end DESC
-    `);
+    `, [employeeId]);
 
     res.json(result || []);
   } catch (error) {
@@ -868,6 +873,10 @@ router.delete(
 // Get all employee certifications (MUST be before /:id to avoid route collision)
 router.get('/certifications', async (req: Request, res: Response) => {
   try {
+    const employeeId = req.query.employeeId ? Number(req.query.employeeId) : null;
+    if (employeeId !== null && !Number.isInteger(employeeId)) {
+      return res.status(400).json({ error: 'Invalid employeeId' });
+    }
     const result = await pool.query(
       `SELECT 
         ec.id,
@@ -882,7 +891,9 @@ router.get('/certifications', async (req: Request, res: Response) => {
       FROM employee_certifications ec
       JOIN employees e ON ec.employee_id = e.id
       JOIN certifications c ON ec.certification_id = c.id
-      ORDER BY e.name, c.name`
+      WHERE ($1::integer IS NULL OR ec.employee_id = $1)
+      ORDER BY e.name, c.name`,
+      [employeeId]
     );
     res.json(result);
   } catch (error) {

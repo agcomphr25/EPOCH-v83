@@ -220,6 +220,18 @@ async function handleAuthError(status: number, url: string): Promise<boolean> {
   return true;
 }
 
+async function isAuthenticationFailure(response: Response): Promise<boolean> {
+  if (response.status === 401) return true;
+  if (response.status !== 403) return false;
+  try {
+    const body = await response.clone().json();
+    return body?.error === 'Invalid or expired token' ||
+      body?.error === 'Authentication required';
+  } catch {
+    return false;
+  }
+}
+
 export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
   const baseUrl = import.meta.env.VITE_API_URL || '';
   const fullUrl = `${baseUrl}${url}`;
@@ -293,7 +305,7 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
 
     if (!response.ok) {
       // ── 401/403 recovery ──────────────────────────────────────────────────
-      if ((response.status === 401 || response.status === 403) && !_isRetry) {
+      if ((await isAuthenticationFailure(response)) && !_isRetry) {
         const shouldRetry = await handleAuthError(response.status, url);
         if (shouldRetry) {
           return apiRequest(url, { ...options, _isRetry: true });
@@ -434,7 +446,7 @@ export const getQueryFn: <T>(options: {
       }
 
       // ── 401/403 recovery (for TanStack Query fetches) ──────────────────────
-      if ((res.status === 401 || res.status === 403) && !url.includes('/api/auth/')) {
+      if ((await isAuthenticationFailure(res)) && !url.includes('/api/auth/')) {
         console.warn(`[AUTH] Query returned ${res.status} for ${url}`);
         const shouldRetry = await handleAuthError(res.status, url);
         if (shouldRetry) {

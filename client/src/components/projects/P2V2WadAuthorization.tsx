@@ -27,8 +27,21 @@ async function request(url: string, init?: { method?: string; body?: string }) {
     ...init,
   });
   const body = await response.json();
-  if (!response.ok)
-    throw new Error(body.message || body.error || 'WAD Authorization failed.');
+  if (!response.ok) {
+    const fieldMessages = Object.entries(
+      body.details?.fieldErrors ?? {}
+    ).flatMap(([field, messages]) =>
+      (Array.isArray(messages) ? messages : []).map(
+        (message) => `${field}: ${message}`
+      )
+    );
+    throw new Error(
+      body.message ||
+        fieldMessages.join(' ') ||
+        body.error ||
+        'WAD Authorization failed.'
+    );
+  }
   return body;
 }
 
@@ -99,6 +112,30 @@ export default function P2V2WadAuthorization({
     financeRequired,
     executiveRequired,
   };
+  function validateDraft() {
+    const missing = [
+      [department, 'department'],
+      [hours, 'labor hours'],
+      [chargeCodeId, 'active charge-code ID'],
+      [materialBudget, 'material budget'],
+      [outsideBudget, 'outside-processing budget'],
+      [startDate, 'start date'],
+      [dueDate, 'due date'],
+      [risk, 'risk'],
+      [riskOwner, 'risk owner'],
+      [riskControl, 'risk control'],
+    ].filter(([entry]) => !entry.trim());
+    if (missing.length) {
+      setError(
+        `Complete the required WAD fields: ${missing
+          .map(([, label]) => label)
+          .join(', ')}.`
+      );
+      return false;
+    }
+    setError('');
+    return true;
+  }
   async function act(suffix: string, body: Row = {}, method = 'POST') {
     try {
       setError('');
@@ -542,28 +579,32 @@ export default function P2V2WadAuthorization({
                   {canManage && (
                     <div className="flex flex-wrap gap-2">
                       <Button
-                        onClick={() => act('/create-draft', draftPayload)}
+                        onClick={() =>
+                          validateDraft() && act('/create-draft', draftPayload)
+                        }
                       >
                         Create WAD Draft
                       </Button>
                       <Input
                         className="max-w-sm"
-                        placeholder="Existing WAD ID"
+                        aria-label="Existing WAD number or ID"
+                        placeholder="Existing WAD number or ID"
                         value={existingWadId}
                         onChange={(event) =>
                           setExistingWadId(event.target.value)
                         }
                       />
                       <Button
-                        disabled={!existingWadId}
+                        disabled={!existingWadId.trim()}
                         variant="outline"
-                        onClick={() =>
+                        onClick={() => {
+                          if (!validateDraft()) return;
                           act('/link-existing', {
                             ...draftPayload,
-                            wadId: existingWadId,
+                            wadReference: existingWadId.trim(),
                             confirmation: 'LINK_MATCHING_BASELINE',
-                          })
-                        }
+                          });
+                        }}
                       >
                         Link Existing WAD
                       </Button>

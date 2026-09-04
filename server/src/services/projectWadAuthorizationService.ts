@@ -545,7 +545,7 @@ export async function createWadDraft(
 
 export async function linkExistingWad(
   projectId: string,
-  wadId: string,
+  wadReference: string,
   input: WadDraftInput,
   actor: WadAuthorizationActor
 ) {
@@ -562,7 +562,18 @@ export async function linkExistingWad(
         'A current WAD authorization already exists.',
         409
       );
-    await createRevision(projectId, input, actor, tx, 1, wadId);
+    const matchingWads = rows(
+      await tx.execute(
+        sql`SELECT id FROM production_work_orders WHERE project_id=${projectId} AND (id::text=${wadReference} OR work_order_number=${wadReference}) FOR UPDATE`
+      )
+    );
+    if (matchingWads.length !== 1)
+      throw new ProjectWadAuthorizationError(
+        'WAD_NOT_FOUND',
+        'No unique WAD with that number or ID belongs to this project.',
+        404
+      );
+    await createRevision(projectId, input, actor, tx, 1, matchingWads[0].id);
     return readModel(projectId, tx);
   });
 }

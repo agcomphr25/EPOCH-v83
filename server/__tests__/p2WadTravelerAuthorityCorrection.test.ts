@@ -118,6 +118,11 @@ describe('Phase 4 WAD authority correction', () => {
     ])
       expect(routes).toContain(capability);
     expect(routes).toContain('ACTOR_EMPLOYEE_REQUIRED');
+    expect(routes).toContain(
+      'const currentUser = await AuthService.getUserById(req.user.id)'
+    );
+    expect(routes).toContain('req.user = currentUser');
+    expect(routes).toContain('const value = await actor(req)');
     expect(routes).not.toMatch(/inventory\.adjust|projects\.edit/);
     expect(service).toContain('created_by_employee_id');
     expect(service).toContain('actor_employee_id');

@@ -12,6 +12,7 @@ import {
   Search,
   Send,
   Sparkles,
+  FlaskConical,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import ProductionInvestigatorPanel from '@/components/epoch-copilot/ProductionInvestigatorPanel';
 
 type Conversation = {
   id: string;
@@ -101,6 +103,7 @@ function recordTypeLabel(type: RecordCard['type']) {
 }
 
 export default function EpochCopilotPage() {
+  const [workspace, setWorkspace] = useState<'copilot' | 'investigator'>('copilot');
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
@@ -241,6 +244,10 @@ export default function EpochCopilotPage() {
     .reverse()
     .find((message) => message.role === 'user')?.content;
 
+  if (workspace === 'investigator') {
+    return <ProductionInvestigatorPanel onReturnToCopilot={() => setWorkspace('copilot')} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="border-b bg-white">
@@ -258,19 +265,31 @@ export default function EpochCopilotPage() {
               operational training capture.
             </p>
           </div>
-          <Button
-            type="button"
-            onClick={() => createConversationMutation.mutate()}
-            disabled={createConversationMutation.isPending}
-            className="gap-2"
-          >
-            {createConversationMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
-            New Chat
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setWorkspace('investigator')}
+              className="gap-2 border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100"
+            >
+              <FlaskConical className="h-4 w-4" />
+              Production Investigator
+              <Badge variant="outline" className="ml-1 border-amber-400">Experimental</Badge>
+            </Button>
+            <Button
+              type="button"
+              onClick={() => createConversationMutation.mutate()}
+              disabled={createConversationMutation.isPending}
+              className="gap-2"
+            >
+              {createConversationMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              New Chat
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -16857,6 +16857,81 @@ export const epochCopilotDraftGuides = pgTable('epoch_copilot_draft_guides', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Read-only Production Investigator experiment. Kept separate from normal
+// Copilot history so the experiment can be audited or retired independently.
+export const productionInvestigatorConversations = pgTable(
+  'production_investigator_conversations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id'),
+    username: text('username').notNull(),
+    title: text('title').notNull().default('New production investigation'),
+    retentionUntil: timestamp('retention_until').notNull(),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  (table) => ({
+    usernameUpdatedIdx: index(
+      'production_investigator_conversations_username_updated_idx'
+    ).on(table.username, table.updatedAt),
+  })
+);
+
+export const productionInvestigatorMessages = pgTable(
+  'production_investigator_messages',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => productionInvestigatorConversations.id, {
+        onDelete: 'cascade',
+      }),
+    role: text('role').notNull(),
+    content: text('content').notNull(),
+    payload: jsonb('payload'),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => ({
+    conversationCreatedIdx: index(
+      'production_investigator_messages_conversation_created_idx'
+    ).on(table.conversationId, table.createdAt),
+  })
+);
+
+export const productionInvestigatorActivity = pgTable(
+  'production_investigator_activity',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => productionInvestigatorConversations.id, {
+        onDelete: 'cascade',
+      }),
+    messageId: uuid('message_id').references(
+      () => productionInvestigatorMessages.id,
+      { onDelete: 'cascade' }
+    ),
+    traceId: uuid('trace_id').notNull(),
+    sequence: integer('sequence').notNull(),
+    toolName: text('tool_name').notNull(),
+    sanitizedArguments: jsonb('sanitized_arguments').notNull(),
+    rationale: text('rationale').notNull(),
+    status: text('status').notNull(),
+    resultSummary: text('result_summary'),
+    durationMs: integer('duration_ms'),
+    errorCode: text('error_code'),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (table) => ({
+    conversationSequenceIdx: index(
+      'production_investigator_activity_conversation_sequence_idx'
+    ).on(table.conversationId, table.sequence),
+    traceIdx: index('production_investigator_activity_trace_idx').on(
+      table.traceId
+    ),
+  })
+);
+
 // Checklist metadata
 export const checklistMetadata = pgTable('checklist_metadata', {
   id: serial('id').primaryKey(),

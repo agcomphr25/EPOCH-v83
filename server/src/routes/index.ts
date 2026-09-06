@@ -58,6 +58,7 @@ import qualityRoutes from './quality';
 import qmsDesignControlRoutes from './qmsDesignControl';
 import auditReadinessRoutes from './auditReadiness';
 import epochSoftwareValidationRoutes from './epochSoftwareValidation';
+import productionInvestigatorRoutes from './productionInvestigator';
 import engineeringReleasesRoutes from './engineeringReleases';
 import postReleaseEngineeringReleasesRoutes from './postReleaseEngineeringReleases';
 import documentsRoutes from './documents';
@@ -1371,6 +1372,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // EPOCH Copilot routes (ADMIN/OWNER only in Phase 1)
   app.use('/api/epoch-copilot', requireAdminOrOwner, epochCopilotRoutes);
+  app.use('/api/production-investigator', requireAdminOrOwner, productionInvestigatorRoutes);
 
   // Pattern awareness signals routes
   app.use('/api/pattern-signals', patternSignalsRoutes);

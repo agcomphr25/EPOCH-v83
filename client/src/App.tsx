@@ -633,6 +633,9 @@ const ForecastSettings = React.lazy(() => import('./pages/ForecastSettings'));
 const AccountingPrepPage = React.lazy(
   () => import('./pages/AccountingPrepPage')
 );
+const FinanceOperationsPilotPage = React.lazy(
+  () => import('./pages/FinanceOperationsPilotPage')
+);
 const SystemHealthChecksPage = React.lazy(
   () => import('./pages/SystemHealthChecksPage')
 );
@@ -1991,6 +1994,10 @@ function App() {
                         <Route
                           path="/finance/accounting-control"
                           component={AccountingControlCenter}
+                        />
+                        <Route
+                          path="/finance/operations-pilot"
+                          component={FinanceOperationsPilotPage}
                         />
                         <Route
                           path="/finance/payroll-control"

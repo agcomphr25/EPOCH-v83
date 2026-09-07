@@ -6,6 +6,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'wouter';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,17 @@ export default function FinanceOperationsPilotPage() {
           Read-only P2 invoice-candidate simulation. It never queries or
           modifies production records.
         </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" asChild>
+          <Link href="/finance/p2-observation">Real P2 observation</Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href="/finance/billing-recipients">
+            Manage billing recipients
+          </Link>
+        </Button>
       </div>
 
       <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/30">

@@ -1,4 +1,5 @@
 import { buildFinanceEvidenceHash } from './financeDecisionLedger.service';
+import { evaluateP2ArCandidate } from './financeP2CandidatePolicy';
 
 export const FINANCE_SYNTHETIC_SCENARIO_ID = 'SYN-P2-001';
 
@@ -16,12 +17,14 @@ type SyntheticEvidence = {
   customerName: string;
   customerPo: string;
   packingSlipNumber: string;
-  packingSlipStatus: 'COMPLETE';
+  packingSlipStatus: 'SHIPPED';
+  shipDate: string;
   shippedQuantity: number;
   billableQuantity: number;
   unitPrice: number;
   paymentTerms: 'NET_30' | null;
   billingContact: string | null;
+  billingContactDesignated: boolean;
   existingInvoiceCount: number;
 };
 
@@ -41,12 +44,14 @@ function baseEvidence(): SyntheticEvidence {
     customerName: 'SYNTHETIC CUSTOMER — NOT A REAL ACCOUNT',
     customerPo: 'SYNTHETIC-PO-001',
     packingSlipNumber: 'SYNTHETIC-PS-001',
-    packingSlipStatus: 'COMPLETE',
+    packingSlipStatus: 'SHIPPED',
+    shipDate: '2099-01-15',
     shippedQuantity: 10,
     billableQuantity: 10,
     unitPrice: 875,
     paymentTerms: 'NET_30',
     billingContact: 'synthetic.billing@example.invalid',
+    billingContactDesignated: true,
     existingInvoiceCount: 0,
   };
 }
@@ -61,20 +66,6 @@ function evidenceForVariant(
   if (variant === 'duplicate-risk') evidence.existingInvoiceCount = 1;
   if (variant === 'source-changed') evidence.billableQuantity = 8;
   return evidence;
-}
-
-function blockersFor(evidence: SyntheticEvidence): string[] {
-  const blockers: string[] = [];
-  if (!evidence.billingContact)
-    blockers.push('Designated billing contact is missing.');
-  if (!evidence.paymentTerms)
-    blockers.push('Customer payment terms are missing.');
-  if (evidence.shippedQuantity !== evidence.billableQuantity) {
-    blockers.push('Shipped quantity does not match billable quantity.');
-  }
-  if (evidence.existingInvoiceCount > 0)
-    blockers.push('A possible duplicate invoice already exists.');
-  return blockers;
 }
 
 function hashEvidence(
@@ -104,7 +95,15 @@ export function buildFinanceSyntheticPilotScenario(
   const evidence = evidenceForVariant(variant);
   const sourceVersion =
     variant === 'source-changed' ? 'synthetic-v2' : 'synthetic-v1';
-  const blockers = blockersFor(evidence);
+  const decision = evaluateP2ArCandidate({
+    ...evidence,
+    customerId: FINANCE_SYNTHETIC_SCENARIO_ID,
+    poNumber: evidence.customerPo,
+    lineCount: 1,
+    pricingComplete: true,
+    isNoChargeReplacement: false,
+  });
+  const blockers = decision.blockers;
   const evidenceHash = hashEvidence(evidence, sourceVersion);
   const approvedEvidenceHash = hashEvidence(baseEvidence(), 'synthetic-v1');
   const sourceChanged = variant === 'source-changed';

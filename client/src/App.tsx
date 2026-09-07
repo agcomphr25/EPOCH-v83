@@ -636,6 +636,12 @@ const AccountingPrepPage = React.lazy(
 const FinanceOperationsPilotPage = React.lazy(
   () => import('./pages/FinanceOperationsPilotPage')
 );
+const FinanceP2ObservationPage = React.lazy(
+  () => import('./pages/FinanceP2ObservationPage')
+);
+const FinanceBillingRecipientsPage = React.lazy(
+  () => import('./pages/FinanceBillingRecipientsPage')
+);
 const SystemHealthChecksPage = React.lazy(
   () => import('./pages/SystemHealthChecksPage')
 );
@@ -1998,6 +2004,14 @@ function App() {
                         <Route
                           path="/finance/operations-pilot"
                           component={FinanceOperationsPilotPage}
+                        />
+                        <Route
+                          path="/finance/p2-observation"
+                          component={FinanceP2ObservationPage}
+                        />
+                        <Route
+                          path="/finance/billing-recipients"
+                          component={FinanceBillingRecipientsPage}
                         />
                         <Route
                           path="/finance/payroll-control"

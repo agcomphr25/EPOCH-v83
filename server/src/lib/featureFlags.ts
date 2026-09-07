@@ -273,6 +273,23 @@ export function areCombinedManufacturingProcessMaterializationWritesEnabled(): b
 }
 
 /**
+ * Finance Operations pilot gates. All three are independent and fail closed.
+ * AI explanations must remain disabled until the approved CMMC/data-boundary
+ * review is complete; deterministic finance workflows do not depend on it.
+ */
+export function isFinanceAttentionCenterEnabled(): boolean {
+  return envBool('FINANCE_ATTENTION_CENTER_ENABLED', false);
+}
+
+export function isFinanceArDraftPreparationEnabled(): boolean {
+  return envBool('FINANCE_AR_DRAFT_PREPARATION_ENABLED', false);
+}
+
+export function isFinanceAiExplanationsEnabled(): boolean {
+  return envBool('FINANCE_AI_EXPLANATIONS_ENABLED', false);
+}
+
+/**
  * Cutover date for the punch_ledger migration.
  * For pay periods starting ON or AFTER this date, hour computations read
  * exclusively from public.punch_ledger.  For periods ending BEFORE this date,

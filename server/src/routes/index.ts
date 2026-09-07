@@ -262,6 +262,7 @@ import arPaymentsRoutes from './arPayments';
 import paymentSettlementsRoutes from './paymentSettlements';
 import arPaymentAttachmentsRoutes from './arPaymentAttachments';
 import apBillsRoutes from './apBills';
+import financeOperationsRoutes from './financeOperations';
 import permissionsRoutes from './permissions';
 import offlineReplayRoutes from './offlineReplay';
 import controlTowerRoutes from './controlTower';
@@ -1648,6 +1649,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/payment-settlements', paymentSettlementsRoutes);
   app.use('/api/ar-payment-attachments', arPaymentAttachmentsRoutes);
   app.use('/api/ap-bills', apBillsRoutes);
+  app.use('/api/finance-operations', financeOperationsRoutes);
   app.use('/api/permissions', permissionsRoutes);
 
   app.use('/api/control-tower', controlTowerRoutes);

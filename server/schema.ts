@@ -35,6 +35,7 @@ import {
   varchar,
   doublePrecision,
   bigint,
+  check,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
@@ -6302,6 +6303,86 @@ export const p2CustomerContacts = pgTable('p2_customer_contacts', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+export const financeBillingRecipients = pgTable(
+  'finance_billing_recipients',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    customerScope: text('customer_scope').notNull(),
+    p1CustomerId: integer('p1_customer_id').references(() => customers.id, {
+      onDelete: 'restrict',
+    }),
+    p2CustomerId: integer('p2_customer_id').references(() => p2Customers.id, {
+      onDelete: 'restrict',
+    }),
+    recipientName: text('recipient_name').notNull(),
+    email: text('email').notNull(),
+    deliveryRole: text('delivery_role').notNull().default('TO'),
+    receivesInvoices: boolean('receives_invoices').notNull().default(true),
+    receivesStatements: boolean('receives_statements').notNull().default(false),
+    receivesCreditMemos: boolean('receives_credit_memos')
+      .notNull()
+      .default(false),
+    active: boolean('active').notNull().default(true),
+    effectiveFrom: date('effective_from')
+      .notNull()
+      .default(sql`CURRENT_DATE`),
+    effectiveUntil: date('effective_until'),
+    changeReason: text('change_reason').notNull(),
+    createdByUserId: integer('created_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    createdByDisplayName: text('created_by_display_name').notNull(),
+    updatedByUserId: integer('updated_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    updatedByDisplayName: text('updated_by_display_name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    p1CustomerIdx: index('finance_billing_recipients_p1_idx')
+      .on(table.p1CustomerId)
+      .where(sql`${table.p1CustomerId} IS NOT NULL`),
+    p2CustomerIdx: index('finance_billing_recipients_p2_idx')
+      .on(table.p2CustomerId)
+      .where(sql`${table.p2CustomerId} IS NOT NULL`),
+    activeInvoiceIdx: index('finance_billing_recipients_active_invoice_idx').on(
+      table.customerScope,
+      table.active,
+      table.receivesInvoices
+    ),
+    uniqueAddress: uniqueIndex('finance_billing_recipients_unique_address').on(
+      table.customerScope,
+      sql`COALESCE(${table.p1CustomerId}, 0)`,
+      sql`COALESCE(${table.p2CustomerId}, 0)`,
+      sql`lower(${table.email})`
+    ),
+    scopeCheck: check(
+      'finance_billing_recipients_scope_check',
+      sql`${table.customerScope} IN ('P1', 'P2')`
+    ),
+    roleCheck: check(
+      'finance_billing_recipients_role_check',
+      sql`${table.deliveryRole} IN ('TO', 'CC')`
+    ),
+    customerCheck: check(
+      'finance_billing_recipients_customer_check',
+      sql`(${table.customerScope} = 'P1' AND ${table.p1CustomerId} IS NOT NULL AND ${table.p2CustomerId} IS NULL) OR (${table.customerScope} = 'P2' AND ${table.p2CustomerId} IS NOT NULL AND ${table.p1CustomerId} IS NULL)`
+    ),
+    effectiveDatesCheck: check(
+      'finance_billing_recipients_effective_dates_check',
+      sql`${table.effectiveUntil} IS NULL OR ${table.effectiveUntil} >= ${table.effectiveFrom}`
+    ),
+  })
+);
+
+export type FinanceBillingRecipient =
+  typeof financeBillingRecipients.$inferSelect;
 
 // P2 Purchase Order Management Tables
 export const p2PurchaseOrders = pgTable('p2_purchase_orders', {

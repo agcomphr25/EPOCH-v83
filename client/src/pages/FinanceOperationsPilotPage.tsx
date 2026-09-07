@@ -72,11 +72,6 @@ export default function FinanceOperationsPilotPage() {
         <Button variant="outline" asChild>
           <Link href="/finance/p2-observation">Real P2 observation</Link>
         </Button>
-        <Button variant="outline" asChild>
-          <Link href="/finance/billing-recipients">
-            Manage billing recipients
-          </Link>
-        </Button>
       </div>
 
       <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/30">

@@ -4317,28 +4317,38 @@ export const customerAddresses = pgTable('customer_addresses', {
   updatedAt: timestamp('updated_at'),
 });
 
-export const customerContacts = pgTable('customer_contacts', {
-  id: serial('id').primaryKey(),
-  customerId: integer('customer_id')
-    .notNull()
-    .references(() => customers.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  title: text('title'),
-  email: text('email'),
-  phone: text('phone'),
-  isPrimary: boolean('is_primary').notNull().default(false),
-  receivesInvoices: boolean('receives_invoices').notNull().default(true),
-  receivesShippingNotifications: boolean('receives_shipping_notifications')
-    .notNull()
-    .default(false),
-  receivesOrderConfirmations: boolean('receives_order_confirmations')
-    .notNull()
-    .default(false),
-  notes: text('notes'),
-  active: boolean('active').notNull().default(true),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const customerContacts = pgTable(
+  'customer_contacts',
+  {
+    id: serial('id').primaryKey(),
+    customerId: integer('customer_id')
+      .notNull()
+      .references(() => customers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    title: text('title'),
+    email: text('email'),
+    phone: text('phone'),
+    isPrimary: boolean('is_primary').notNull().default(false),
+    receivesInvoices: boolean('receives_invoices').notNull().default(false),
+    invoiceDeliveryRole: text('invoice_delivery_role').notNull().default('TO'),
+    receivesShippingNotifications: boolean('receives_shipping_notifications')
+      .notNull()
+      .default(false),
+    receivesOrderConfirmations: boolean('receives_order_confirmations')
+      .notNull()
+      .default(false),
+    notes: text('notes'),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    invoiceDeliveryRoleCheck: check(
+      'customer_contacts_invoice_delivery_role_check',
+      sql`${table.invoiceDeliveryRole} IN ('TO', 'CC')`
+    ),
+  })
+);
 
 // Vendors table for supplier management
 export const vendors = pgTable('vendors', {
@@ -5184,7 +5194,8 @@ export const insertCustomerContactSchema = createInsertSchema(customerContacts)
       ),
     phone: z.string().optional().nullable(),
     isPrimary: z.boolean().default(false),
-    receivesInvoices: z.boolean().default(true),
+    receivesInvoices: z.boolean().default(false),
+    invoiceDeliveryRole: z.enum(['TO', 'CC']).default('TO'),
     receivesShippingNotifications: z.boolean().default(false),
     receivesOrderConfirmations: z.boolean().default(false),
     notes: z.string().optional().nullable(),
@@ -6292,17 +6303,29 @@ export const p2Customers = pgTable('p2_customers', {
 });
 
 // P2 Customer Contacts - Additional contacts for P2 customers
-export const p2CustomerContacts = pgTable('p2_customer_contacts', {
-  id: serial('id').primaryKey(),
-  customerId: integer('customer_id').notNull(),
-  name: text('name').notNull(),
-  title: text('title'),
-  email: text('email'),
-  phone: text('phone'),
-  isPrimary: boolean('is_primary').default(false),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
+export const p2CustomerContacts = pgTable(
+  'p2_customer_contacts',
+  {
+    id: serial('id').primaryKey(),
+    customerId: integer('customer_id').notNull(),
+    name: text('name').notNull(),
+    title: text('title'),
+    email: text('email'),
+    phone: text('phone'),
+    isPrimary: boolean('is_primary').default(false),
+    receivesInvoices: boolean('receives_invoices').notNull().default(false),
+    invoiceDeliveryRole: text('invoice_delivery_role').notNull().default('TO'),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  (table) => ({
+    invoiceDeliveryRoleCheck: check(
+      'p2_customer_contacts_invoice_delivery_role_check',
+      sql`${table.invoiceDeliveryRole} IN ('TO', 'CC')`
+    ),
+  })
+);
 
 export const financeBillingRecipients = pgTable(
   'finance_billing_recipients',
@@ -8642,6 +8665,9 @@ export const insertP2CustomerContactSchema = createInsertSchema(
     email: z.string().email().optional().nullable(),
     phone: z.string().optional().nullable(),
     isPrimary: z.boolean().default(false),
+    receivesInvoices: z.boolean().default(false),
+    invoiceDeliveryRole: z.enum(['TO', 'CC']).default('TO'),
+    active: z.boolean().default(true),
   });
 
 // P2 Purchase Order Insert Schemas

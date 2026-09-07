@@ -105,13 +105,10 @@ export async function observeRealP2ArCandidates(requestedLimit = 100) {
                   '[]'::jsonb
                 ) AS billing_recipients,
                 MAX(updated_at) AS billing_recipient_version
-           FROM finance_billing_recipients
-          WHERE customer_scope = 'P2'
-            AND p2_customer_id = customer.id
+           FROM p2_customer_contacts
+          WHERE customer_id = customer.id
             AND active = true
             AND receives_invoices = true
-            AND effective_from <= CURRENT_DATE
-            AND (effective_until IS NULL OR effective_until >= CURRENT_DATE)
        ) recipients ON true
        LEFT JOIN LATERAL (
          SELECT COUNT(*)::int AS existing_invoice_count
@@ -245,7 +242,7 @@ export async function observeRealP2ArCandidates(requestedLimit = 100) {
       aiUsed: false,
     },
     modelGap:
-      'Legacy general contacts are not promoted automatically. Configure at least one active To recipient in the shared billing-recipient register.',
+      'Configure at least one active invoice To recipient on the P2 customer profile. General contact emails are not used automatically.',
     candidates,
   };
 }

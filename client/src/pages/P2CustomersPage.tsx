@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -47,6 +48,9 @@ interface P2CustomerContact {
   email: string | null;
   phone: string | null;
   isPrimary: boolean;
+  receivesInvoices: boolean;
+  invoiceDeliveryRole: 'TO' | 'CC';
+  active: boolean;
 }
 
 export default function P2CustomersPage() {
@@ -64,6 +68,9 @@ export default function P2CustomersPage() {
     email: '',
     phone: '',
     isPrimary: false,
+    receivesInvoices: false,
+    invoiceDeliveryRole: 'TO' as 'TO' | 'CC',
+    active: true,
   });
   const [formData, setFormData] = useState({
     customerId: '',
@@ -210,6 +217,9 @@ export default function P2CustomersPage() {
       email: '',
       phone: '',
       isPrimary: false,
+      receivesInvoices: false,
+      invoiceDeliveryRole: 'TO',
+      active: true,
     });
   };
 
@@ -866,6 +876,14 @@ export default function P2CustomersPage() {
                             {contact.isPrimary && (
                               <Badge variant="secondary" className="ml-2 text-xs">Primary</Badge>
                             )}
+                            {contact.receivesInvoices && (
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                Invoice {contact.invoiceDeliveryRole || 'TO'}
+                              </Badge>
+                            )}
+                            {!contact.active && (
+                              <Badge variant="outline" className="ml-2 text-xs">Inactive</Badge>
+                            )}
                           </TableCell>
                           <TableCell>{contact.title || '-'}</TableCell>
                           <TableCell>
@@ -897,6 +915,10 @@ export default function P2CustomersPage() {
                                     email: contact.email || '',
                                     phone: contact.phone || '',
                                     isPrimary: contact.isPrimary,
+                                    receivesInvoices: contact.receivesInvoices,
+                                    invoiceDeliveryRole:
+                                      contact.invoiceDeliveryRole || 'TO',
+                                    active: contact.active,
                                   });
                                 }}
                                 data-testid={`button-edit-contact-${contact.id}`}
@@ -977,6 +999,41 @@ export default function P2CustomersPage() {
                 data-testid="input-contact-phone"
               />
             </div>
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="contact-receives-invoices"
+                  checked={contactFormData.receivesInvoices}
+                  onCheckedChange={(checked) =>
+                    setContactFormData({
+                      ...contactFormData,
+                      receivesInvoices: Boolean(checked),
+                    })
+                  }
+                />
+                <Label htmlFor="contact-receives-invoices">Invoice recipient</Label>
+              </div>
+              {contactFormData.receivesInvoices && (
+                <div className="space-y-2">
+                  <Label>Invoice delivery</Label>
+                  <Select
+                    value={contactFormData.invoiceDeliveryRole}
+                    onValueChange={(value: 'TO' | 'CC') =>
+                      setContactFormData({
+                        ...contactFormData,
+                        invoiceDeliveryRole: value,
+                      })
+                    }
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TO">To</SelectItem>
+                      <SelectItem value="CC">CC</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddContactDialog(false)}>Cancel</Button>
@@ -1037,6 +1094,54 @@ export default function P2CustomersPage() {
                 onChange={(e) => setContactFormData({ ...contactFormData, phone: e.target.value })}
                 data-testid="input-edit-contact-phone"
               />
+            </div>
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-contact-receives-invoices"
+                  checked={contactFormData.receivesInvoices}
+                  onCheckedChange={(checked) =>
+                    setContactFormData({
+                      ...contactFormData,
+                      receivesInvoices: Boolean(checked),
+                    })
+                  }
+                />
+                <Label htmlFor="edit-contact-receives-invoices">Invoice recipient</Label>
+              </div>
+              {contactFormData.receivesInvoices && (
+                <div className="space-y-2">
+                  <Label>Invoice delivery</Label>
+                  <Select
+                    value={contactFormData.invoiceDeliveryRole}
+                    onValueChange={(value: 'TO' | 'CC') =>
+                      setContactFormData({
+                        ...contactFormData,
+                        invoiceDeliveryRole: value,
+                      })
+                    }
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TO">To</SelectItem>
+                      <SelectItem value="CC">CC</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-contact-active"
+                  checked={contactFormData.active}
+                  onCheckedChange={(checked) =>
+                    setContactFormData({
+                      ...contactFormData,
+                      active: Boolean(checked),
+                    })
+                  }
+                />
+                <Label htmlFor="edit-contact-active">Active contact</Label>
+              </div>
             </div>
           </div>
           <DialogFooter>

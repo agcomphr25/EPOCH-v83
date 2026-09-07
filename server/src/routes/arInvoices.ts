@@ -1449,6 +1449,7 @@ type InvoiceEmailRecipient = {
   name: string;
   email: string;
   type: 'primary' | 'additional' | 'contact';
+  deliveryRole?: 'TO' | 'CC';
 };
 
 const ACCOUNTING_INVOICE_CC = 'glenn@agadvanced.com';
@@ -1606,12 +1607,14 @@ async function appendCustomerInvoiceRecipients(
   customer: CustomerRecipientSource | null,
 ) {
   if (!customer?.id) return;
+  const startingRecipientCount = recipients.length;
 
   const contacts = await db
     .select({
       name: customerContacts.name,
       email: customerContacts.email,
       isPrimary: customerContacts.isPrimary,
+      deliveryRole: customerContacts.invoiceDeliveryRole,
     })
     .from(customerContacts)
     .where(and(
@@ -1626,12 +1629,17 @@ async function appendCustomerInvoiceRecipients(
       appendRecipient(recipients, {
         name: contact.name,
         email: contact.email,
-        type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
+        type:
+          contact.deliveryRole === 'TO' &&
+          !recipients.some((recipient) => recipient.type === 'primary')
+            ? 'primary'
+            : 'contact',
+        deliveryRole: contact.deliveryRole === 'CC' ? 'CC' : 'TO',
       });
     }
   }
 
-  if (customer.email) {
+  if (recipients.length === startingRecipientCount && customer.email) {
     appendRecipient(recipients, {
       name: customer.contact || customer.name,
       email: customer.email,
@@ -1689,19 +1697,21 @@ async function appendP2CustomerInvoiceRecipients(
   customer: P2CustomerRecipientSource | null,
 ) {
   if (!customer?.id) return;
-
-  if (customer.email) {
-    appendRecipient(recipients, {
-      name: customer.name,
-      email: customer.email,
-      type: recipients.length === 0 ? 'primary' : 'additional',
-    });
-  }
+  const startingRecipientCount = recipients.length;
 
   const contacts = await db
-    .select({ name: p2CustomerContacts.name, email: p2CustomerContacts.email, isPrimary: p2CustomerContacts.isPrimary })
+    .select({
+      name: p2CustomerContacts.name,
+      email: p2CustomerContacts.email,
+      isPrimary: p2CustomerContacts.isPrimary,
+      deliveryRole: p2CustomerContacts.invoiceDeliveryRole,
+    })
     .from(p2CustomerContacts)
-    .where(eq(p2CustomerContacts.customerId, customer.id))
+    .where(and(
+      eq(p2CustomerContacts.customerId, customer.id),
+      eq(p2CustomerContacts.active, true),
+      eq(p2CustomerContacts.receivesInvoices, true),
+    ))
     .orderBy(desc(p2CustomerContacts.isPrimary), p2CustomerContacts.name);
 
   for (const contact of contacts) {
@@ -1709,9 +1719,22 @@ async function appendP2CustomerInvoiceRecipients(
       appendRecipient(recipients, {
         name: contact.name,
         email: contact.email,
-        type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
+        type:
+          contact.deliveryRole === 'TO' &&
+          !recipients.some((recipient) => recipient.type === 'primary')
+            ? 'primary'
+            : 'contact',
+        deliveryRole: contact.deliveryRole === 'CC' ? 'CC' : 'TO',
       });
     }
+  }
+
+  if (recipients.length === startingRecipientCount && customer.email) {
+    appendRecipient(recipients, {
+      name: customer.name,
+      email: customer.email,
+      type: recipients.length === 0 ? 'primary' : 'additional',
+    });
   }
 }
 

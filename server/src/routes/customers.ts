@@ -37,6 +37,7 @@ const customerContactUpdateSchema = z.object({
   phone: z.string().nullable().optional(),
   isPrimary: z.boolean().optional(),
   receivesInvoices: z.boolean().optional(),
+  invoiceDeliveryRole: z.enum(['TO', 'CC']).optional(),
   receivesShippingNotifications: z.boolean().optional(),
   receivesOrderConfirmations: z.boolean().optional(),
   notes: z.string().nullable().optional(),

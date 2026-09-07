@@ -132,6 +132,7 @@ type EmailRecipient = {
   name: string;
   email: string;
   type: 'primary' | 'additional' | 'contact';
+  deliveryRole?: 'TO' | 'CC';
 };
 
 type InvoiceAttachment = {
@@ -392,8 +393,7 @@ export default function InvoiceDetailPage() {
         return true;
       });
       setDialogRecipients(recipients);
-      const primary = recipients.find((recipient) => recipient.type === 'primary');
-      setSelectedRecipients(primary ? [primary.email] : recipients.slice(0, 1).map((recipient) => recipient.email));
+      setSelectedRecipients(recipients.map((recipient) => recipient.email));
     } catch (error: any) {
       toast({ title: 'Recipients unavailable', description: error.message, variant: 'destructive' });
     } finally {

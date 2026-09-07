@@ -2038,6 +2038,33 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ p2_customers column migration skipped:', p2cErr.message);
       }
 
+      // Invoice delivery preferences are ordinary customer-contact fields.
+      try {
+        const { sql: sqlInvoiceContacts } = await import('drizzle-orm');
+        await db.execute(sqlInvoiceContacts`ALTER TABLE customer_contacts ADD COLUMN IF NOT EXISTS invoice_delivery_role TEXT NOT NULL DEFAULT 'TO'`);
+        await db.execute(sqlInvoiceContacts`ALTER TABLE customer_contacts ALTER COLUMN receives_invoices SET DEFAULT false`);
+        await db.execute(sqlInvoiceContacts`ALTER TABLE p2_customer_contacts ADD COLUMN IF NOT EXISTS receives_invoices BOOLEAN NOT NULL DEFAULT false`);
+        await db.execute(sqlInvoiceContacts`ALTER TABLE p2_customer_contacts ADD COLUMN IF NOT EXISTS invoice_delivery_role TEXT NOT NULL DEFAULT 'TO'`);
+        await db.execute(sqlInvoiceContacts`ALTER TABLE p2_customer_contacts ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true`);
+        await db.execute(sqlInvoiceContacts`
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'customer_contacts_invoice_delivery_role_check') THEN
+              ALTER TABLE customer_contacts
+                ADD CONSTRAINT customer_contacts_invoice_delivery_role_check
+                CHECK (invoice_delivery_role IN ('TO', 'CC'));
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'p2_customer_contacts_invoice_delivery_role_check') THEN
+              ALTER TABLE p2_customer_contacts
+                ADD CONSTRAINT p2_customer_contacts_invoice_delivery_role_check
+                CHECK (invoice_delivery_role IN ('TO', 'CC'));
+            END IF;
+          END $$
+        `);
+        console.log('✅ Ensured customer invoice contact preferences');
+      } catch (invoiceContactErr: any) {
+        console.warn('⚠️ customer invoice contact preferences migration skipped:', invoiceContactErr.message);
+      }
+
       // Ensure routing_documents has extracted_text column
       try {
         const { sql: sqlTag } = await import('drizzle-orm');

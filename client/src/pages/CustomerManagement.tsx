@@ -107,6 +107,7 @@ type CustomerContact = {
   phone?: string | null;
   isPrimary: boolean;
   receivesInvoices: boolean;
+  invoiceDeliveryRole: 'TO' | 'CC';
   receivesShippingNotifications: boolean;
   receivesOrderConfirmations: boolean;
   notes?: string | null;
@@ -154,6 +155,7 @@ type ContactFormData = {
   phone: string;
   isPrimary: boolean;
   receivesInvoices: boolean;
+  invoiceDeliveryRole: 'TO' | 'CC';
   receivesShippingNotifications: boolean;
   receivesOrderConfirmations: boolean;
   notes: string;
@@ -186,7 +188,8 @@ const initialContactFormData: ContactFormData = {
   email: '',
   phone: '',
   isPrimary: false,
-  receivesInvoices: true,
+  receivesInvoices: false,
+  invoiceDeliveryRole: 'TO',
   receivesShippingNotifications: false,
   receivesOrderConfirmations: false,
   notes: '',
@@ -1424,6 +1427,7 @@ export default function CustomerManagement() {
       phone: contact.phone || '',
       isPrimary: contact.isPrimary,
       receivesInvoices: contact.receivesInvoices,
+      invoiceDeliveryRole: contact.invoiceDeliveryRole || 'TO',
       receivesShippingNotifications: contact.receivesShippingNotifications,
       receivesOrderConfirmations: contact.receivesOrderConfirmations,
       notes: contact.notes || '',
@@ -2290,7 +2294,7 @@ export default function CustomerManagement() {
                   <div className="text-sm text-muted-foreground">Loading contacts...</div>
                 ) : contacts.length === 0 ? (
                   <div className="text-sm text-muted-foreground italic">
-                    No additional contacts. Invoice sends will fall back to the customer email above.
+                    No additional contacts have been configured.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -2311,7 +2315,11 @@ export default function CustomerManagement() {
                               {contact.phone && <div>{contact.phone}</div>}
                             </div>
                             <div className="mt-2 flex flex-wrap gap-1">
-                              {contact.receivesInvoices && <Badge variant="outline">Invoices</Badge>}
+                              {contact.receivesInvoices && (
+                                <Badge variant="outline">
+                                  Invoice {contact.invoiceDeliveryRole || 'TO'}
+                                </Badge>
+                              )}
                               {contact.receivesShippingNotifications && <Badge variant="outline">Shipping</Badge>}
                               {contact.receivesOrderConfirmations && <Badge variant="outline">Orders</Badge>}
                             </div>
@@ -2706,6 +2714,30 @@ export default function CustomerManagement() {
                     Invoice recipient
                   </Label>
                 </div>
+                {contactFormData.receivesInvoices && (
+                  <div className="space-y-1">
+                    <Label htmlFor="contact-invoice-role" className="text-sm">
+                      Invoice delivery
+                    </Label>
+                    <Select
+                      value={contactFormData.invoiceDeliveryRole}
+                      onValueChange={(value: 'TO' | 'CC') =>
+                        setContactFormData((prev) => ({
+                          ...prev,
+                          invoiceDeliveryRole: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="contact-invoice-role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TO">To</SelectItem>
+                        <SelectItem value="CC">CC</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="contact-shipping"

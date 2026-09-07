@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, RefreshCw, ShieldCheck, Users } from 'lucide-react';
+import { ArrowLeft, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Link } from 'wouter';
 
 import { Badge } from '@/components/ui/badge';
@@ -57,11 +57,6 @@ export default function FinanceP2ObservationPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/finance/billing-recipients">
-              <Users className="mr-2 h-4 w-4" /> Billing recipients
-            </Link>
-          </Button>
           <Button
             variant="outline"
             onClick={() => observation.refetch()}
@@ -112,7 +107,7 @@ export default function FinanceP2ObservationPage() {
           </div>
           <Card className="border-amber-300">
             <CardContent className="p-4 text-sm">
-              <strong>Recipient migration note:</strong>{' '}
+              <strong>Invoice contact note:</strong>{' '}
               {observation.data.modelGap}
             </CardContent>
           </Card>
